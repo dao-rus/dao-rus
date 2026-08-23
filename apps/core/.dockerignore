@@ -1,6 +1,34 @@
-node_modules
-.next
-.git
+# Dependencies and generated build output.
+node_modules/
+.next/
+coverage/
+tsconfig.tsbuildinfo
+
+# Repository metadata.
+.git/
+
+# Local environment files. Keep the public template in the build context.
 .env
-.env.local
+.env.*
+!.env.example
+
+# Local Telegram exports, MTProto sessions and development environments.
+.local/
+*.session
+*.session-*
+**/*.session
+**/*.session-*
+*.bak
+*.backup
+**/*.bak
+**/*.backup
+.venv/
+venv/
+__pycache__/
+**/__pycache__/
+*.pyc
+**/*.pyc
+
+# Local runtime output.
 *.log
+**/*.log
