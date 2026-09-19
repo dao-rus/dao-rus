@@ -21,6 +21,7 @@ type RegistryPageProps = {
     telegram_presence_status?: string;
     sort?: string;
     registry_update?: string;
+    registry_repair?: string;
   }>;
 };
 
@@ -63,6 +64,14 @@ const updateMessages: Record<string, string> = {
   not_found: "Запись roster не найдена.",
 };
 
+const repairMessages: Record<string, string> = {
+  repaired: "Связь с Core восстановлена по подтверждённой истории членства.",
+  unchanged: "Связь с Core уже корректна; новые события не созданы.",
+  invalid: "Некорректный Telegram ID для восстановления связи.",
+  not_found: "Запись roster для восстановления связи не найдена.",
+  conflict: "Связь не восстановлена: обнаружен конфликт или недостаточно подтверждённой истории.",
+};
+
 export default async function ParticipantRegistryPage({
   searchParams,
 }: RegistryPageProps) {
@@ -80,6 +89,9 @@ export default async function ParticipantRegistryPage({
   });
   const updateMessage = params.registry_update
     ? updateMessages[params.registry_update]
+    : null;
+  const repairMessage = params.registry_repair
+    ? repairMessages[params.registry_repair]
     : null;
 
   return (
@@ -167,6 +179,11 @@ export default async function ParticipantRegistryPage({
             {updateMessage}
           </p>
         ) : null}
+        {repairMessage ? (
+          <p className={params.registry_repair === "repaired" || params.registry_repair === "unchanged" ? "formNotice" : "formError"}>
+            {repairMessage}
+          </p>
+        ) : null}
 
         <div className="registryTableWrap">
           <table className="registryTable">
@@ -227,6 +244,20 @@ export default async function ParticipantRegistryPage({
                     ) : (
                       <span className="muted">Не связан</span>
                     )}
+                    {entry.membershipStatus === "participant" ? (
+                      <form
+                        className="registryRepairAction"
+                        action="/api/admin/participants/repair"
+                        method="post"
+                      >
+                        <input
+                          type="hidden"
+                          name="telegram_user_id"
+                          value={entry.telegramUserId}
+                        />
+                        <button type="submit">Проверить / восстановить связь</button>
+                      </form>
+                    ) : null}
                   </td>
                 </tr>
               ))}

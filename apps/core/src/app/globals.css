@@ -164,6 +164,15 @@ dd { margin: 6px 0 0; }
 .registryFeedback.success { color: var(--accent); }
 .registryFeedback.notice { color: var(--muted); }
 .registryFeedback.error { color: #9b3f36; }
+.registryRepairAction { margin-top: 10px; }
+.registryRepairAction button {
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: transparent;
+  color: var(--ink);
+  cursor: pointer;
+  padding: 7px 9px;
+}
 
 .metrics small,
 .activitySummary small {
