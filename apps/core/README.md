@@ -359,7 +359,15 @@ ADMIN_PARTICIPANT_IDS=00000000-0000-0000-0000-000000000001
 
 `http://localhost:3000/admin/participants`
 
-Страница позволяет искать по имени, username и Telegram ID, фильтровать roster по членству, человеческой верификации и категории Telegram presence, а также менять две управляемые координаты реестра. Обычный Participant перенаправляется из страницы в профиль и получает `403 Forbidden` при прямой попытке изменить запись через API.
+Страница позволяет искать по имени, username и Telegram ID, фильтровать roster по членству, канонической Human Verification и категории Telegram presence, а также менять административный статус членства. Обычный Participant перенаправляется из страницы в профиль и получает `403 Forbidden` при прямой попытке изменить запись через API.
+
+Колонка верификации строится одной set-based проекцией существующего Web of Trust:
+несвязанная roster entry показывает **«Нет профиля Core»**, достижимый от
+verification root Participant — **«Личность подтверждена»**, а прочий связанный
+Participant — **«Пока не подтверждена»**. Legacy-поле
+`telegram_roster_entries.identity_verification` сохраняется только для
+исторической совместимости, не отображается, не фильтруется и не редактируется
+через Participant Registry.
 
 Колонка **«Последний раз в Telegram»** отображает точное время в локальном часовом
 поясе браузера, когда Telegram его раскрывает, либо исходную privacy-категорию.
@@ -375,7 +383,7 @@ Telegram presence не является активностью в ДАО и не
 `inactive`, `silent` или «молчун». В дальнейшем активность Participant должна
 иметь отдельное наблюдение вроде `last_observed_dao_activity_at`.
 
-`membership_status` roster имеет значения `unknown`, `participant`, `left`, `excluded`, `bot`; импортированные legacy-записи получают `unknown`. `identity_verification` остаётся отдельным значением `unverified` / `verified`, поэтому `participant + unverified` является допустимым состоянием.
+`membership_status` roster имеет значения `unknown`, `participant`, `left`, `excluded`, `bot`; импортированные legacy-записи получают `unknown`. Legacy `identity_verification` остаётся в схеме без синхронизации с каноническими `verification_roots` и `verification_attestations`.
 
 #### Membership Binding v0.1
 
@@ -465,12 +473,12 @@ ID, старое и новое состояния, источник `participant
 
 В `/profile` раздел **«История участия»** показывает только membership-события от
 новых к старым, локальное время браузера и, для ручных действий, администратора.
-Изменения человеческой верификации остаются независимыми registry audit events и
-в эту проекцию не входят.
+Исторические изменения legacy verification остаются отдельными registry audit
+events и в эту проекцию не входят.
 
 Каждое фактическое изменение статуса и его audit event записываются одной транзакцией. Автор берётся только из серверной сессии. Авторизованный администратор также видит на `/profile` ссылку **«Участники ДАО»**; её скрытие для остальных пользователей является только UX, а серверные проверки страницы и API остаются обязательными и независимыми.
 
-События `participant_registry.membership_status_changed` и `participant_registry.identity_verification_changed` являются канонической audit history реестра. Отдельная таблица audit log не создаётся, и данные из `events` не дублируются. Каждое событие описывает изменение состояния: кто изменил (`changed_by_participant_id`), к какой roster entry оно относится (`telegram_user_id`), какое значение изменилось, старое и новое значения и время изменения (`changed_at`). Это позволяет позднее построить отдельное представление истории административных изменений.
+Событие `participant_registry.membership_status_changed` является текущей канонической audit history ручных изменений реестра. Ранее созданные `participant_registry.identity_verification_changed` сохраняются как исторические legacy events, но новые через Participant Registry больше не создаются. Отдельная таблица audit log не создаётся, и данные из `events` не дублируются.
 
 No-op сохранение не является изменением состояния, поэтому событие для него не создаётся и в audit history оно не попадает. Нажатие кнопки само по себе не является административным событием.
 

@@ -64,7 +64,7 @@ function normalizeSubjectId(value: string): string {
   return value.toLowerCase();
 }
 
-const VERIFIED_SUBJECTS_CTE = `WITH RECURSIVE verified(subject_id) AS (
+export const VERIFIED_SUBJECTS_CTE = `WITH RECURSIVE verified(subject_id) AS (
   SELECT subject_id FROM verification_roots
   UNION
   SELECT attestation.subject_id

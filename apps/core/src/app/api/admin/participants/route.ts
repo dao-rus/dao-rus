@@ -25,11 +25,15 @@ export async function POST(request: NextRequest) {
   }
 
   const formData = await request.formData();
+  const field = formData.get("field");
+  if (field !== "membership_status") {
+    return registryRedirect("invalid");
+  }
   try {
     const result = await updateParticipantRegistry(
       participant.id,
       formData.get("telegram_user_id"),
-      formData.get("field"),
+      field,
       formData.get("value"),
     );
     return registryRedirect(result.changed ? "updated" : "unchanged");

@@ -5,9 +5,9 @@ import { LocalDateTime } from "@/components/local-date-time";
 import { hasPrototypeAdminAccess } from "@/lib/config";
 import {
   listParticipantRegistry,
-  registryIdentityVerifications,
   registryMembershipStatuses,
   registryPresenceStatuses,
+  registryVerificationStatuses,
 } from "@/lib/participant-registry";
 import { getCurrentParticipant } from "@/lib/session";
 
@@ -17,7 +17,7 @@ type RegistryPageProps = {
   searchParams: Promise<{
     q?: string;
     membership_status?: string;
-    identity_verification?: string;
+    verification_status?: string;
     telegram_presence_status?: string;
     sort?: string;
     registry_update?: string;
@@ -33,8 +33,9 @@ const membershipLabels: Record<string, string> = {
 };
 
 const verificationLabels: Record<string, string> = {
-  unverified: "Не верифицирован",
-  verified: "Верифицирован",
+  no_core_profile: "Нет профиля Core",
+  verified: "Личность подтверждена",
+  unverified: "Пока не подтверждена",
 };
 
 const presenceLabels: Record<string, string> = {
@@ -49,11 +50,6 @@ const presenceLabels: Record<string, string> = {
 const membershipOptions = registryMembershipStatuses.map((value) => ({
   value,
   label: membershipLabels[value],
-}));
-
-const verificationOptions = registryIdentityVerifications.map((value) => ({
-  value,
-  label: verificationLabels[value],
 }));
 
 const updateMessages: Record<string, string> = {
@@ -74,7 +70,7 @@ export default async function ParticipantRegistryPage({
   const entries = await listParticipantRegistry({
     search: params.q,
     membershipStatus: params.membership_status,
-    identityVerification: params.identity_verification,
+    verificationStatus: params.verification_status,
     telegramPresenceStatus: params.telegram_presence_status,
     sort: params.sort,
   });
@@ -124,11 +120,11 @@ export default async function ParticipantRegistryPage({
           <label>
             <span>Верификация личности</span>
             <select
-              name="identity_verification"
-              defaultValue={params.identity_verification ?? ""}
+              name="verification_status"
+              defaultValue={params.verification_status ?? ""}
             >
               <option value="">Все</option>
-              {registryIdentityVerifications.map((status) => (
+              {registryVerificationStatuses.map((status) => (
                 <option value={status} key={status}>{verificationLabels[status]}</option>
               ))}
             </select>
@@ -208,14 +204,7 @@ export default async function ParticipantRegistryPage({
                     />
                   </td>
                   <td>
-                    <RegistryFieldEditor
-                      telegramUserId={entry.telegramUserId}
-                      field="identity_verification"
-                      label="Верификация личности"
-                      value={entry.identityVerification}
-                      options={verificationOptions}
-                      saveLabel="Сохранить верификацию"
-                    />
+                    {verificationLabels[entry.verificationStatus]}
                   </td>
                   <td>
                     {entry.participantId ? (

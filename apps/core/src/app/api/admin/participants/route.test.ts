@@ -70,4 +70,21 @@ describe("POST /api/admin/participants", () => {
       "http://localhost:3000/admin/participants?registry_update=updated",
     );
   });
+
+  it("rejects legacy identity verification changes before registry mutation", async () => {
+    mocks.getCurrentParticipant.mockResolvedValue({ id: "server-session-admin" });
+    mocks.hasPrototypeAdminAccess.mockReturnValue(true);
+
+    const response = await POST(registryRequest({
+      telegram_user_id: "184229790",
+      field: "identity_verification",
+      value: "verified",
+    }));
+
+    expect(mocks.updateParticipantRegistry).not.toHaveBeenCalled();
+    expect(response.status).toBe(303);
+    expect(response.headers.get("location")).toBe(
+      "http://localhost:3000/admin/participants?registry_update=invalid",
+    );
+  });
 });

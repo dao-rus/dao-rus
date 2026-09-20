@@ -2,6 +2,7 @@ import {
   membershipEventTypeForTransition,
   recordMembershipTransitionWithClient,
 } from "./membership-history";
+import { VERIFIED_SUBJECTS_CTE } from "./verification";
 
 export const registryMembershipStatuses = [
   "unknown",
@@ -11,7 +12,11 @@ export const registryMembershipStatuses = [
   "bot",
 ] as const;
 
-export const registryIdentityVerifications = ["unverified", "verified"] as const;
+export const registryVerificationStatuses = [
+  "no_core_profile",
+  "verified",
+  "unverified",
+] as const;
 
 export const registryPresenceStatuses = [
   "online",
@@ -29,11 +34,11 @@ export const registrySortOptions = [
 ] as const;
 
 export type RegistryMembershipStatus = (typeof registryMembershipStatuses)[number];
-export type RegistryIdentityVerification =
-  (typeof registryIdentityVerifications)[number];
+export type RegistryVerificationStatus =
+  (typeof registryVerificationStatuses)[number];
 export type RegistryPresenceStatus = (typeof registryPresenceStatuses)[number];
 export type RegistrySort = (typeof registrySortOptions)[number];
-export type RegistryField = "membership_status" | "identity_verification";
+export type RegistryField = "membership_status";
 
 export type ParticipantRegistryEntry = {
   telegramUserId: string;
@@ -41,7 +46,7 @@ export type ParticipantRegistryEntry = {
   displayName: string;
   isBot: boolean;
   membershipStatus: RegistryMembershipStatus;
-  identityVerification: RegistryIdentityVerification;
+  verificationStatus: RegistryVerificationStatus;
   participantId: string | null;
   participantDisplayName: string | null;
   observedAt: Date;
@@ -53,7 +58,7 @@ export type ParticipantRegistryEntry = {
 export type ParticipantRegistryFilters = {
   search?: string;
   membershipStatus?: string;
-  identityVerification?: string;
+  verificationStatus?: string;
   telegramPresenceStatus?: string;
   sort?: string;
 };
@@ -118,12 +123,12 @@ function isMembershipStatus(value: unknown): value is RegistryMembershipStatus {
   );
 }
 
-function isIdentityVerification(
+function isVerificationStatus(
   value: unknown,
-): value is RegistryIdentityVerification {
+): value is RegistryVerificationStatus {
   return (
     typeof value === "string" &&
-    registryIdentityVerifications.includes(value as RegistryIdentityVerification)
+    registryVerificationStatuses.includes(value as RegistryVerificationStatus)
   );
 }
 
@@ -147,8 +152,8 @@ function normalizeFilters(filters: ParticipantRegistryFilters) {
     membershipStatus: isMembershipStatus(filters.membershipStatus)
       ? filters.membershipStatus
       : null,
-    identityVerification: isIdentityVerification(filters.identityVerification)
-      ? filters.identityVerification
+    verificationStatus: isVerificationStatus(filters.verificationStatus)
+      ? filters.verificationStatus
       : null,
     telegramPresenceStatus: isPresenceStatus(filters.telegramPresenceStatus)
       ? filters.telegramPresenceStatus
@@ -231,20 +236,27 @@ export async function listParticipantRegistryWithDatabase(
 ): Promise<ParticipantRegistryEntry[]> {
   const normalized = normalizeFilters(filters);
   const result = await database.query(
-    `SELECT r.telegram_user_id,
+    `${VERIFIED_SUBJECTS_CTE}
+     SELECT r.telegram_user_id,
             r.username,
             r.display_name,
             r.is_bot,
             r.membership_status,
-            r.identity_verification,
             r.participant_id,
             r.observed_at,
             r.telegram_presence_status,
             r.telegram_last_seen_at,
             r.telegram_presence_observed_at,
-            p.display_name AS participant_display_name
+            p.display_name AS participant_display_name,
+            CASE
+              WHEN r.participant_id IS NULL THEN 'no_core_profile'
+              WHEN canonical_verification.subject_id IS NOT NULL THEN 'verified'
+              ELSE 'unverified'
+            END AS verification_status
        FROM telegram_roster_entries r
        LEFT JOIN participants p ON p.id = r.participant_id
+       LEFT JOIN verified canonical_verification
+         ON canonical_verification.subject_id = r.participant_id
       WHERE (
         $1 = ''
         OR r.display_name ILIKE '%' || $1 || '%'
@@ -252,14 +264,21 @@ export async function listParticipantRegistryWithDatabase(
         OR r.telegram_user_id::text LIKE '%' || $1 || '%'
       )
         AND ($2::text IS NULL OR r.membership_status = $2)
-        AND ($3::text IS NULL OR r.identity_verification = $3)
+        AND (
+          $3::text IS NULL
+          OR CASE
+               WHEN r.participant_id IS NULL THEN 'no_core_profile'
+               WHEN canonical_verification.subject_id IS NOT NULL THEN 'verified'
+               ELSE 'unverified'
+             END = $3
+        )
         AND ($4::text IS NULL OR r.telegram_presence_status = $4)
       ORDER BY lower(r.display_name), r.telegram_user_id
       LIMIT 1000`,
     [
       normalized.search,
       normalized.membershipStatus,
-      normalized.identityVerification,
+      normalized.verificationStatus,
       normalized.telegramPresenceStatus,
     ],
   );
@@ -270,9 +289,9 @@ export async function listParticipantRegistryWithDatabase(
     displayName: String(row.display_name),
     isBot: Boolean(row.is_bot),
     membershipStatus: String(row.membership_status) as RegistryMembershipStatus,
-    identityVerification: String(
-      row.identity_verification,
-    ) as RegistryIdentityVerification,
+    verificationStatus: String(
+      row.verification_status,
+    ) as RegistryVerificationStatus,
     participantId: row.participant_id ? String(row.participant_id) : null,
     participantDisplayName: row.participant_display_name
       ? String(row.participant_display_name)
@@ -521,14 +540,11 @@ export async function updateParticipantRegistryWithDatabase(
   newValue: unknown,
 ): Promise<ParticipantRegistryUpdateResult> {
   const telegramUserId = normalizeTelegramUserId(telegramUserIdValue);
-  if (fieldValue !== "membership_status" && fieldValue !== "identity_verification") {
+  if (fieldValue !== "membership_status") {
     throw new ParticipantRegistryValidationError("Invalid registry field");
   }
-  const field: RegistryField = fieldValue;
-  if (
-    (field === "membership_status" && !isMembershipStatus(newValue)) ||
-    (field === "identity_verification" && !isIdentityVerification(newValue))
-  ) {
+  const field: RegistryField = "membership_status";
+  if (!isMembershipStatus(newValue)) {
     throw new ParticipantRegistryValidationError("Invalid registry value");
   }
 
@@ -539,7 +555,6 @@ export async function updateParticipantRegistryWithDatabase(
     await client.query("BEGIN");
     const current = await client.query(
       `SELECT membership_status,
-              identity_verification,
               participant_id,
               display_name,
               username
@@ -552,10 +567,7 @@ export async function updateParticipantRegistryWithDatabase(
 
     const oldValue = String(current.rows[0][field]);
     if (oldValue === normalizedNewValue) {
-      if (
-        field === "membership_status" &&
-        isCanonicalMembershipStatus(normalizedNewValue)
-      ) {
+      if (isCanonicalMembershipStatus(normalizedNewValue)) {
         await assertCanonicalMembershipWithClient(
           client,
           current.rows[0].participant_id
@@ -571,7 +583,7 @@ export async function updateParticipantRegistryWithDatabase(
     let membershipParticipantId = current.rows[0].participant_id
       ? String(current.rows[0].participant_id)
       : null;
-    if (field === "membership_status" && normalizedNewValue === "participant") {
+    if (normalizedNewValue === "participant") {
       membershipParticipantId = await bindParticipantForMembership(
         client,
         current.rows[0],
@@ -579,10 +591,7 @@ export async function updateParticipantRegistryWithDatabase(
       );
     }
 
-    if (
-      field === "membership_status" &&
-      isCanonicalMembershipStatus(normalizedNewValue)
-    ) {
+    if (isCanonicalMembershipStatus(normalizedNewValue)) {
       await updateCanonicalMembershipWithClient(
         client,
         membershipParticipantId,
@@ -591,9 +600,10 @@ export async function updateParticipantRegistryWithDatabase(
       );
     }
 
-    const membershipEventType = field === "membership_status"
-      ? membershipEventTypeForTransition(oldValue, normalizedNewValue)
-      : null;
+    const membershipEventType = membershipEventTypeForTransition(
+      oldValue,
+      normalizedNewValue,
+    );
     if (membershipEventType && !membershipParticipantId) {
       throw new ParticipantRegistryIntegrityError(
         `Membership transition ${oldValue} -> ${normalizedNewValue} requires a canonical Participant`,
@@ -603,20 +613,16 @@ export async function updateParticipantRegistryWithDatabase(
     const changedAt = new Date().toISOString();
     await client.query(
       `UPDATE telegram_roster_entries
-          SET ${field} = $2
+          SET membership_status = $2
         WHERE telegram_user_id = $1::bigint`,
       [telegramUserId, normalizedNewValue],
     );
 
-    const eventType =
-      field === "membership_status"
-        ? "participant_registry.membership_status_changed"
-        : "participant_registry.identity_verification_changed";
     await client.query(
       `INSERT INTO events(event_type, participant_id, payload)
        VALUES ($1, $2, $3::jsonb)`,
       [
-        eventType,
+        "participant_registry.membership_status_changed",
         changedByParticipantId,
         JSON.stringify({
           telegram_user_id: telegramUserId,

@@ -19,7 +19,6 @@ class FakeClient implements ParticipantRegistryDatabaseClient {
   queries: Array<{ text: string; values?: unknown[] }> = [];
   released = false;
   membershipStatus: string;
-  identityVerification: string;
   rosterParticipantId: string | null;
   identityParticipantId: string | null;
   canonicalMembershipStatus: string;
@@ -27,7 +26,6 @@ class FakeClient implements ParticipantRegistryDatabaseClient {
   private pendingMembershipEvents: string[] = [];
   private transactionState: {
     membershipStatus: string;
-    identityVerification: string;
     rosterParticipantId: string | null;
     identityParticipantId: string | null;
     canonicalMembershipStatus: string;
@@ -36,7 +34,6 @@ class FakeClient implements ParticipantRegistryDatabaseClient {
   constructor(
     private readonly options: {
       membershipStatus?: string;
-      identityVerification?: string;
       rosterParticipantId?: string | null;
       identityParticipantId?: string | null;
       missing?: boolean;
@@ -46,7 +43,6 @@ class FakeClient implements ParticipantRegistryDatabaseClient {
     } = {},
   ) {
     this.membershipStatus = options.membershipStatus ?? "unknown";
-    this.identityVerification = options.identityVerification ?? "unverified";
     this.rosterParticipantId = options.rosterParticipantId ?? null;
     this.identityParticipantId = options.identityParticipantId ?? null;
     this.canonicalMembershipStatus = options.canonicalMembershipStatus ??
@@ -61,7 +57,6 @@ class FakeClient implements ParticipantRegistryDatabaseClient {
     if (text === "BEGIN") {
       this.transactionState = {
         membershipStatus: this.membershipStatus,
-        identityVerification: this.identityVerification,
         rosterParticipantId: this.rosterParticipantId,
         identityParticipantId: this.identityParticipantId,
         canonicalMembershipStatus: this.canonicalMembershipStatus,
@@ -80,7 +75,6 @@ class FakeClient implements ParticipantRegistryDatabaseClient {
     if (text === "ROLLBACK") {
       if (this.transactionState) {
         this.membershipStatus = this.transactionState.membershipStatus;
-        this.identityVerification = this.transactionState.identityVerification;
         this.rosterParticipantId = this.transactionState.rosterParticipantId;
         this.identityParticipantId = this.transactionState.identityParticipantId;
         this.canonicalMembershipStatus =
@@ -110,7 +104,6 @@ class FakeClient implements ParticipantRegistryDatabaseClient {
         rowCount: 1,
         rows: [{
           membership_status: this.membershipStatus,
-          identity_verification: this.identityVerification,
           participant_id: this.rosterParticipantId,
           display_name: "Участник из roster",
           username: "roster_member",
@@ -162,14 +155,6 @@ class FakeClient implements ParticipantRegistryDatabaseClient {
       text.includes("SET membership_status")
     ) {
       this.membershipStatus = String(values?.[1]);
-      return { rowCount: 1, rows: [] };
-    }
-
-    if (
-      text.includes("UPDATE telegram_roster_entries") &&
-      text.includes("SET identity_verification")
-    ) {
-      this.identityVerification = String(values?.[1]);
       return { rowCount: 1, rows: [] };
     }
 
@@ -265,7 +250,7 @@ describe("Participant Registry migrations", () => {
 
 describe("updateParticipantRegistryWithDatabase", () => {
   it("creates one Participant, Telegram identity and roster link for unknown to participant", async () => {
-    const client = new FakeClient({ identityVerification: "unverified" });
+    const client = new FakeClient();
     const result = await updateParticipantRegistryWithDatabase(
       fakeDatabase(client),
       adminParticipantId,
@@ -285,7 +270,9 @@ describe("updateParticipantRegistryWithDatabase", () => {
     expect(client.rosterParticipantId).toBe(createdParticipantId);
     expect(client.identityParticipantId).toBe(createdParticipantId);
     expect(client.canonicalMembershipStatus).toBe("participant");
-    expect(client.identityVerification).toBe("unverified");
+    expect(
+      client.queries.every(({ text }) => !text.includes("identity_verification")),
+    ).toBe(true);
 
     const participantInsert = client.queries.find(({ text }) =>
       text.includes("INSERT INTO participants"),
@@ -465,28 +452,20 @@ describe("updateParticipantRegistryWithDatabase", () => {
     expect(registryEvent(client)).toBeDefined();
   });
 
-  it("changes verification independently without membership binding", async () => {
-    const client = new FakeClient({
-      membershipStatus: "participant",
-      identityVerification: "unverified",
-    });
-    await updateParticipantRegistryWithDatabase(
-      fakeDatabase(client),
-      adminParticipantId,
-      telegramUserId,
-      "identity_verification",
-      "verified",
-    );
+  it("rejects legacy identity verification updates before opening a transaction", async () => {
+    const client = new FakeClient({ membershipStatus: "participant" });
 
-    expect(client.identityVerification).toBe("verified");
-    expect(client.membershipStatus).toBe("participant");
-    expect(queryCount(client, "INSERT INTO participants")).toBe(0);
-    expect(queryCount(client, "INSERT INTO external_identities")).toBe(0);
-    const event = client.queries.find(
-      ({ values }) =>
-        values?.[0] === "participant_registry.identity_verification_changed",
-    );
-    expect(event).toBeDefined();
+    await expect(
+      updateParticipantRegistryWithDatabase(
+        fakeDatabase(client),
+        adminParticipantId,
+        telegramUserId,
+        "identity_verification",
+        "verified",
+      ),
+    ).rejects.toThrow("Invalid registry field");
+
+    expect(client.queries).toEqual([]);
   });
 
   it("rolls back a conflicting roster and ExternalIdentity link", async () => {
@@ -593,7 +572,7 @@ describe("listParticipantRegistryWithDatabase", () => {
               display_name: "Участник ДАО",
               is_bot: false,
               membership_status: "participant",
-              identity_verification: "unverified",
+              verification_status: "verified",
               participant_id: adminParticipantId,
               participant_display_name: "Core profile",
               observed_at: "2026-08-21T15:15:00.000Z",
@@ -607,7 +586,7 @@ describe("listParticipantRegistryWithDatabase", () => {
       {
         search: "  184229  ",
         membershipStatus: "participant",
-        identityVerification: "unverified",
+        verificationStatus: "verified",
         telegramPresenceStatus: "recently",
         sort: "presence_oldest",
       },
@@ -616,17 +595,20 @@ describe("listParticipantRegistryWithDatabase", () => {
     expect(queries[0].values).toEqual([
       "184229",
       "participant",
-      "unverified",
+      "verified",
       "recently",
     ]);
     expect(queries[0].text).toContain("r.display_name ILIKE");
     expect(queries[0].text).toContain("r.username");
     expect(queries[0].text).toContain("r.telegram_user_id::text");
     expect(queries[0].text).toContain("r.telegram_presence_status = $4");
+    expect(queries[0].text).toContain("WITH RECURSIVE verified");
+    expect(queries[0].text).toContain("LEFT JOIN verified canonical_verification");
+    expect(queries[0].text).not.toContain("r.identity_verification");
     expect(entries[0]).toMatchObject({
       telegramUserId,
       membershipStatus: "participant",
-      identityVerification: "unverified",
+      verificationStatus: "verified",
       participantId: adminParticipantId,
       telegramPresenceStatus: "recently",
     });
@@ -645,7 +627,7 @@ function registryEntry(
     displayName,
     isBot: false,
     membershipStatus: "unknown",
-    identityVerification: "unverified",
+    verificationStatus: "no_core_profile",
     participantId: null,
     participantDisplayName: null,
     observedAt: new Date("2026-08-22T00:00:00.000Z"),
