@@ -583,7 +583,7 @@ export async function updateParticipantRegistryWithDatabase(
     let membershipParticipantId = current.rows[0].participant_id
       ? String(current.rows[0].participant_id)
       : null;
-    if (normalizedNewValue === "participant") {
+    if (isCanonicalMembershipStatus(normalizedNewValue)) {
       membershipParticipantId = await bindParticipantForMembership(
         client,
         current.rows[0],

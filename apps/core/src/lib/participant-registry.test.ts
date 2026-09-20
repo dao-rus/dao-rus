@@ -317,6 +317,37 @@ describe("updateParticipantRegistryWithDatabase", () => {
   });
 
   it.each([
+    ["left", "membership.left"],
+    ["excluded", "membership.excluded"],
+  ])(
+    "binds an unbound unknown roster as %s and records %s without joined",
+    async (newStatus, eventType) => {
+      const client = new FakeClient();
+
+      await updateParticipantRegistryWithDatabase(
+        fakeDatabase(client),
+        adminParticipantId,
+        telegramUserId,
+        "membership_status",
+        newStatus,
+      );
+
+      expect(queryCount(client, "INSERT INTO participants")).toBe(1);
+      expect(queryCount(client, "INSERT INTO external_identities")).toBe(1);
+      expect(client.rosterParticipantId).toBe(createdParticipantId);
+      expect(client.identityParticipantId).toBe(createdParticipantId);
+      expect(client.canonicalMembershipStatus).toBe(newStatus);
+      expect(client.persistedMembershipEvents).toEqual([eventType]);
+      expect(client.persistedMembershipEvents).not.toContain("membership.joined");
+      expect(membershipEvent(client)?.values?.slice(0, 2)).toEqual([
+        eventType,
+        createdParticipantId,
+      ]);
+      expect(client.queries.at(-1)?.text).toBe("COMMIT");
+    },
+  );
+
+  it.each([
     ["participant", "left", "membership.left"],
     ["left", "participant", "membership.rejoined"],
     ["participant", "excluded", "membership.excluded"],
@@ -537,23 +568,21 @@ describe("updateParticipantRegistryWithDatabase", () => {
     expect(client.persistedMembershipEvents).toEqual([]);
   });
 
-  it("rejects a historical transition without a canonical Participant", async () => {
+  it("repairs a historical participant roster before changing it to left", async () => {
     const client = new FakeClient({ membershipStatus: "participant" });
 
-    await expect(
-      updateParticipantRegistryWithDatabase(
-        fakeDatabase(client),
-        adminParticipantId,
-        telegramUserId,
-        "membership_status",
-        "left",
-      ),
-    ).rejects.toThrow("requires a canonical Participant");
+    await updateParticipantRegistryWithDatabase(
+      fakeDatabase(client),
+      adminParticipantId,
+      telegramUserId,
+      "membership_status",
+      "left",
+    );
 
-    expect(client.membershipStatus).toBe("participant");
-    expect(registryEvent(client)).toBeUndefined();
-    expect(membershipEvent(client)).toBeUndefined();
-    expect(client.queries.at(-1)?.text).toBe("ROLLBACK");
+    expect(client.rosterParticipantId).toBe(createdParticipantId);
+    expect(client.canonicalMembershipStatus).toBe("left");
+    expect(client.persistedMembershipEvents).toEqual(["membership.left"]);
+    expect(client.queries.at(-1)?.text).toBe("COMMIT");
   });
 });
 

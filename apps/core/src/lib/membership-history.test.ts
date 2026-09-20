@@ -11,6 +11,8 @@ const adminParticipantId = "20000000-0000-0000-0000-000000000001";
 describe("membershipEventTypeForTransition", () => {
   it.each([
     ["unknown", "participant", "membership.joined"],
+    ["unknown", "left", "membership.left"],
+    ["unknown", "excluded", "membership.excluded"],
     ["participant", "left", "membership.left"],
     ["left", "participant", "membership.rejoined"],
     ["participant", "excluded", "membership.excluded"],

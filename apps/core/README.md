@@ -387,7 +387,7 @@ Telegram presence не является активностью в ДАО и не
 
 #### Membership Binding v0.1
 
-Сырой roster import по-прежнему только сохраняет snapshot и никогда не создаёт `Participant` или `ExternalIdentity`. Создание канонической Core identity разрешает отдельное институциональное действие: переход roster entry из другого статуса в `membership_status = 'participant'`.
+Сырой roster import по-прежнему только сохраняет snapshot и никогда не создаёт `Participant` или `ExternalIdentity`. Создание канонической Core identity разрешает отдельное институциональное действие: установка roster entry в одно из канонических состояний `participant`, `left` или `excluded`. Классификации `unknown` и `bot` сами по себе Core identity не создают.
 
 При таком переходе Core под блокировкой roster entry:
 
@@ -395,7 +395,7 @@ Telegram presence не является активностью в ДАО и не
 2. иначе ищет Telegram `ExternalIdentity` по `external_user_id` и связывает её Participant с roster;
 3. если обеих связей нет, создаёт один `Participant` с display name из roster, Telegram `ExternalIdentity` и заполняет `participant_id` roster entry.
 
-Для нового Participant устанавливается статус `participant`, поскольку его создание происходит вследствие явного административного признания членства. Если Participant уже существовал, он переиспользуется без создания дубля. Telegram user ID защищён уникальным индексом среди Telegram identities. Противоречие между существующим roster link и Telegram identity считается integrity conflict: вся операция откатывается, данные не исправляются молча.
+Для нового Participant итоговый канонический статус в той же транзакции становится выбранным `participant`, `left` или `excluded`. Если Participant уже существовал, он переиспользуется без создания дубля. Telegram user ID защищён уникальным индексом среди Telegram identities. Противоречие между существующим roster link и Telegram identity считается integrity conflict: вся операция откатывается, данные не исправляются молча. Legacy/backfill переходы `unknown → left` и `unknown → excluded` создают соответственно `membership.left` и `membership.excluded`, но не выдумывают неизвестную дату предшествующего вступления и не создают `membership.joined`.
 
 Создание/связывание identity, изменение `membership_status`, `participant.created` при создании нового Participant и `participant_registry.membership_status_changed` выполняются одной транзакцией. `identity_verification` эта операция не меняет. No-op не создаёт новые сущности или события.
 

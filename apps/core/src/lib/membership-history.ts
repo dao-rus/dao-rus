@@ -28,6 +28,8 @@ export type MembershipHistoryQueryClient = {
 
 const transitionEventTypes: Record<string, MembershipEventType> = {
   "unknown:participant": "membership.joined",
+  "unknown:left": "membership.left",
+  "unknown:excluded": "membership.excluded",
   "participant:left": "membership.left",
   "left:participant": "membership.rejoined",
   "participant:excluded": "membership.excluded",
