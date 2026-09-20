@@ -21,7 +21,3 @@ CREATE UNIQUE INDEX verification_attestations_active_pair_idx
 CREATE INDEX verification_attestations_active_subject_idx
   ON verification_attestations(subject_id, verifier_subject_id)
   WHERE revoked_at IS NULL;
-
-CREATE INDEX verification_attestations_active_verifier_idx
-  ON verification_attestations(verifier_subject_id, subject_id)
-  WHERE revoked_at IS NULL;
