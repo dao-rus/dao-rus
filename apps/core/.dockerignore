@@ -11,6 +11,7 @@ tsconfig.tsbuildinfo
 .env
 .env.*
 !.env.example
+!.env.production.example
 
 # Local Telegram exports, MTProto sessions and development environments.
 .local/

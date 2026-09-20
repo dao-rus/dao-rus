@@ -219,6 +219,41 @@ docker compose exec db psql -U dao -d dao -c "SELECT id, event_type, participant
 
 Повторная доставка того же `update_id` не должна добавлять вторую строку события.
 
+## Production deployment на отдельный VPS
+
+Production-контур отделён от локального `docker-compose.yml` и запускается через
+`compose.prod.yml`:
+
+`Internet → Caddy :80/:443 → Next.js web:3000 → PostgreSQL:5432`
+
+Наружу публикуются только порты Caddy. `web` доступен Caddy по Docker network
+`proxy`, а PostgreSQL находится только во внутренней сети `backend`. Перед запуском
+web одноразовый сервис `migrate` выполняет существующий `npm run db:migrate`; при
+ошибке integrity check или migration приложение не запускается.
+
+На чистом Ubuntu VPS сначала запусти `deploy/bootstrap.sh`. Скрипт устанавливает
+Docker Engine с Compose plugin, создаёт swap `/swapfile` размером 2 GiB, включает
+UFW для SSH/HTTP/HTTPS и подготавливает `/opt/dao-rus`.
+
+Production secrets хранятся только в `apps/core/.env.production` на VPS. Файл
+игнорируется Git и Docker build context. Начни с `.env.production.example`, задай
+URL-safe пароль PostgreSQL и Telegram credentials, затем ограничь права:
+
+```bash
+chmod 600 apps/core/.env.production
+```
+
+Для первого и последующих обновлений из Git используется:
+
+```bash
+sudo DAO_CORE_REPO_DIR=/opt/dao-rus DAO_CORE_BRANCH=main \
+  bash /opt/dao-rus/apps/core/deploy/update.sh
+```
+
+Caddy автоматически получает и обновляет TLS-сертификат, когда DNS A record
+`core.daorus.org` указывает на VPS и внешние TCP-порты 80/443 доступны. UDP 443
+публикуется для HTTP/3.
+
 ## 6. Одноразовый Telegram Roster v0.1
 
 Bot API не предоставляет надёжный полный список участников закрытого supergroup/forum. Для лабораторного snapshot используется отдельный локальный MTProto-клиент под пользовательским Telegram-аккаунтом. Официальные точки отсчёта: [получение `api_id`/`api_hash`](https://core.telegram.org/api/obtaining_api_id), [авторизация пользователя](https://core.telegram.org/api/auth) и [`channels.getParticipants`](https://core.telegram.org/method/channels.getParticipants).

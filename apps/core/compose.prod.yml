@@ -1,0 +1,115 @@
+name: dao-core
+
+x-core-environment: &core-environment
+  NODE_ENV: production
+  NODE_OPTIONS: --max-old-space-size=768
+  DATABASE_URL: postgresql://${POSTGRES_USER:-dao}:${POSTGRES_PASSWORD:?POSTGRES_PASSWORD is required}@db:5432/${POSTGRES_DB:-dao}
+  APP_BASE_URL: ${APP_BASE_URL:?APP_BASE_URL is required}
+  TELEGRAM_OIDC_CLIENT_ID: ${TELEGRAM_OIDC_CLIENT_ID:?TELEGRAM_OIDC_CLIENT_ID is required}
+  TELEGRAM_OIDC_CLIENT_SECRET: ${TELEGRAM_OIDC_CLIENT_SECRET:?TELEGRAM_OIDC_CLIENT_SECRET is required}
+  TELEGRAM_OIDC_REDIRECT_URI: ${TELEGRAM_OIDC_REDIRECT_URI:?TELEGRAM_OIDC_REDIRECT_URI is required}
+  TELEGRAM_WEBHOOK_SECRET: ${TELEGRAM_WEBHOOK_SECRET:-}
+  TELEGRAM_INGEST_CHAT_ID: ${TELEGRAM_INGEST_CHAT_ID:-}
+  ADMIN_PARTICIPANT_IDS: ${ADMIN_PARTICIPANT_IDS:-}
+  SESSION_TTL_DAYS: ${SESSION_TTL_DAYS:-30}
+  DEV_AUTH_BYPASS: "false"
+
+x-core-image: &core-image
+  image: dao-core-web:${DAO_CORE_IMAGE_TAG:-latest}
+  build:
+    context: .
+    dockerfile: Dockerfile.prod
+
+x-logging: &default-logging
+  driver: json-file
+  options:
+    max-size: 10m
+    max-file: "3"
+
+services:
+  db:
+    image: postgres:17-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB:-dao}
+      POSTGRES_USER: ${POSTGRES_USER:-dao}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?POSTGRES_PASSWORD is required}
+    volumes:
+      - dao_pgdata:/var/lib/postgresql/data
+    networks:
+      - backend
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER} -d $${POSTGRES_DB}"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+      start_period: 10s
+    logging: *default-logging
+
+  migrate:
+    <<: *core-image
+    restart: "no"
+    command: ["npm", "run", "db:migrate"]
+    environment: *core-environment
+    depends_on:
+      db:
+        condition: service_healthy
+    networks:
+      - backend
+    logging: *default-logging
+
+  web:
+    <<: *core-image
+    restart: unless-stopped
+    environment: *core-environment
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+    expose:
+      - "3000"
+    networks:
+      - proxy
+      - backend
+    healthcheck:
+      test:
+        [
+          "CMD",
+          "node",
+          "-e",
+          "fetch('http://127.0.0.1:3000/').then(r=>{if(!r.ok)process.exit(1)}).catch(()=>process.exit(1))",
+        ]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+      start_period: 20s
+    logging: *default-logging
+
+  caddy:
+    image: caddy:2.10-alpine
+    restart: unless-stopped
+    environment:
+      CORE_DOMAIN: ${CORE_DOMAIN:-core.daorus.org}
+    depends_on:
+      web:
+        condition: service_healthy
+    ports:
+      - "80:80"
+      - "443:443"
+      - "443:443/udp"
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy_data:/data
+      - caddy_config:/config
+    networks:
+      - proxy
+    logging: *default-logging
+
+networks:
+  proxy:
+  backend:
+    internal: true
+
+volumes:
+  dao_pgdata:
+  caddy_data:
+  caddy_config:

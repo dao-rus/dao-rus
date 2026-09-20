@@ -2,10 +2,12 @@ node_modules/
 .next/
 .env
 .env.local
+.env.production
 .env.*.local
 coverage/
 *.log
 
 *.tsbuildinfo
 !.env.example
+!.env.production.example
 .local/

@@ -51,6 +51,7 @@ describe("Docker build context", () => {
 
     expect(envWildcard).toBeGreaterThanOrEqual(0);
     expect(envExample).toBeGreaterThan(envWildcard);
+    expect(rules.indexOf("!.env.production.example")).toBeGreaterThan(envWildcard);
 
     for (const unsafeRule of ["*", "src/", "migrations/", "*.json", "*.ts", "*.tsx"]) {
       expect(rules).not.toContain(unsafeRule);
