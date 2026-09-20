@@ -22,6 +22,16 @@ describe("production deployment", () => {
     expect(dockerfile).toContain("COPY --chown=nextjs:nodejs migrations ./migrations");
   });
 
+  it("packages the runtime dependencies of the Telegram roster importer", async () => {
+    const dockerfile = await projectFile("Dockerfile.prod");
+    const importer = await projectFile("scripts/import-telegram-roster.ts");
+
+    expect(importer).toContain('../src/lib/telegram-roster');
+    expect(importer).toContain('../src/lib/db');
+    expect(dockerfile).toContain("src/lib/telegram-roster.ts");
+    expect(dockerfile).toContain("src/lib/db.ts");
+  });
+
   it("publishes only Caddy while keeping PostgreSQL on the internal network", async () => {
     const compose = await projectFile("compose.prod.yml");
     const db = serviceBlock(compose, "db", "migrate");

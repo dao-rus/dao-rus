@@ -39,7 +39,11 @@ COPY --from=builder --chown=nextjs:nodejs /app/.next/static ./.next/static
 COPY --chown=nextjs:nodejs package.json package-lock.json tsconfig.json ./
 COPY --chown=nextjs:nodejs migrations ./migrations
 COPY --chown=nextjs:nodejs scripts ./scripts
-COPY --chown=nextjs:nodejs src/lib/migration-integrity.ts ./src/lib/migration-integrity.ts
+COPY --chown=nextjs:nodejs \
+  src/lib/db.ts \
+  src/lib/migration-integrity.ts \
+  src/lib/telegram-roster.ts \
+  ./src/lib/
 
 USER nextjs
 
