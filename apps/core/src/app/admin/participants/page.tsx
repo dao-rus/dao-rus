@@ -221,7 +221,11 @@ export default async function ParticipantRegistryPage({
                     {entry.participantId ? (
                       <>
                         <strong>Связан</strong>
-                        <small>{entry.participantDisplayName ?? "Participant"}</small>
+                        <small>
+                          <Link href={`/profile/${entry.participantId}`}>
+                            {entry.participantDisplayName ?? "Participant"}
+                          </Link>
+                        </small>
                         <code>{entry.participantId}</code>
                       </>
                     ) : (

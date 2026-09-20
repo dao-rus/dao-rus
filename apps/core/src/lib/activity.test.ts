@@ -14,6 +14,15 @@ describe("activityEventLabel", () => {
     expect(activityEventLabel("participant_registry.identity_verification_changed")).toBe(
       "Изменение верификации в реестре",
     );
+    expect(activityEventLabel("verification.root_added")).toBe(
+      "Добавлен корень человеческой верификации",
+    );
+    expect(activityEventLabel("verification.attestation_created")).toBe(
+      "Создано подтверждение личности",
+    );
+    expect(activityEventLabel("verification.attestation_revoked")).toBe(
+      "Отозвано подтверждение личности",
+    );
     expect(activityEventLabel("membership.joined")).toBe("Принятие в ДАО");
     expect(activityEventLabel("membership.left")).toBe("Выход из ДАО");
     expect(activityEventLabel("membership.rejoined")).toBe("Возвращение в ДАО");

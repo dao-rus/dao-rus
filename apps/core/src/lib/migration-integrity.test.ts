@@ -126,6 +126,27 @@ describe("migration integrity", () => {
     );
   });
 
+  it("accepts verification migration 009 as pending after validating 001-008", async () => {
+    const legacy = await legacyFiles();
+    const verification = migrationFile(
+      "009_verification_attestations.sql",
+      await readFile(
+        new URL(
+          "../../migrations/009_verification_attestations.sql",
+          import.meta.url,
+        ),
+        "utf8",
+      ),
+    );
+    const plan = createMigrationPlan(
+      [...legacy, verification],
+      legacy.map((file) => ({ name: file.name, checksum: file.checksum })),
+    );
+
+    expect(plan.bootstrap).toEqual([]);
+    expect(plan.pending).toEqual([verification]);
+  });
+
   it("applies SQL and saves its checksum in the same transaction", async () => {
     const client = new FakeClient();
     const file = migrationFile("009_example.sql", "SELECT 1;\n");

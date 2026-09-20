@@ -229,6 +229,29 @@ dd { margin: 6px 0 0; }
 .membershipHistoryAuthor { font-size: 12px; line-height: 1.4; }
 .membershipHistoryAuthor { padding-top: 2px; }
 
+.verificationCard,
+.verificationAdmin {
+  margin-top: 30px;
+  padding: 20px;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+}
+.verificationCard > div { display: flex; align-items: center; gap: 10px; }
+.verificationCard > strong { display: block; margin-top: 14px; }
+.verificationCard form,
+.verificationAdmin form { margin-top: 16px; }
+.verificationBadge {
+  display: inline-flex;
+  padding: 6px 10px;
+  border-radius: 999px;
+  background: #ece9e0;
+  color: var(--muted);
+  font-size: 13px;
+  font-weight: 700;
+}
+.verificationBadge.verified { background: #e1efe5; color: var(--accent); }
+.verificationAdmin h2 { margin-top: 0; font-size: 20px; }
+
 .proposalForm {
   display: grid;
   gap: 10px;

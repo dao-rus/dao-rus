@@ -8,6 +8,7 @@ import {
   membershipEventLabel,
 } from "@/lib/membership-history";
 import { getCurrentParticipant } from "@/lib/session";
+import { getVerificationProfile } from "@/lib/verification";
 
 export const dynamic = "force-dynamic";
 
@@ -33,9 +34,10 @@ export default async function ProfilePage({ searchParams }: ProfilePageProps) {
   if (!participant) redirect("/");
 
   const params = await searchParams;
-  const [activity, membershipHistory] = await Promise.all([
+  const [activity, membershipHistory, verification] = await Promise.all([
     getActivitySummary(participant.id),
     getMembershipHistory(participant.id),
+    getVerificationProfile(participant.id, participant.id),
   ]);
   const hasAdminAccess = hasPrototypeAdminAccess(participant.id);
   const updateMessage = params.profile_update
@@ -94,6 +96,14 @@ export default async function ProfilePage({ searchParams }: ProfilePageProps) {
 
         <dl className="facts">
           <div>
+            <dt>Человеческая верификация</dt>
+            <dd>
+              <strong>{verification?.isVerified ? "V · Верифицирован" : "Не верифицирован"}</strong>
+              {verification?.isRoot ? " · root" : ""}
+              {` · ${verification?.verificationPoints ?? 0} points`}
+            </dd>
+          </div>
+          <div>
             <dt>Внутренний ID</dt>
             <dd className="mono">{participant.id}</dd>
           </div>
@@ -108,6 +118,12 @@ export default async function ProfilePage({ searchParams }: ProfilePageProps) {
             </dd>
           </div>
         </dl>
+
+        <p>
+          <Link className="metricLink" href={`/profile/${participant.id}`}>
+            Открыть профиль верификации →
+          </Link>
+        </p>
 
         <section className="activityHistory membershipHistory">
           <h2>История участия</h2>

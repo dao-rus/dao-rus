@@ -285,6 +285,25 @@ docker compose exec web npm run telegram:roster:import -- "/app/.local/telegram/
 
 Новая запись получает `identity_verification = 'unverified'`. Roster не создаёт `Participant` или `ExternalIdentity`, не доказывает членство, не импортирует сообщения/телефоны и не формирует репутацию. `identity_verification` означает отдельную человеческую проверку личности внутри ДАО и не является результатом Telegram OIDC/Core login.
 
+### Human Verification v0.1
+
+Каноническая человеческая верификация Core хранится отдельно от legacy-поля
+`telegram_roster_entries.identity_verification`. Таблицы `verification_roots` и
+`verification_attestations` образуют web of trust между уже существующими Core
+Subjects. Root считается верифицированным непосредственно; любой другой subject
+считается верифицированным, если достижим от root по активным attestations.
+
+`verification points` — число активных входящих attestations от уже
+верифицированных subjects. Self-verification запрещена, одна пара
+`verifier → subject` может иметь не более одной активной записи, а отзыв
+заполняет `revoked_at` и не удаляет историю. Добавление root доступно только
+prototype-admin из `ADMIN_PARTICIPANT_IDS`, но само присутствие UUID в этой
+переменной root не создаёт. Legacy `verified` автоматически не мигрируется.
+
+Verification не изменяет membership, login, Proposal eligibility или reputation.
+События `verification.root_added`, `verification.attestation_created` и
+`verification.attestation_revoked` сохраняют audit history этих действий.
+
 Проверить импорт можно напрямую:
 
 ```powershell

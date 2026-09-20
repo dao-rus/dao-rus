@@ -77,7 +77,9 @@ export default async function ProposalsPage({ searchParams }: ProposalsPageProps
               {proposals.map((proposal) => (
                 <li key={proposal.id}>
                   <div className="proposalMeta">
-                    <span>{proposal.authorDisplayName}</span>
+                    <Link href={`/profile/${proposal.authorParticipantId}`}>
+                      {proposal.authorDisplayName}
+                    </Link>
                     <span>
                       <LocalDateTime value={proposal.createdAt.toISOString()} />
                     </span>
