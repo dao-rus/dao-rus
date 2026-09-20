@@ -125,6 +125,7 @@ describe("admin access regression", () => {
 
     const page = await ProfilePage({ searchParams: Promise.resolve({}) });
 
+    expect(treeContainsHref(page, "/participants")).toBe(true);
     expect(treeContainsHref(page, "/admin/participants")).toBe(false);
   });
 

@@ -252,6 +252,34 @@ dd { margin: 6px 0 0; }
 .verificationBadge.verified { background: #e1efe5; color: var(--accent); }
 .verificationAdmin h2 { margin-top: 0; font-size: 20px; }
 
+.participantsSearch {
+  display: grid;
+  gap: 8px;
+  margin: 28px 0;
+}
+.participantsSearch > label { color: var(--muted); font-size: 13px; }
+.participantsSearch > div { display: flex; flex-wrap: wrap; gap: 8px; }
+.participantsSearch input {
+  flex: 1;
+  min-width: 220px;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  padding: 11px 12px;
+  background: #fff;
+  color: var(--ink);
+}
+.participantsDirectory { list-style: none; margin: 0; padding: 0; }
+.participantsDirectory li {
+  display: flex;
+  justify-content: space-between;
+  gap: 18px;
+  align-items: center;
+  padding: 16px 0;
+  border-top: 1px solid var(--line);
+}
+.participantsDirectory li > div:first-child { display: grid; gap: 5px; }
+.participantDirectoryActions { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; }
+
 .proposalForm {
   display: grid;
   gap: 10px;
@@ -289,4 +317,5 @@ dd { margin: 6px 0 0; }
 @media (max-width: 620px) {
   .activitySummary { grid-template-columns: 1fr; }
   .activityHistory li { flex-direction: column; gap: 7px; }
+  .participantsDirectory li { align-items: flex-start; flex-direction: column; }
 }
