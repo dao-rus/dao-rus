@@ -15,13 +15,13 @@ type SubjectProfilePageProps = {
 };
 
 const actionMessages: Record<string, string> = {
-  created: "Ваша верификация сохранена.",
-  revoked: "Ваша верификация отозвана.",
-  unchanged: "Состояние уже актуально; новое событие не создано.",
+  created: "Ваше подтверждение сохранено.",
+  revoked: "Ваше подтверждение отозвано.",
+  unchanged: "Ничего не изменилось.",
   self: "Нельзя подтвердить самого себя.",
-  not_verified: "Создавать верификации может только верифицированный субъект.",
+  not_verified: "Подтверждать других может только человек с подтверждённой личностью.",
   not_found: "Профиль не найден.",
-  invalid: "Некорректное действие верификации.",
+  invalid: "Не удалось выполнить действие с подтверждением.",
 };
 
 const rootMessages: Record<string, string> = {
@@ -58,9 +58,8 @@ export default async function SubjectProfilePage({
           <div>
             <div className="eyebrow">Профиль</div>
             <h1>{profile.displayName}</h1>
-            <p className="muted mono">{profile.subjectId}</p>
           </div>
-          <Link className="button secondary" href="/profile">К своему профилю</Link>
+          <Link className="button secondary" href="/profile">Ваш профиль</Link>
         </div>
 
         <section className="verificationCard">
@@ -74,23 +73,26 @@ export default async function SubjectProfilePage({
           <p className="muted">
             Здесь учитываются подтверждения от людей, чья личность уже подтверждена в сети доверия.
           </p>
+          {!ownProfile ? (
+            <p className="muted">Подтверждайте только тех, кого можете лично узнать и отличить от других.</p>
+          ) : null}
 
           {!ownProfile && profile.viewerAttestationId ? (
             <form action="/api/verification/attestations" method="post">
               <input type="hidden" name="subject_id" value={profile.subjectId} />
               <input type="hidden" name="action" value="revoke" />
-              <button className="button secondary" type="submit">Отозвать мою верификацию</button>
+              <button className="button secondary" type="submit">Отозвать подтверждение</button>
             </form>
           ) : null}
           {!ownProfile && !profile.viewerAttestationId && profile.viewerIsVerified ? (
             <form action="/api/verification/attestations" method="post">
               <input type="hidden" name="subject_id" value={profile.subjectId} />
               <input type="hidden" name="action" value="create" />
-              <button className="button primary" type="submit">Верифицировать</button>
+              <button className="button primary" type="submit">Подтвердить, что знаю этого человека</button>
             </form>
           ) : null}
           {!ownProfile && !profile.viewerIsVerified ? (
-            <p className="muted">Ваш профиль пока не имеет права создавать attestations.</p>
+            <p className="muted">Подтверждать других можно после подтверждения вашей личности.</p>
           ) : null}
           {ownProfile ? (
             <p className="muted">Нельзя подтвердить самого себя.</p>
@@ -103,7 +105,7 @@ export default async function SubjectProfilePage({
             <h2>Начальное ядро доверия</h2>
             <p className="muted">
               Первые участники, которые лично знают друг друга, становятся исходными точками
-              верификации. От них сеть подтверждений распространяется дальше.
+              подтверждения личности. От них сеть подтверждений распространяется дальше.
             </p>
             <form action="/api/admin/verification/roots" method="post">
               <input type="hidden" name="subject_id" value={profile.subjectId} />

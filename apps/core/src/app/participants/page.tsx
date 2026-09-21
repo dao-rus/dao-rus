@@ -21,17 +21,15 @@ export default async function ParticipantsPage({ searchParams }: ParticipantsPag
       <section className="card participantsPage">
         <div className="profileHeader">
           <div>
-            <div className="eyebrow">DAO Core</div>
-            <h1>Участники</h1>
-            <p className="muted">
-              Профили людей, уже представленных в Core. Найдено: {participants.length}.
-            </p>
+            <div className="eyebrow">Ядро</div>
+            <h1>Люди</h1>
+            <p className="muted">Найдено: {participants.length}.</p>
           </div>
-          <Link className="button secondary" href="/profile">К профилю</Link>
+          <Link className="button secondary" href="/profile">Ваш профиль</Link>
         </div>
 
         <form className="participantsSearch" method="get">
-          <label htmlFor="participants-search">Имя или Telegram username</label>
+          <label htmlFor="participants-search">Имя или имя в Telegram</label>
           <div>
             <input
               id="participants-search"
@@ -53,7 +51,7 @@ export default async function ParticipantsPage({ searchParams }: ParticipantsPag
                   <span className="muted">
                     {participant.telegramUsername
                       ? `@${participant.telegramUsername}`
-                      : "Telegram username не указан"}
+                      : "Имя в Telegram не указано"}
                   </span>
                 </div>
                 <div className="participantDirectoryActions">

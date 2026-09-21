@@ -49,21 +49,21 @@ export default async function ProfilePage({ searchParams }: ProfilePageProps) {
       <section className="card profile">
         <div className="profileHeader">
           <div>
-            <div className="eyebrow">Участник DAO Core</div>
+            <div className="eyebrow">Ядро</div>
             <h1>{participant.displayName}</h1>
             <p className="muted">
               {participant.telegramUsername
                 ? `@${participant.telegramUsername}`
-                : `Telegram ID: ${participant.telegramUserId ?? "—"}`}
+                : "Вы вошли через Telegram"}
             </p>
           </div>
           <div className="profileActions">
             <Link className="button secondary" href="/participants">
-              Участники
+              Люди
             </Link>
             {hasAdminAccess ? (
               <Link className="button secondary" href="/admin/participants">
-                Участники ДАО
+                Реестр ДАО
               </Link>
             ) : null}
             <Link className="button secondary" href="/proposals">
@@ -99,16 +99,12 @@ export default async function ProfilePage({ searchParams }: ProfilePageProps) {
 
         <dl className="facts">
           <div>
-            <dt>Человеческая верификация</dt>
+            <dt>Подтверждение личности</dt>
             <dd>
-              <strong>{verification?.isVerified ? "V · Верифицирован" : "Не верифицирован"}</strong>
-              {verification?.isRoot ? " · root" : ""}
-              {` · ${verification?.verificationPoints ?? 0} points`}
+              <strong>
+                {verification?.isVerified ? "✓ Личность подтверждена" : "Личность пока не подтверждена"}
+              </strong>
             </dd>
-          </div>
-          <div>
-            <dt>Внутренний ID</dt>
-            <dd className="mono">{participant.id}</dd>
           </div>
           <div>
             <dt>Статус</dt>
@@ -124,7 +120,7 @@ export default async function ProfilePage({ searchParams }: ProfilePageProps) {
 
         <p>
           <Link className="metricLink" href={`/profile/${participant.id}`}>
-            Открыть профиль верификации →
+            Подтверждение личности →
           </Link>
         </p>
 
@@ -173,12 +169,11 @@ export default async function ProfilePage({ searchParams }: ProfilePageProps) {
             </Link>
           </article>
           <article>
-            <span>Отзывы</span>
+            <span>Карма</span>
             <strong>Нет данных</strong>
-          </article>
-          <article>
-            <span>Коммуникабельность</span>
-            <strong>Нет данных</strong>
+            <Link className="metricLink" href="/profile/reputation">
+              Подробнее →
+            </Link>
           </article>
         </div>
       </section>

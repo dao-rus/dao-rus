@@ -17,14 +17,14 @@ export default async function Home({
   return (
     <main className="shell">
       <section className="hero card">
-        <div className="eyebrow">DAO Core · prototype 0.1</div>
+        <div className="eyebrow">Ядро</div>
         <h1>ДАО Русь</h1>
         <p className="lead">
-          Первый вертикальный срез: единый участник, независимый от Telegram и Discourse.
+          Пространство, где мы узнаём друг друга, сохраняем историю участия и вместе строим ДАО Русь.
         </p>
 
         {params.auth_error ? (
-          <p className="alert">Вход через Telegram не завершён: {params.auth_error}</p>
+          <p className="alert">Не удалось войти через Telegram. Попробуйте ещё раз.</p>
         ) : null}
 
         {participant ? (
@@ -46,17 +46,13 @@ export default async function Home({
             {devReady ? (
               <form action="/api/auth/dev" method="post">
                 <button className="button secondary" type="submit">
-                  Демо-вход для локальной проверки
+                  Пробный вход для локальной проверки
                 </button>
               </form>
             ) : null}
           </div>
         )}
 
-        <p className="hint">
-          Реальный Telegram-вход использует OIDC Authorization Code Flow + PKCE и проверку
-          подписанного ID token на сервере.
-        </p>
       </section>
     </main>
   );
