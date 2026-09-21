@@ -9,6 +9,7 @@ const mocks = vi.hoisted(() => ({
   getVerificationProfile: vi.fn(),
   readInterfaceTexts: vi.fn(),
   getDarusBalance: vi.fn(),
+  getReputationSummary: vi.fn(),
   getCurrentRewardRule: vi.fn(),
   listParticipantRegistry: vi.fn(),
   redirect: vi.fn(),
@@ -53,6 +54,7 @@ vi.mock("@/lib/tokenization", () => ({
   getDarusBalance: mocks.getDarusBalance,
   getCurrentRewardRule: mocks.getCurrentRewardRule,
 }));
+vi.mock("@/lib/reputation", () => ({ getReputationSummary: mocks.getReputationSummary }));
 
 vi.mock("@/lib/participant-registry", () => ({
   listParticipantRegistry: mocks.listParticipantRegistry,
@@ -143,6 +145,7 @@ describe("admin access regression", () => {
     });
     mocks.readInterfaceTexts.mockResolvedValue({ values: { "profile.eyebrow": "Профиль" } });
     mocks.getDarusBalance.mockResolvedValue("0.000000");
+    mocks.getReputationSummary.mockResolvedValue({ positiveCount: 0, viewerSignal: null });
 
     const page = await ProfilePage({ searchParams: Promise.resolve({}) });
 
@@ -159,13 +162,14 @@ describe("admin access regression", () => {
     expect(mocks.getCurrentRewardRule).not.toHaveBeenCalled();
   });
 
-  it("shows the three protected sections in one admin dashboard", async () => {
+  it("shows the protected sections in one admin dashboard", async () => {
     mocks.getCurrentParticipant.mockResolvedValue({ id: "admin" });
     mocks.hasPrototypeAdminAccess.mockReturnValue(true);
     const page = await AdminPage();
     expect(treeContainsHref(page, "/admin/participants")).toBe(true);
     expect(treeContainsHref(page, "/admin/interface")).toBe(true);
     expect(treeContainsHref(page, "/admin/rewards")).toBe(true);
+    expect(treeContainsHref(page, "/admin/reputation")).toBe(true);
   });
 
   it("shows only one management link in the admin profile", async () => {
@@ -179,11 +183,13 @@ describe("admin access regression", () => {
     mocks.getVerificationProfile.mockResolvedValue({ isVerified: true });
     mocks.readInterfaceTexts.mockResolvedValue({ values: { "profile.eyebrow": "Профиль" } });
     mocks.getDarusBalance.mockResolvedValue("0.000000");
+    mocks.getReputationSummary.mockResolvedValue({ positiveCount: 0, viewerSignal: null });
     const page = await ProfilePage({ searchParams: Promise.resolve({}) });
     expect(treeContainsHref(page, "/admin")).toBe(true);
     expect(treeContainsHref(page, "/admin/participants")).toBe(false);
     expect(treeContainsHref(page, "/admin/interface")).toBe(false);
     expect(treeContainsHref(page, "/admin/rewards")).toBe(false);
+    expect(treeContainsHref(page, "/admin/reputation")).toBe(false);
   });
 
   it("does not show verification root controls to a non-admin", async () => {
@@ -198,6 +204,7 @@ describe("admin access regression", () => {
       viewerAttestationId: null,
       viewerIsVerified: false,
     });
+    mocks.getReputationSummary.mockResolvedValue({ positiveCount: 0, viewerSignal: null });
 
     const page = await SubjectProfilePage({
       params: Promise.resolve({ participantId: "subject-participant" }),

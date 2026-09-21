@@ -5,6 +5,7 @@ const mocks = vi.hoisted(() => ({
   getCurrentParticipant: vi.fn(),
   getVerificationProfile: vi.fn(),
   getVisibleProfileAbout: vi.fn(),
+  getReputationSummary: vi.fn(),
   hasPrototypeAdminAccess: vi.fn(),
   redirect: vi.fn(),
   notFound: vi.fn(),
@@ -14,6 +15,7 @@ vi.mock("next/navigation", () => ({ redirect: mocks.redirect, notFound: mocks.no
 vi.mock("@/lib/session", () => ({ getCurrentParticipant: mocks.getCurrentParticipant }));
 vi.mock("@/lib/verification", () => ({ getVerificationProfile: mocks.getVerificationProfile }));
 vi.mock("@/lib/profile-about", () => ({ getVisibleProfileAbout: mocks.getVisibleProfileAbout }));
+vi.mock("@/lib/reputation", () => ({ getReputationSummary: mocks.getReputationSummary }));
 vi.mock("@/lib/config", () => ({ hasPrototypeAdminAccess: mocks.hasPrototypeAdminAccess }));
 vi.mock("@/components/telegram-avatar", () => ({ TelegramAvatar: () => null }));
 
@@ -49,6 +51,7 @@ describe("public subject profile name", () => {
       interests: [],
       signals: [],
     });
+    mocks.getReputationSummary.mockResolvedValue({ positiveCount: 2, viewerSignal: null });
   });
 
   it("hides a roster name before the person's own login", async () => {
@@ -90,5 +93,28 @@ describe("public subject profile name", () => {
     expect(text).toContain("История");
     expect(text).toContain("Могу редактировать тексты");
     expect(text).not.toContain("+79990000000");
+  });
+
+  it("shows only positive totals and the viewer's own quality flag", async () => {
+    mocks.getReputationSummary.mockResolvedValue({ positiveCount: 2, viewerSignal: "quality_flag" });
+    const page = await SubjectProfilePage({
+      params: Promise.resolve({ participantId: rosterProfile.subjectId }),
+      searchParams: Promise.resolve({}),
+    });
+    const text = textContent(page);
+    expect(mocks.getReputationSummary).toHaveBeenCalledWith(rosterProfile.subjectId, "10000000-0000-4000-8000-000000000001");
+    expect(text).toMatch(/Хороший опыт взаимодействия:\s+2/);
+    expect(text).toMatch(/Ваша текущая оценка:\s+Есть проблема/);
+    expect(text).not.toContain("количество проблем");
+    expect(text).not.toContain("автор");
+  });
+
+  it("does not offer self rating on one's own subject profile", async () => {
+    mocks.getCurrentParticipant.mockResolvedValue({ id: rosterProfile.subjectId });
+    const page = await SubjectProfilePage({
+      params: Promise.resolve({ participantId: rosterProfile.subjectId }),
+      searchParams: Promise.resolve({}),
+    });
+    expect(textContent(page)).not.toContain("Опыт взаимодействия");
   });
 });

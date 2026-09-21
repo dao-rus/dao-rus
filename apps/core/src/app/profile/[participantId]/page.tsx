@@ -3,6 +3,7 @@ import { notFound, redirect } from "next/navigation";
 import { hasPrototypeAdminAccess } from "@/lib/config";
 import { TelegramAvatar } from "@/components/telegram-avatar";
 import { getVisibleProfileAbout } from "@/lib/profile-about";
+import { getReputationSummary } from "@/lib/reputation";
 import { getCurrentParticipant } from "@/lib/session";
 import { getVerificationProfile } from "@/lib/verification";
 
@@ -17,7 +18,7 @@ const signalLabels: Record<string, string> = {
 
 type SubjectProfilePageProps = {
   params: Promise<{ participantId: string }>;
-  searchParams: Promise<{ verification_action?: string; verification_root?: string }>;
+  searchParams: Promise<{ verification_action?: string; verification_root?: string; reputation_action?: string }>;
 };
 
 const actionMessages: Record<string, string> = {
@@ -48,10 +49,20 @@ export default async function SubjectProfilePage({ params, searchParams }: Subje
   ]);
   if (!profile) notFound();
 
+  const reputation = await getReputationSummary(profile.subjectId, viewer.id);
+
   const ownProfile = viewer.id === profile.subjectId;
   const admin = hasPrototypeAdminAccess(viewer.id);
   const actionMessage = query.verification_action ? actionMessages[query.verification_action] : null;
   const rootMessage = query.verification_root ? rootMessages[query.verification_root] : null;
+  const reputationMessage = query.reputation_action ? ({
+    created: "Ваш опыт сохранён.",
+    changed: "Ваш опыт изменён.",
+    revoked: "Ваш опыт отозван.",
+    unchanged: "Ничего не изменилось.",
+    self: "Нельзя оценивать себя.",
+    invalid: "Не удалось сохранить оценку.",
+  } as Record<string, string>)[query.reputation_action] : null;
 
   return (
     <main className="shell">
@@ -128,6 +139,38 @@ export default async function SubjectProfilePage({ params, searchParams }: Subje
           {ownProfile ? <p className="muted">Нельзя подтвердить самого себя.</p> : null}
           {actionMessage ? <p className="formNotice">{actionMessage}</p> : null}
         </section>
+
+        {!ownProfile ? (
+          <section className="verificationCard">
+            <h2>Опыт взаимодействия</h2>
+            <p>Хороший опыт взаимодействия: <strong>{reputation.positiveCount}</strong></p>
+            <p className="muted">Ваша текущая оценка: {reputation.viewerSignal === "positive" ? "Хороший опыт взаимодействия" : reputation.viewerSignal === "quality_flag" ? "Есть проблема" : "пока нет"}.</p>
+            <div className="actions">
+              {reputation.viewerSignal !== "positive" ? (
+                <form action="/api/reputation" method="post">
+                  <input type="hidden" name="subject_id" value={profile.subjectId} />
+                  <input type="hidden" name="action" value="positive" />
+                  <button className="button secondary" type="submit">Хороший опыт взаимодействия</button>
+                </form>
+              ) : null}
+              {reputation.viewerSignal !== "quality_flag" ? (
+                <form action="/api/reputation" method="post">
+                  <input type="hidden" name="subject_id" value={profile.subjectId} />
+                  <input type="hidden" name="action" value="quality_flag" />
+                  <button className="button secondary" type="submit">Есть проблема</button>
+                </form>
+              ) : null}
+              {reputation.viewerSignal ? (
+                <form action="/api/reputation" method="post">
+                  <input type="hidden" name="subject_id" value={profile.subjectId} />
+                  <input type="hidden" name="action" value="revoke" />
+                  <button className="button secondary" type="submit">Отозвать оценку</button>
+                </form>
+              ) : null}
+            </div>
+            {reputationMessage ? <p className="formNotice">{reputationMessage}</p> : null}
+          </section>
+        ) : null}
 
         {admin && !profile.isRoot ? (
           <section className="verificationAdmin">

@@ -20,6 +20,7 @@ export default async function AdminPage() {
           <Link className="button secondary" href="/admin/participants">Реестр ДАО</Link>
           <Link className="button secondary" href="/admin/interface">Тексты интерфейса</Link>
           <Link className="button secondary" href="/admin/rewards">Тарифы DARUS</Link>
+          <Link className="button secondary" href="/admin/reputation">История репутации</Link>
         </nav>
       </section>
     </main>
