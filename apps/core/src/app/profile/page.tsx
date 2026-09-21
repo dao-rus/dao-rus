@@ -29,6 +29,15 @@ const signalLabels: Record<string, string> = {
   have: "У меня есть",
 };
 
+const signalPrompts = {
+  want: "Хочу…",
+  need: "Мне нужно…",
+  can: "Я могу…",
+  have: "У меня есть…",
+} as const;
+
+const signalKinds = ["want", "need", "can", "have"] as const;
+
 const visibilityLabels: Record<string, string> = {
   public: "Всем",
   members: "Участникам ДАО",
@@ -165,40 +174,60 @@ export default async function ProfilePage({ searchParams }: ProfilePageProps) {
           </div>
 
           <div className="aboutBlock">
-            <h3>Я хочу / Мне нужно / Я могу / У меня есть</h3>
-            {about?.signals.length ? (
-              <ul className="profileItems signalItems">
-                {about.signals.map((signal) => (
-                  <li key={signal.id}>
-                    <div>
-                      <span className="signalKind">{signalLabels[signal.kind] ?? signal.kind}</span>
-                      <strong>{signal.body}</strong>
-                      <small>{visibilityLabels[signal.visibility] ?? signal.visibility}</small>
-                    </div>
-                    <form action="/api/profile/about" method="post">
-                      <input type="hidden" name="action" value="archive_signal" />
-                      <input type="hidden" name="signal_id" value={signal.id} />
-                      <button className="button secondary compact" type="submit">Убрать</button>
+            <h3>Что вы хотите, можете, ищете или готовы предложить</h3>
+            <p className="muted">
+              Заполните только то, что актуально. Каждый пункт можно скрыть и использовать только для будущего поиска совпадений.
+            </p>
+            <div className="signalEntryGrid">
+              {signalKinds.map((kind) => {
+                const signals = about?.signals.filter((signal) => signal.kind === kind) ?? [];
+                return (
+                  <section className="signalEntryCard" key={kind}>
+                    <h4>{signalLabels[kind]}</h4>
+                    {signals.length ? (
+                      <ul className="profileItems signalItems">
+                        {signals.map((signal) => (
+                          <li key={signal.id}>
+                            <div>
+                              <strong>{signal.body}</strong>
+                              <small>{visibilityLabels[signal.visibility] ?? signal.visibility}</small>
+                            </div>
+                            <form action="/api/profile/about" method="post">
+                              <input type="hidden" name="action" value="archive_signal" />
+                              <input type="hidden" name="signal_id" value={signal.id} />
+                              <button className="button secondary compact" type="submit">Убрать</button>
+                            </form>
+                          </li>
+                        ))}
+                      </ul>
+                    ) : null}
+                    <form className="aboutForm signalForm" action="/api/profile/about" method="post">
+                      <input type="hidden" name="action" value="add_signal" />
+                      <input type="hidden" name="kind" value={kind} />
+                      <textarea
+                        name="body"
+                        maxLength={500}
+                        placeholder={signalPrompts[kind]}
+                        aria-label={signalLabels[kind]}
+                        required
+                      />
+                      <label>
+                        Кто видит
+                        <select name="visibility" defaultValue="members">
+                          {matchableVisibilityOptions.map((value) => (
+                            <option key={value} value={value}>{visibilityLabels[value]}</option>
+                          ))}
+                        </select>
+                      </label>
+                      <button className="button secondary" type="submit">Добавить</button>
                     </form>
-                  </li>
-                ))}
-              </ul>
-            ) : <p className="muted">Пока нет активных сигналов.</p>}
-            <form className="aboutForm signalForm" action="/api/profile/about" method="post">
-              <input type="hidden" name="action" value="add_signal" />
-              <label htmlFor="signal-kind">Тип</label>
-              <select id="signal-kind" name="kind" defaultValue="want">
-                {Object.entries(signalLabels).map(([value, label]) => <option key={value} value={value}>{label}</option>)}
-              </select>
-              <label htmlFor="signal-body">Текст</label>
-              <textarea id="signal-body" name="body" maxLength={500} placeholder="Например: хочу найти людей для исторического проекта" required />
-              <label htmlFor="signal-visibility">Кто видит</label>
-              <select id="signal-visibility" name="visibility" defaultValue="members">
-                {matchableVisibilityOptions.map((value) => <option key={value} value={value}>{visibilityLabels[value]}</option>)}
-              </select>
-              <p className="muted privacyHint">«Только при совпадении» не публикует исходный сигнал в чужих профилях. Механизм сопоставления будет подключён отдельным этапом.</p>
-              <button className="button primary" type="submit">Добавить сигнал</button>
-            </form>
+                  </section>
+                );
+              })}
+            </div>
+            <p className="muted privacyHint">
+              «Только при совпадении» не публикует исходный сигнал в чужих профилях. Механизм сопоставления будет подключён отдельным этапом.
+            </p>
           </div>
           {aboutMessage ? <p className={params.about_update === "invalid" ? "formError" : "formNotice"}>{aboutMessage}</p> : null}
         </section>
