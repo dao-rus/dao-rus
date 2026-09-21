@@ -37,6 +37,9 @@ const visibilityLabels: Record<string, string> = {
   private: "Только мне",
 };
 
+const bioVisibilityOptions = ["public", "members", "private"] as const;
+const matchableVisibilityOptions = ["public", "members", "match_only", "private"] as const;
+
 type ProfilePageProps = {
   searchParams: Promise<{ profile_update?: string; about_update?: string }>;
 };
@@ -127,7 +130,7 @@ export default async function ProfilePage({ searchParams }: ProfilePageProps) {
             <textarea id="profile-bio" name="bio" maxLength={2000} defaultValue={about?.bio ?? ""} placeholder="Несколько слов о себе" />
             <label htmlFor="bio-visibility">Кто видит</label>
             <select id="bio-visibility" name="visibility" defaultValue={about?.bioVisibility ?? "members"}>
-              {Object.entries(visibilityLabels).map(([value, label]) => <option key={value} value={value}>{label}</option>)}
+              {bioVisibilityOptions.map((value) => <option key={value} value={value}>{visibilityLabels[value]}</option>)}
             </select>
             <button className="button primary" type="submit">Сохранить био</button>
           </form>
@@ -155,7 +158,7 @@ export default async function ProfilePage({ searchParams }: ProfilePageProps) {
               <input type="hidden" name="action" value="add_interest" />
               <input name="label" maxLength={80} placeholder="Например: история" required />
               <select name="visibility" defaultValue="members">
-                {Object.entries(visibilityLabels).map(([value, label]) => <option key={value} value={value}>{label}</option>)}
+                {matchableVisibilityOptions.map((value) => <option key={value} value={value}>{visibilityLabels[value]}</option>)}
               </select>
               <button className="button secondary" type="submit">Добавить</button>
             </form>
@@ -191,7 +194,7 @@ export default async function ProfilePage({ searchParams }: ProfilePageProps) {
               <textarea id="signal-body" name="body" maxLength={500} placeholder="Например: хочу найти людей для исторического проекта" required />
               <label htmlFor="signal-visibility">Кто видит</label>
               <select id="signal-visibility" name="visibility" defaultValue="members">
-                {Object.entries(visibilityLabels).map(([value, label]) => <option key={value} value={value}>{label}</option>)}
+                {matchableVisibilityOptions.map((value) => <option key={value} value={value}>{visibilityLabels[value]}</option>)}
               </select>
               <p className="muted privacyHint">«Только при совпадении» не публикует исходный сигнал в чужих профилях. Механизм сопоставления будет подключён отдельным этапом.</p>
               <button className="button primary" type="submit">Добавить сигнал</button>
