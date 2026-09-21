@@ -31,6 +31,7 @@ describe("participants directory", () => {
     expect(queries[0].text).toContain("WITH RECURSIVE verified");
     expect(queries[0].text).toContain("FROM participants participant");
     expect(queries[0].text).toContain("LEFT JOIN external_identities telegram");
+    expect(queries[0].text).toContain("login.event_type = 'participant.logged_in'");
     expect(queries[0].text).not.toContain("telegram_roster_entries");
     expect(entries).toEqual([
       {
@@ -45,6 +46,28 @@ describe("participants directory", () => {
         telegramUsername: null,
         isVerified: false,
       },
+    ]);
+  });
+
+  it("hides a roster-backed profile until its own successful Core login", async () => {
+    const participantId = "30000000-0000-4000-8000-000000000003";
+    let hasLoggedIn = false;
+    const database = {
+      async query(text: string) {
+        expect(text).toContain("login.participant_id = participant.id");
+        expect(text).toContain("login.event_type = 'participant.logged_in'");
+        return {
+          rows: hasLoggedIn
+            ? [{ participant_id: participantId, display_name: "Имя из Telegram", telegram_username: null, is_verified: false }]
+            : [],
+        };
+      },
+    };
+
+    expect(await listParticipantsDirectoryWithDatabase(database)).toEqual([]);
+    hasLoggedIn = true;
+    expect(await listParticipantsDirectoryWithDatabase(database)).toMatchObject([
+      { participantId, displayName: "Имя из Telegram" },
     ]);
   });
 });

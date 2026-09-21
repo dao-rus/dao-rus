@@ -57,7 +57,7 @@ export default async function SubjectProfilePage({
         <div className="profileHeader">
           <div>
             <div className="eyebrow">Профиль</div>
-            <h1>{profile.displayName}</h1>
+            <h1>{profile.hasLoggedIn ? profile.displayName : "Человек ещё не вошёл в Ядро"}</h1>
           </div>
           <Link className="button secondary" href="/profile">Ваш профиль</Link>
         </div>

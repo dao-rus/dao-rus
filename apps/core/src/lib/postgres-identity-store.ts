@@ -54,7 +54,7 @@ export class PostgresIdentityStore implements IdentityStore {
   async updateTelegramIdentity(
     participantId: string,
     profile: TelegramIdentityProfile,
-  ): Promise<void> {
+  ): Promise<Participant> {
     const client = await pool.connect();
     try {
       await client.query("BEGIN");
@@ -78,12 +78,26 @@ export class PostgresIdentityStore implements IdentityStore {
           profile.avatarUrl,
         ],
       );
+      await client.query(
+        `UPDATE participants
+            SET display_name = $2, updated_at = now()
+          WHERE id = $1
+            AND NOT display_name_chosen_in_core
+            AND display_name IS DISTINCT FROM $2`,
+        [participantId, profile.displayName],
+      );
       await linkTelegramRosterEntryWithClient(
         client,
         profile.telegramUserId,
         participantId,
       );
+      const participantResult = await client.query(
+        `SELECT id, display_name, membership_status, created_at
+           FROM participants WHERE id = $1`,
+        [participantId],
+      );
       await client.query("COMMIT");
+      return participantFromRow(participantResult.rows[0]);
     } catch (error) {
       try {
         await client.query("ROLLBACK");
@@ -138,8 +152,7 @@ export class PostgresIdentityStore implements IdentityStore {
           try {
             const existing = await findWithClient(existingClient, profile);
             if (!existing) throw error;
-            await this.updateTelegramIdentity(existing.id, profile);
-            return existing;
+            return await this.updateTelegramIdentity(existing.id, profile);
           } finally {
             existingClient.release();
           }

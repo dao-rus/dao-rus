@@ -59,6 +59,12 @@ export async function updateParticipantDisplayNameWithDatabase(
     const oldDisplayName = String(participantResult.rows[0].display_name);
 
     if (oldDisplayName === newDisplayName) {
+      await client.query(
+        `UPDATE participants
+            SET display_name_chosen_in_core = true
+          WHERE id = $1 AND NOT display_name_chosen_in_core`,
+        [participantId],
+      );
       await client.query("COMMIT");
       return { changed: false, oldDisplayName, newDisplayName };
     }
@@ -66,6 +72,7 @@ export async function updateParticipantDisplayNameWithDatabase(
     await client.query(
       `UPDATE participants
           SET display_name = $2,
+              display_name_chosen_in_core = true,
               updated_at = now()
         WHERE id = $1`,
       [participantId, newDisplayName],

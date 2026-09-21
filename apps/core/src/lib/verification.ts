@@ -12,6 +12,7 @@ export type DerivedVerification = {
 export type VerificationProfile = {
   subjectId: string;
   displayName: string;
+  hasLoggedIn: boolean;
   membershipStatus: string;
   isRoot: boolean;
   isVerified: boolean;
@@ -111,6 +112,7 @@ function profileFromRow(row: Record<string, unknown>): VerificationProfile {
   return {
     subjectId: String(row.subject_id),
     displayName: String(row.display_name),
+    hasLoggedIn: Boolean(row.has_logged_in),
     membershipStatus: String(row.membership_status),
     isRoot: Boolean(row.is_root),
     isVerified: Boolean(row.is_verified),
@@ -132,6 +134,11 @@ export async function getVerificationProfileWithDatabase(
     `${VERIFIED_SUBJECTS_CTE}
      SELECT subject.id AS subject_id,
             subject.display_name,
+            EXISTS (
+              SELECT 1 FROM events login
+               WHERE login.participant_id = subject.id
+                 AND login.event_type = 'participant.logged_in'
+            ) AS has_logged_in,
             subject.membership_status,
             EXISTS (
               SELECT 1 FROM verification_roots root

@@ -28,6 +28,7 @@ class FakeStore implements IdentityStore {
 
   async updateTelegramIdentity() {
     this.updates += 1;
+    return this.participant!;
   }
 
   async createParticipantWithTelegram() {

@@ -21,8 +21,8 @@ export default async function ParticipantsPage({ searchParams }: ParticipantsPag
       <section className="card participantsPage">
         <div className="profileHeader">
           <div>
-            <div className="eyebrow">Ядро</div>
-            <h1>Люди</h1>
+            <div className="eyebrow">ДАО Русь</div>
+            <h1>Ядро</h1>
             <p className="muted">Найдено: {participants.length}.</p>
           </div>
           <Link className="button secondary" href="/profile">Ваш профиль</Link>

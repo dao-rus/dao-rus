@@ -32,10 +32,12 @@ class FakeIdentityClient {
   rosterParticipantId: string | null;
   identityVerification: "verified" | "unverified" = "verified";
   providerSubject: string | null = null;
+  displayName = "Участник из roster";
 
   constructor(
     rosterParticipantId: string | null = null,
     private readonly existingIdentityParticipantId: string | null = null,
+    private readonly nameChosenInCore = false,
   ) {
     this.rosterParticipantId = rosterParticipantId;
   }
@@ -49,7 +51,7 @@ class FakeIdentityClient {
             rowCount: 1,
             rows: [{
               id: this.existingIdentityParticipantId,
-              display_name: "Участник из roster",
+              display_name: this.displayName,
               membership_status: "participant",
               created_at: "2026-08-22T00:00:00.000Z",
             }],
@@ -86,6 +88,23 @@ class FakeIdentityClient {
     if (text.includes("UPDATE external_identities")) {
       this.providerSubject = String(values?.[1]);
       return { rowCount: 1, rows: [] };
+    }
+
+    if (text.includes("UPDATE participants")) {
+      if (!this.nameChosenInCore) this.displayName = String(values?.[1]);
+      return { rowCount: this.nameChosenInCore ? 0 : 1, rows: [] };
+    }
+
+    if (text.includes("FROM participants WHERE id = $1")) {
+      return {
+        rowCount: 1,
+        rows: [{
+          id: this.existingIdentityParticipantId ?? participantId,
+          display_name: this.displayName,
+          membership_status: "participant",
+          created_at: "2026-08-22T00:00:00.000Z",
+        }],
+      };
     }
 
     return { rowCount: 1, rows: [] };
@@ -160,6 +179,8 @@ describe("PostgresIdentityStore Telegram roster link", () => {
     );
     expect(lookup?.values).toEqual([profile.subject, profile.telegramUserId]);
     expect(client.providerSubject).toBe(profile.subject);
+    expect(client.displayName).toBe(profile.displayName);
+    expect(result.participant.displayName).toBe(profile.displayName);
     const identityUpdate = client.queries.find(({ text }) =>
       text.includes("UPDATE external_identities"),
     );
@@ -168,6 +189,19 @@ describe("PostgresIdentityStore Telegram roster link", () => {
       profile.subject,
       profile.telegramUserId,
     ]);
+  });
+
+  it("keeps a name chosen in Core on later Telegram login", async () => {
+    const client = new FakeIdentityClient(participantId, participantId, true);
+    client.displayName = "Моё имя";
+    mocks.connect.mockResolvedValue(client);
+
+    const result = await resolveTelegramParticipant(new PostgresIdentityStore(), profile);
+
+    expect(result.participant.displayName).toBe("Моё имя");
+    expect(client.displayName).toBe("Моё имя");
+    expect(client.queries.find(({ text }) => text.includes("UPDATE participants"))?.text)
+      .toContain("NOT display_name_chosen_in_core");
   });
 
   it("rolls back OIDC identity creation on a conflicting roster link", async () => {

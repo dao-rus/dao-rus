@@ -320,6 +320,16 @@ docker compose exec web npm run telegram:roster:import -- "/app/.local/telegram/
 
 Новая запись получает `identity_verification = 'unverified'`. Roster не создаёт `Participant` или `ExternalIdentity`, не доказывает членство, не импортирует сообщения/телефоны и не формирует репутацию. `identity_verification` означает отдельную человеческую проверку личности внутри ДАО и не является результатом Telegram OIDC/Core login.
 
+При Membership Binding roster-имя может временно стать `participants.display_name`,
+но публичный каталог `/participants` показывает профиль только после собственного
+успешного входа человека в Core (`participant.logged_in`). Прямой пользовательский
+профиль до этого входа не показывает roster-имя. OIDC-вход обновляет имя из
+Telegram, пока человек сам не выбрал имя в Core; такой выбор имеет приоритет и
+помечается даже при сохранении прежнего значения. Миграция 010 восстанавливает
+этот признак из прежних событий `participant.profile_updated` и заменяет
+унаследованные имена у уже входивших людей доступными полями Telegram identity.
+Roster-имя остаётся только fallback, когда других данных об имени нет.
+
 ### Human Verification v0.1
 
 Каноническая человеческая верификация Core хранится отдельно от legacy-поля

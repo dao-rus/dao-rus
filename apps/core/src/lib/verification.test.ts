@@ -49,6 +49,7 @@ class FakeClient implements VerificationDatabaseClient {
         rows: [{
           subject_id: subjectB,
           display_name: "Subject B",
+          has_logged_in: false,
           membership_status: "none",
           is_root: false,
           is_verified: true,
@@ -233,12 +234,14 @@ describe("VerificationAttestation persistence", () => {
     const profile = await getVerificationProfileWithDatabase(client, subjectB, subjectA);
     expect(profile).toMatchObject({
       subjectId: subjectB,
+      hasLoggedIn: false,
       isVerified: true,
       verificationPoints: 2,
       viewerAttestationId: attestationId,
     });
     expect(client.queries[0].text).toContain("WITH RECURSIVE verified");
     expect(client.queries[0].text).toContain("incoming.revoked_at IS NULL");
+    expect(client.queries[0].text).toContain("login.event_type = 'participant.logged_in'");
   });
 });
 

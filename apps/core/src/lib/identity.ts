@@ -19,7 +19,7 @@ export type TelegramIdentityProfile = {
 
 export interface IdentityStore {
   findByTelegramIdentity(profile: TelegramIdentityProfile): Promise<Participant | null>;
-  updateTelegramIdentity(participantId: string, profile: TelegramIdentityProfile): Promise<void>;
+  updateTelegramIdentity(participantId: string, profile: TelegramIdentityProfile): Promise<Participant>;
   createParticipantWithTelegram(profile: TelegramIdentityProfile): Promise<Participant>;
 }
 
@@ -36,8 +36,8 @@ export async function resolveTelegramParticipant(
 ): Promise<{ participant: Participant; created: boolean }> {
   const existing = await store.findByTelegramIdentity(profile);
   if (existing) {
-    await store.updateTelegramIdentity(existing.id, profile);
-    return { participant: existing, created: false };
+    const participant = await store.updateTelegramIdentity(existing.id, profile);
+    return { participant, created: false };
   }
 
   const participant = await store.createParticipantWithTelegram(profile);

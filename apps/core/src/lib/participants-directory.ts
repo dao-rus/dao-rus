@@ -33,9 +33,16 @@ export async function listParticipantsDirectoryWithDatabase(
        LEFT JOIN external_identities telegram
          ON telegram.participant_id = participant.id
         AND telegram.provider = 'telegram'
-      WHERE $1::text = ''
-         OR participant.display_name ILIKE '%' || $1 || '%'
-         OR COALESCE(telegram.username, '') ILIKE '%' || $1 || '%'
+      WHERE EXISTS (
+        SELECT 1 FROM events login
+         WHERE login.participant_id = participant.id
+           AND login.event_type = 'participant.logged_in'
+      )
+        AND (
+          $1::text = ''
+          OR participant.display_name ILIKE '%' || $1 || '%'
+          OR COALESCE(telegram.username, '') ILIKE '%' || $1 || '%'
+        )
       ORDER BY lower(participant.display_name), participant.id`,
     [normalizedSearch],
   );

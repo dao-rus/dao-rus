@@ -9,6 +9,7 @@ import {
 class FakeClient implements ProfileDatabaseClient {
   queries: Array<{ text: string; values?: unknown[] }> = [];
   released = false;
+  nameChosenInCore = false;
 
   constructor(private readonly currentDisplayName: string) {}
 
@@ -20,6 +21,10 @@ class FakeClient implements ProfileDatabaseClient {
         rowCount: 1,
         rows: [{ display_name: this.currentDisplayName }],
       };
+    }
+
+    if (text.includes("SET display_name_chosen_in_core = true")) {
+      this.nameChosenInCore = true;
     }
 
     return { rowCount: 1, rows: [] };
@@ -57,6 +62,7 @@ describe("updateParticipantDisplayNameWithDatabase", () => {
 
     const update = client.queries.find(({ text }) => text.includes("UPDATE participants"));
     expect(update?.values).toEqual([participantId, "Новое имя"]);
+    expect(update?.text).toContain("display_name_chosen_in_core = true");
 
     const event = client.queries.find(({ text }) =>
       text.includes("participant.profile_updated"),
@@ -95,7 +101,8 @@ describe("updateParticipantDisplayNameWithDatabase", () => {
     );
 
     expect(result.changed).toBe(false);
-    expect(client.queries.some(({ text }) => text.includes("UPDATE participants"))).toBe(false);
+    expect(client.nameChosenInCore).toBe(true);
+    expect(client.queries.some(({ text }) => text.includes("display_name_chosen_in_core = true"))).toBe(true);
     expect(client.queries.some(({ text }) => text.includes("INSERT INTO events"))).toBe(false);
     expect(client.queries.at(-1)?.text).toBe("COMMIT");
   });

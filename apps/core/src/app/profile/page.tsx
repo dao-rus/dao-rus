@@ -59,7 +59,7 @@ export default async function ProfilePage({ searchParams }: ProfilePageProps) {
           </div>
           <div className="profileActions">
             <Link className="button secondary" href="/participants">
-              Люди
+              Ядро
             </Link>
             {hasAdminAccess ? (
               <Link className="button secondary" href="/admin/participants">
