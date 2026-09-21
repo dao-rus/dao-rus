@@ -410,3 +410,27 @@ dd { margin: 6px 0 0; }
   .inlineAboutForm { grid-template-columns: 1fr; }
   .profileItems li { flex-direction: column; }
 }
+
+.signalEntryGrid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+  margin-top: 16px;
+}
+.signalEntryCard {
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  padding: 16px;
+}
+.signalEntryCard h4 {
+  margin: 0 0 10px;
+  font-size: 16px;
+}
+.signalEntryCard .aboutForm { margin-top: 10px; }
+.signalEntryCard .aboutForm textarea { min-height: 88px; }
+.signalEntryCard .aboutForm label { display: grid; gap: 6px; }
+.signalEntryCard .profileItems { margin-bottom: 10px; }
+
+@media (max-width: 620px) {
+  .signalEntryGrid { grid-template-columns: 1fr; }
+}
