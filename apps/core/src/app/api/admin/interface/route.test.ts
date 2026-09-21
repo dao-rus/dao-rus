@@ -20,6 +20,7 @@ vi.mock("@/lib/interface-texts", () => ({
     "home.login_button": form.get("home.login_button"),
     "home.profile_button": form.get("home.profile_button"),
     "participants.title": form.get("participants.title"),
+    "profile.eyebrow": form.get("profile.eyebrow"),
   }),
   saveInterfaceTexts: mocks.saveInterfaceTexts,
 }));
@@ -40,6 +41,7 @@ const fields = {
   "home.login_button": "Войти через Telegram",
   "home.profile_button": "Открыть профиль",
   "participants.title": "Сеть",
+  "profile.eyebrow": "Профиль",
 };
 
 describe("POST /api/admin/interface", () => {

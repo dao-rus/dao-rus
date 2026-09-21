@@ -19,6 +19,7 @@ vi.mock("@/lib/interface-texts", () => ({
     { key: "home.login_button", label: "Кнопка входа", defaultValue: "Войти", multiline: false },
     { key: "home.profile_button", label: "Кнопка профиля", defaultValue: "Профиль", multiline: false },
     { key: "participants.title", label: "Заголовок раздела «Ядро»", defaultValue: "Сеть", multiline: false },
+    { key: "profile.eyebrow", label: "Надпись над именем в профиле", defaultValue: "Профиль", multiline: false },
   ],
   readInterfaceTexts: mocks.readInterfaceTexts,
 }));
@@ -60,6 +61,7 @@ describe("/admin/interface", () => {
         "home.login_button": "Войти",
         "home.profile_button": "Профиль",
         "participants.title": "Сеть",
+        "profile.eyebrow": "Профиль",
       },
       overrides: {
         "home.eyebrow": null,
@@ -68,6 +70,7 @@ describe("/admin/interface", () => {
         "home.login_button": null,
         "home.profile_button": null,
         "participants.title": null,
+        "profile.eyebrow": null,
       },
     });
 
@@ -79,6 +82,7 @@ describe("/admin/interface", () => {
     expect(text).toContain("Кнопка входа");
     expect(text).toContain("Кнопка профиля");
     expect(text).toContain("Заголовок раздела «Ядро»");
+    expect(text).toContain("Надпись над именем в профиле");
     expect(text).toContain("Сохранить тексты");
   });
 });

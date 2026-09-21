@@ -7,6 +7,7 @@ const mocks = vi.hoisted(() => ({
   getActivitySummary: vi.fn(),
   getMembershipHistory: vi.fn(),
   getVerificationProfile: vi.fn(),
+  readInterfaceTexts: vi.fn(),
   listParticipantRegistry: vi.fn(),
   redirect: vi.fn(),
   notFound: vi.fn(),
@@ -36,6 +37,10 @@ vi.mock("@/lib/membership-history", () => ({
 
 vi.mock("@/lib/verification", () => ({
   getVerificationProfile: mocks.getVerificationProfile,
+}));
+
+vi.mock("@/lib/interface-texts", () => ({
+  readInterfaceTexts: mocks.readInterfaceTexts,
 }));
 
 vi.mock("@/lib/participant-registry", () => ({
@@ -122,6 +127,7 @@ describe("admin access regression", () => {
       isRoot: false,
       verificationPoints: 0,
     });
+    mocks.readInterfaceTexts.mockResolvedValue({ values: { "profile.eyebrow": "Профиль" } });
 
     const page = await ProfilePage({ searchParams: Promise.resolve({}) });
 

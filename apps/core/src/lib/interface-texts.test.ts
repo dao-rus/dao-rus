@@ -114,4 +114,21 @@ describe("interface texts", () => {
     expect((await readInterfaceTextsWithDatabase(database)).values["participants.title"])
       .toBe("Сеть");
   });
+
+  it("overrides and restores the profile eyebrow", async () => {
+    const database = new FakeDatabase();
+    const form = formWithDefaults();
+    form.set("profile.eyebrow", "О себе");
+
+    expect(await saveInterfaceTextsWithDatabase(database, "admin-id", parseInterfaceTextForm(form)))
+      .toEqual(["profile.eyebrow"]);
+    expect((await readInterfaceTextsWithDatabase(database)).values["profile.eyebrow"])
+      .toBe("О себе");
+
+    form.set("reset.profile.eyebrow", "on");
+    expect(await saveInterfaceTextsWithDatabase(database, "admin-id", parseInterfaceTextForm(form)))
+      .toEqual(["profile.eyebrow"]);
+    expect((await readInterfaceTextsWithDatabase(database)).values["profile.eyebrow"])
+      .toBe("Профиль");
+  });
 });

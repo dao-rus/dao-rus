@@ -3,6 +3,7 @@ import { redirect } from "next/navigation";
 import { LocalDateTime } from "@/components/local-date-time";
 import { getActivitySummary } from "@/lib/activity";
 import { hasPrototypeAdminAccess } from "@/lib/config";
+import { readInterfaceTexts } from "@/lib/interface-texts";
 import {
   getMembershipHistory,
   membershipEventLabel,
@@ -34,10 +35,11 @@ export default async function ProfilePage({ searchParams }: ProfilePageProps) {
   if (!participant) redirect("/");
 
   const params = await searchParams;
-  const [activity, membershipHistory, verification] = await Promise.all([
+  const [activity, membershipHistory, verification, { values: texts }] = await Promise.all([
     getActivitySummary(participant.id),
     getMembershipHistory(participant.id),
     getVerificationProfile(participant.id, participant.id),
+    readInterfaceTexts(),
   ]);
   const hasAdminAccess = hasPrototypeAdminAccess(participant.id);
   const updateMessage = params.profile_update
@@ -49,7 +51,7 @@ export default async function ProfilePage({ searchParams }: ProfilePageProps) {
       <section className="card profile">
         <div className="profileHeader">
           <div>
-            <div className="eyebrow">Ядро</div>
+            <div className="eyebrow">{texts["profile.eyebrow"]}</div>
             <h1>{participant.displayName}</h1>
             <p className="muted">
               {participant.telegramUsername
@@ -59,7 +61,7 @@ export default async function ProfilePage({ searchParams }: ProfilePageProps) {
           </div>
           <div className="profileActions">
             <Link className="button secondary" href="/participants">
-              Ядро
+              Сеть
             </Link>
             {hasAdminAccess ? (
               <>
