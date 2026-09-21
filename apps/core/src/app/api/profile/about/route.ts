@@ -20,7 +20,7 @@ function profileRedirect(status: string) {
 
 function requiredId(value: FormDataEntryValue | null): string {
   const id = String(value ?? "");
-  if (!/^[0-9a-f-]{36}$/i.test(id)) {
+  if (!/^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(id)) {
     throw new ProfileAboutValidationError("Invalid id");
   }
   return id;
