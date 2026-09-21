@@ -8,6 +8,8 @@ const mocks = vi.hoisted(() => ({
   getMembershipHistory: vi.fn(),
   getVerificationProfile: vi.fn(),
   readInterfaceTexts: vi.fn(),
+  getDarusBalance: vi.fn(),
+  getCurrentRewardRule: vi.fn(),
   listParticipantRegistry: vi.fn(),
   redirect: vi.fn(),
   notFound: vi.fn(),
@@ -47,6 +49,10 @@ vi.mock("@/lib/verification", () => ({
 vi.mock("@/lib/interface-texts", () => ({
   readInterfaceTexts: mocks.readInterfaceTexts,
 }));
+vi.mock("@/lib/tokenization", () => ({
+  getDarusBalance: mocks.getDarusBalance,
+  getCurrentRewardRule: mocks.getCurrentRewardRule,
+}));
 
 vi.mock("@/lib/participant-registry", () => ({
   listParticipantRegistry: mocks.listParticipantRegistry,
@@ -65,6 +71,8 @@ vi.mock("@/components/local-date-time", () => ({
 vi.mock("@/components/telegram-avatar", () => ({ TelegramAvatar: () => null }));
 
 import ParticipantRegistryPage from "./admin/participants/page";
+import AdminPage from "./admin/page";
+import RewardsPage from "./admin/rewards/page";
 import ProfilePage from "./profile/page";
 import SubjectProfilePage from "./profile/[participantId]/page";
 
@@ -134,11 +142,48 @@ describe("admin access regression", () => {
       verificationPoints: 0,
     });
     mocks.readInterfaceTexts.mockResolvedValue({ values: { "profile.eyebrow": "Профиль" } });
+    mocks.getDarusBalance.mockResolvedValue("0.000000");
 
     const page = await ProfilePage({ searchParams: Promise.resolve({}) });
 
     expect(treeContainsHref(page, "/participants")).toBe(true);
     expect(treeContainsHref(page, "/admin/participants")).toBe(false);
+    expect(treeContainsHref(page, "/admin")).toBe(false);
+  });
+
+  it("guards the admin dashboard and tariffs before reading rules", async () => {
+    mocks.getCurrentParticipant.mockResolvedValue({ id: "ordinary-participant" });
+    mocks.hasPrototypeAdminAccess.mockReturnValue(false);
+    await expect(AdminPage()).rejects.toThrow("redirect:/profile");
+    await expect(RewardsPage({ searchParams: Promise.resolve({}) })).rejects.toThrow("redirect:/profile");
+    expect(mocks.getCurrentRewardRule).not.toHaveBeenCalled();
+  });
+
+  it("shows the three protected sections in one admin dashboard", async () => {
+    mocks.getCurrentParticipant.mockResolvedValue({ id: "admin" });
+    mocks.hasPrototypeAdminAccess.mockReturnValue(true);
+    const page = await AdminPage();
+    expect(treeContainsHref(page, "/admin/participants")).toBe(true);
+    expect(treeContainsHref(page, "/admin/interface")).toBe(true);
+    expect(treeContainsHref(page, "/admin/rewards")).toBe(true);
+  });
+
+  it("shows only one management link in the admin profile", async () => {
+    mocks.getCurrentParticipant.mockResolvedValue({
+      id: "admin", displayName: "Администратор", membershipStatus: "participant",
+      createdAt: new Date("2026-09-20T12:00:00Z"),
+    });
+    mocks.hasPrototypeAdminAccess.mockReturnValue(true);
+    mocks.getActivitySummary.mockResolvedValue({ events30d: 0, lastActivityAt: null });
+    mocks.getMembershipHistory.mockResolvedValue([]);
+    mocks.getVerificationProfile.mockResolvedValue({ isVerified: true });
+    mocks.readInterfaceTexts.mockResolvedValue({ values: { "profile.eyebrow": "Профиль" } });
+    mocks.getDarusBalance.mockResolvedValue("0.000000");
+    const page = await ProfilePage({ searchParams: Promise.resolve({}) });
+    expect(treeContainsHref(page, "/admin")).toBe(true);
+    expect(treeContainsHref(page, "/admin/participants")).toBe(false);
+    expect(treeContainsHref(page, "/admin/interface")).toBe(false);
+    expect(treeContainsHref(page, "/admin/rewards")).toBe(false);
   });
 
   it("does not show verification root controls to a non-admin", async () => {

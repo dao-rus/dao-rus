@@ -38,7 +38,7 @@ export default async function InterfacePage({ searchParams }: InterfacePageProps
             <h1>Тексты интерфейса</h1>
             <p className="muted">Тексты главной страницы. Галочка вернёт отдельное поле к значению по умолчанию.</p>
           </div>
-          <Link className="button secondary" href="/profile">Ваш профиль</Link>
+          <Link className="button secondary" href="/admin">К управлению</Link>
         </div>
 
         {message ? (

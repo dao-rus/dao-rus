@@ -308,6 +308,30 @@ export async function createVerificationAttestationWithDatabase(
         }),
       ],
     );
+    await client.query("LOCK TABLE reward_rules IN SHARE MODE");
+    const reward = await client.query(
+      `SELECT id, version, amount FROM (
+         SELECT id, version, amount, active, effective_to
+           FROM reward_rules
+          WHERE action_type = 'verification_created' AND effective_from <= clock_timestamp()
+          ORDER BY version DESC LIMIT 1
+       ) current_rule
+       WHERE active AND (effective_to IS NULL OR effective_to > clock_timestamp())`,
+    );
+    if (reward.rowCount) {
+      const rule = reward.rows[0];
+      await client.query(
+        `INSERT INTO darus_ledger(
+           participant_id, amount, reward_rule_id, reward_rule_version,
+           source_type, source_attestation_id, source_subject_id
+         ) VALUES ($1::uuid, $2::numeric, $3::uuid, $4,
+                   'verification_created', $5::uuid, $6::uuid)
+         ON CONFLICT (participant_id, source_subject_id)
+           WHERE source_type = 'verification_created'
+         DO NOTHING`,
+        [verifierSubjectId, String(rule.amount), String(rule.id), Number(rule.version), attestationId, subjectId],
+      );
+    }
     await client.query("COMMIT");
     return { changed: true, attestationId };
   } catch (error) {

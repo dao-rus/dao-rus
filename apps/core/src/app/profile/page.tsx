@@ -11,6 +11,7 @@ import {
 } from "@/lib/membership-history";
 import { getProfileAbout } from "@/lib/profile-about";
 import { getCurrentParticipant } from "@/lib/session";
+import { getDarusBalance } from "@/lib/tokenization";
 import { getVerificationProfile } from "@/lib/verification";
 
 export const dynamic = "force-dynamic";
@@ -69,12 +70,13 @@ export default async function ProfilePage({ searchParams }: ProfilePageProps) {
   if (!participant) redirect("/");
 
   const params = await searchParams;
-  const [activity, membershipHistory, verification, about, { values: texts }] = await Promise.all([
+  const [activity, membershipHistory, verification, about, { values: texts }, darusBalance] = await Promise.all([
     getActivitySummary(participant.id),
     getMembershipHistory(participant.id),
     getVerificationProfile(participant.id, participant.id),
     getProfileAbout(participant.id),
     readInterfaceTexts(),
+    getDarusBalance(participant.id),
   ]);
   const hasAdminAccess = hasPrototypeAdminAccess(participant.id);
   const updateMessage = params.profile_update ? updateMessages[params.profile_update] : null;
@@ -101,12 +103,7 @@ export default async function ProfilePage({ searchParams }: ProfilePageProps) {
           </div>
           <div className="profileActions">
             <Link className="button secondary" href="/participants">Сеть</Link>
-            {hasAdminAccess ? (
-              <>
-                <Link className="button secondary" href="/admin/participants">Реестр ДАО</Link>
-                <Link className="button secondary" href="/admin/interface">Тексты интерфейса</Link>
-              </>
-            ) : null}
+            {hasAdminAccess ? <Link className="button secondary" href="/admin">Управление</Link> : null}
             <Link className="button secondary" href="/proposals">Предложения</Link>
             <form action="/api/auth/logout" method="post">
               <button className="button secondary" type="submit">Выйти</button>
@@ -279,6 +276,11 @@ export default async function ProfilePage({ searchParams }: ProfilePageProps) {
             <span>Карма</span>
             <strong>Нет данных</strong>
             <Link className="metricLink" href="/profile/reputation">Подробнее →</Link>
+          </article>
+          <article>
+            <span>DARUS</span>
+            <strong>{darusBalance} DARUS</strong>
+            <Link className="metricLink" href="/profile/tokens">История начислений →</Link>
           </article>
         </div>
       </section>

@@ -363,6 +363,24 @@ Verification не изменяет membership, login, Proposal eligibility ил�
 События `verification.root_added`, `verification.attestation_created` и
 `verification.attestation_revoked` сохраняют audit history этих действий.
 
+### Tokenization v0.1
+
+DARUS — отдельная от Кармы внутренняя валюта. `darus_ledger` хранит только
+добавляемые начисления с точной суммой `numeric(20,6)`; баланс участника всегда
+вычисляется как `SUM(amount)` его записей. При создании новой Human Verification
+attestation проверяется последняя действующая версия `reward_rules` для
+`verification_created`. Если она включена, начисление верификатору и attestation
+записываются в одной транзакции. Уникальный индекс ledger на пару
+`verifier → subject` не допускает повторного начисления даже после revoke;
+отзыв не списывает DARUS. Если тариф выключен, attestation всё равно создаётся.
+
+Изменение тарифа через `/admin/rewards` добавляет новую версию, сохраняя старые
+версии и суммы ранее проведённых начислений. `effective_from` у новой версии —
+время её создания; текущая версия выбирается по максимальному номеру среди
+наступивших. `effective_to` ограничивает срок действия версии, если задан.
+Начальная версия — `0.1 DARUS`, включена, автор `system`. Доступ к тарифам и
+единой панели `/admin` использует существующий `ADMIN_PARTICIPANT_IDS`.
+
 Проверить импорт можно напрямую:
 
 ```powershell

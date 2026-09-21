@@ -89,8 +89,8 @@ export default async function ParticipantRegistryPage({
               Telegram roster и ручные институциональные статусы. Найдено: {entries.length}.
             </p>
           </div>
-          <Link className="button secondary" href="/profile">
-            К профилю
+          <Link className="button secondary" href="/admin">
+            К управлению
           </Link>
         </div>
 

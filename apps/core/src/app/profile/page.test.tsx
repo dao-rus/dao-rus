@@ -8,6 +8,7 @@ const mocks = vi.hoisted(() => ({
   getVerificationProfile: vi.fn(),
   getProfileAbout: vi.fn(),
   readInterfaceTexts: vi.fn(),
+  getDarusBalance: vi.fn(),
 }));
 
 vi.mock("@/lib/session", () => ({ getCurrentParticipant: mocks.getCurrentParticipant }));
@@ -19,6 +20,7 @@ vi.mock("@/lib/membership-history", () => ({
 vi.mock("@/lib/verification", () => ({ getVerificationProfile: mocks.getVerificationProfile }));
 vi.mock("@/lib/profile-about", () => ({ getProfileAbout: mocks.getProfileAbout }));
 vi.mock("@/lib/interface-texts", () => ({ readInterfaceTexts: mocks.readInterfaceTexts }));
+vi.mock("@/lib/tokenization", () => ({ getDarusBalance: mocks.getDarusBalance }));
 vi.mock("@/lib/config", () => ({ hasPrototypeAdminAccess: () => false }));
 vi.mock("@/components/local-date-time", () => ({ LocalDateTime: () => null }));
 vi.mock("@/components/telegram-avatar", () => ({ TelegramAvatar: () => null }));
@@ -54,6 +56,7 @@ describe("/profile copy", () => {
       signals: [],
     });
     mocks.readInterfaceTexts.mockResolvedValue({ values: { "profile.eyebrow": "О себе" } });
+    mocks.getDarusBalance.mockResolvedValue("0.100000");
 
     const page = await ProfilePage({ searchParams: Promise.resolve({}) });
     const text = textContent(page);
@@ -70,5 +73,7 @@ describe("/profile copy", () => {
     expect(text).not.toContain("Ядро");
     expect(text).toContain("О себе в Telegram");
     expect(text).toContain("+79990000000");
+    expect(text).toContain("0.100000");
+    expect(text).toContain("История начислений");
   });
 });
