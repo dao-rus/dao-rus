@@ -334,3 +334,79 @@ dd { margin: 6px 0 0; }
   .activityHistory li { flex-direction: column; gap: 7px; }
   .participantsDirectory li { align-items: flex-start; flex-direction: column; }
 }
+
+
+.profileAbout {
+  margin-top: 34px;
+  padding-top: 30px;
+  border-top: 1px solid var(--line);
+}
+.profileSectionHeading h2,
+.profileAbout h2 { margin: 0 0 8px; font-size: 24px; }
+.profileSectionHeading p { margin: 0; }
+.aboutBlock { margin-top: 28px; }
+.aboutBlock h3 { margin: 0 0 12px; font-size: 18px; }
+.aboutForm {
+  display: grid;
+  gap: 9px;
+  margin-top: 20px;
+}
+.aboutForm label {
+  color: var(--muted);
+  font-size: 12px;
+  text-transform: uppercase;
+  letter-spacing: .08em;
+}
+.aboutForm textarea,
+.aboutForm select,
+.inlineAboutForm input,
+.inlineAboutForm select {
+  width: 100%;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  padding: 11px 12px;
+  background: #fff;
+  color: var(--ink);
+}
+.aboutForm textarea { min-height: 110px; resize: vertical; }
+.aboutForm .button { justify-self: start; }
+.inlineAboutForm {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto auto;
+  gap: 8px;
+  margin-top: 12px;
+}
+.profileItems { list-style: none; margin: 0; padding: 0; }
+.profileItems li {
+  display: flex;
+  justify-content: space-between;
+  gap: 14px;
+  align-items: flex-start;
+  padding: 12px 0;
+  border-top: 1px solid var(--line);
+}
+.profileItems li > div { display: grid; gap: 5px; min-width: 0; }
+.profileItems strong { overflow-wrap: anywhere; }
+.profileItems small { color: var(--muted); font-size: 12px; }
+.signalKind {
+  color: var(--accent);
+  font-size: 12px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: .06em;
+}
+.button.compact { min-height: 34px; padding: 0 10px; font-size: 12px; }
+.privacyHint { margin: 2px 0 4px; font-size: 12px; line-height: 1.45; }
+.publicAbout { padding-top: 22px; }
+.interestChips { display: flex; flex-wrap: wrap; gap: 8px; }
+.interestChips span {
+  padding: 7px 10px;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  font-size: 13px;
+}
+
+@media (max-width: 620px) {
+  .inlineAboutForm { grid-template-columns: 1fr; }
+  .profileItems li { flex-direction: column; }
+}
