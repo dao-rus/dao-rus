@@ -137,7 +137,7 @@ export default async function ProfilePage({ searchParams }: ProfilePageProps) {
             <input type="hidden" name="action" value="update_bio" />
             <label htmlFor="profile-bio">Био</label>
             <textarea id="profile-bio" name="bio" maxLength={2000} defaultValue={about?.bio ?? ""} placeholder="Несколько слов о себе" />
-            <label htmlFor="bio-visibility">Кто видит</label>
+            <label htmlFor="bio-visibility">Кому видно</label>
             <select id="bio-visibility" name="visibility" defaultValue={about?.bioVisibility ?? "members"}>
               {bioVisibilityOptions.map((value) => <option key={value} value={value}>{visibilityLabels[value]}</option>)}
             </select>
@@ -212,7 +212,7 @@ export default async function ProfilePage({ searchParams }: ProfilePageProps) {
                         required
                       />
                       <label>
-                        Кто видит
+                        Кому видно
                         <select name="visibility" defaultValue="members">
                           {matchableVisibilityOptions.map((value) => (
                             <option key={value} value={value}>{visibilityLabels[value]}</option>
