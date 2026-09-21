@@ -60,7 +60,10 @@ describe("/profile copy", () => {
 
     expect(text).toContain("О себе");
     expect(text).toContain("Интересы");
-    expect(text).toContain("Я хочу / Мне нужно / Я могу / У меня есть");
+    expect(text).toContain("Я хочу");
+    expect(text).toContain("Мне нужно");
+    expect(text).toContain("Я могу");
+    expect(text).toContain("У меня есть");
     expect(text).toContain("Сеть");
     expect(text).not.toContain("Ядро");
     expect(text).toContain("О себе в Telegram");
