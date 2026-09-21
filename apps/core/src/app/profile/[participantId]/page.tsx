@@ -2,17 +2,22 @@ import Link from "next/link";
 import { notFound, redirect } from "next/navigation";
 import { hasPrototypeAdminAccess } from "@/lib/config";
 import { TelegramAvatar } from "@/components/telegram-avatar";
+import { getVisibleProfileAbout } from "@/lib/profile-about";
 import { getCurrentParticipant } from "@/lib/session";
 import { getVerificationProfile } from "@/lib/verification";
 
 export const dynamic = "force-dynamic";
 
+const signalLabels: Record<string, string> = {
+  want: "Я хочу",
+  need: "Мне нужно",
+  can: "Я могу",
+  have: "У меня есть",
+};
+
 type SubjectProfilePageProps = {
   params: Promise<{ participantId: string }>;
-  searchParams: Promise<{
-    verification_action?: string;
-    verification_root?: string;
-  }>;
+  searchParams: Promise<{ verification_action?: string; verification_root?: string }>;
 };
 
 const actionMessages: Record<string, string> = {
@@ -32,25 +37,21 @@ const rootMessages: Record<string, string> = {
   invalid: "Некорректный профиль.",
 };
 
-export default async function SubjectProfilePage({
-  params,
-  searchParams,
-}: SubjectProfilePageProps) {
+export default async function SubjectProfilePage({ params, searchParams }: SubjectProfilePageProps) {
   const viewer = await getCurrentParticipant();
   if (!viewer) redirect("/");
 
   const [{ participantId }, query] = await Promise.all([params, searchParams]);
-  const profile = await getVerificationProfile(participantId, viewer.id);
+  const [profile, about] = await Promise.all([
+    getVerificationProfile(participantId, viewer.id),
+    getVisibleProfileAbout(participantId, viewer.id),
+  ]);
   if (!profile) notFound();
 
   const ownProfile = viewer.id === profile.subjectId;
   const admin = hasPrototypeAdminAccess(viewer.id);
-  const actionMessage = query.verification_action
-    ? actionMessages[query.verification_action]
-    : null;
-  const rootMessage = query.verification_root
-    ? rootMessages[query.verification_root]
-    : null;
+  const actionMessage = query.verification_action ? actionMessages[query.verification_action] : null;
+  const rootMessage = query.verification_root ? rootMessages[query.verification_root] : null;
 
   return (
     <main className="shell">
@@ -64,17 +65,40 @@ export default async function SubjectProfilePage({
             <div>
               <div className="eyebrow">Профиль</div>
               <h1>{profile.hasLoggedIn ? profile.displayName : "Человек ещё не вошёл в Ядро"}</h1>
-              {profile.hasLoggedIn && profile.telegramUsername ? (
-                <p className="muted">{`@${profile.telegramUsername}`}</p>
-              ) : null}
-              {profile.hasLoggedIn && profile.telegramName && profile.telegramName !== profile.displayName ? (
-                <p className="muted">В Telegram: {profile.telegramName}</p>
-              ) : null}
-              {profile.hasLoggedIn && profile.telegramBio ? <p className="profileBio">{profile.telegramBio}</p> : null}
+              {profile.hasLoggedIn && profile.telegramUsername ? <p className="muted">{`@${profile.telegramUsername}`}</p> : null}
+              {profile.hasLoggedIn && profile.telegramName && profile.telegramName !== profile.displayName ? <p className="muted">В Telegram: {profile.telegramName}</p> : null}
+              {profile.hasLoggedIn && profile.telegramBio ? <p className="profileBio muted">Telegram: {profile.telegramBio}</p> : null}
             </div>
           </div>
           <Link className="button secondary" href="/profile">Ваш профиль</Link>
         </div>
+
+        {about && (about.bio || about.interests.length || about.signals.length) ? (
+          <section className="profileAbout publicAbout">
+            {about.bio ? <div className="aboutBlock"><h2>О себе</h2><p className="profileBio">{about.bio}</p></div> : null}
+            {about.interests.length ? (
+              <div className="aboutBlock">
+                <h3>Интересы</h3>
+                <div className="interestChips">{about.interests.map((interest) => <span key={interest.id}>{interest.label}</span>)}</div>
+              </div>
+            ) : null}
+            {about.signals.length ? (
+              <div className="aboutBlock">
+                <h3>Сигналы</h3>
+                <ul className="profileItems signalItems">
+                  {about.signals.map((signal) => (
+                    <li key={signal.id}>
+                      <div>
+                        <span className="signalKind">{signalLabels[signal.kind] ?? signal.kind}</span>
+                        <strong>{signal.body}</strong>
+                      </div>
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            ) : null}
+          </section>
+        ) : null}
 
         <section className="verificationCard">
           <div>
@@ -84,13 +108,8 @@ export default async function SubjectProfilePage({
             {profile.isRoot ? <small className="muted">В начальном ядре доверия</small> : null}
           </div>
           <strong>{profile.verificationPoints} подтверждений от других</strong>
-          <p className="muted">
-            Здесь учитываются подтверждения от людей, чья личность уже подтверждена в сети доверия.
-          </p>
-          {!ownProfile ? (
-            <p className="muted">Подтверждайте только тех, кого можете лично узнать и отличить от других.</p>
-          ) : null}
-
+          <p className="muted">Здесь учитываются подтверждения от людей, чья личность уже подтверждена в сети доверия.</p>
+          {!ownProfile ? <p className="muted">Подтверждайте только тех, кого можете лично узнать и отличить от других.</p> : null}
           {!ownProfile && profile.viewerAttestationId ? (
             <form action="/api/verification/attestations" method="post">
               <input type="hidden" name="subject_id" value={profile.subjectId} />
@@ -105,22 +124,15 @@ export default async function SubjectProfilePage({
               <button className="button primary" type="submit">Подтвердить, что знаю этого человека</button>
             </form>
           ) : null}
-          {!ownProfile && !profile.viewerIsVerified ? (
-            <p className="muted">Подтверждать других можно после подтверждения вашей личности.</p>
-          ) : null}
-          {ownProfile ? (
-            <p className="muted">Нельзя подтвердить самого себя.</p>
-          ) : null}
+          {!ownProfile && !profile.viewerIsVerified ? <p className="muted">Подтверждать других можно после подтверждения вашей личности.</p> : null}
+          {ownProfile ? <p className="muted">Нельзя подтвердить самого себя.</p> : null}
           {actionMessage ? <p className="formNotice">{actionMessage}</p> : null}
         </section>
 
         {admin && !profile.isRoot ? (
           <section className="verificationAdmin">
             <h2>Начальное ядро доверия</h2>
-            <p className="muted">
-              Первые участники, которые лично знают друг друга, становятся исходными точками
-              подтверждения личности. От них сеть подтверждений распространяется дальше.
-            </p>
+            <p className="muted">Первые участники, которые лично знают друг друга, становятся исходными точками подтверждения личности. От них сеть подтверждений распространяется дальше.</p>
             <form action="/api/admin/verification/roots" method="post">
               <input type="hidden" name="subject_id" value={profile.subjectId} />
               <button className="button secondary" type="submit">Добавить в начальное ядро</button>
