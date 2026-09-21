@@ -4,6 +4,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 const mocks = vi.hoisted(() => ({
   getCurrentParticipant: vi.fn(),
   getVerificationProfile: vi.fn(),
+  getVisibleProfileAbout: vi.fn(),
   hasPrototypeAdminAccess: vi.fn(),
   redirect: vi.fn(),
   notFound: vi.fn(),
@@ -12,6 +13,7 @@ const mocks = vi.hoisted(() => ({
 vi.mock("next/navigation", () => ({ redirect: mocks.redirect, notFound: mocks.notFound }));
 vi.mock("@/lib/session", () => ({ getCurrentParticipant: mocks.getCurrentParticipant }));
 vi.mock("@/lib/verification", () => ({ getVerificationProfile: mocks.getVerificationProfile }));
+vi.mock("@/lib/profile-about", () => ({ getVisibleProfileAbout: mocks.getVisibleProfileAbout }));
 vi.mock("@/lib/config", () => ({ hasPrototypeAdminAccess: mocks.hasPrototypeAdminAccess }));
 vi.mock("@/components/telegram-avatar", () => ({ TelegramAvatar: () => null }));
 
@@ -41,6 +43,12 @@ describe("public subject profile name", () => {
     mocks.getCurrentParticipant.mockResolvedValue({ id: "10000000-0000-4000-8000-000000000001" });
     mocks.hasPrototypeAdminAccess.mockReturnValue(false);
     mocks.getVerificationProfile.mockResolvedValue(rosterProfile);
+    mocks.getVisibleProfileAbout.mockResolvedValue({
+      bio: "",
+      bioVisibility: "members",
+      interests: [],
+      signals: [],
+    });
   });
 
   it("hides a roster name before the person's own login", async () => {
@@ -62,14 +70,25 @@ describe("public subject profile name", () => {
       telegramBio: "Биография из Telegram",
       telegramPhoneNumber: "+79990000000",
     });
+    mocks.getVisibleProfileAbout.mockResolvedValue({
+      bio: "Моё био в ДАО",
+      bioVisibility: "members",
+      interests: [{ id: "i1", label: "История", visibility: "members" }],
+      signals: [{ id: "s1", kind: "can", body: "Могу редактировать тексты", visibility: "members" }],
+    });
+
     const page = await SubjectProfilePage({
       params: Promise.resolve({ participantId: "20000000-0000-4000-8000-000000000002" }),
       searchParams: Promise.resolve({}),
     });
 
-    expect(textContent(page)).toContain("Имя из Telegram");
-    expect(textContent(page)).toContain("@telegram_name");
-    expect(textContent(page)).toContain("Биография из Telegram");
-    expect(textContent(page)).not.toContain("+79990000000");
+    const text = textContent(page);
+    expect(text).toContain("Имя из Telegram");
+    expect(text).toContain("@telegram_name");
+    expect(text).toContain("Биография из Telegram");
+    expect(text).toContain("Моё био в ДАО");
+    expect(text).toContain("История");
+    expect(text).toContain("Могу редактировать тексты");
+    expect(text).not.toContain("+79990000000");
   });
 });
