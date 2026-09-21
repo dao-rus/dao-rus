@@ -413,7 +413,7 @@ dd { margin: 6px 0 0; }
 
 .signalEntryGrid {
   display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
+  grid-template-columns: minmax(0, 1fr);
   gap: 12px;
   margin-top: 16px;
 }
@@ -430,7 +430,3 @@ dd { margin: 6px 0 0; }
 .signalEntryCard .aboutForm textarea { min-height: 88px; }
 .signalEntryCard .aboutForm label { display: grid; gap: 6px; }
 .signalEntryCard .profileItems { margin-bottom: 10px; }
-
-@media (max-width: 620px) {
-  .signalEntryGrid { grid-template-columns: 1fr; }
-}
