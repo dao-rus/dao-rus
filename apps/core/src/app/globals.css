@@ -66,6 +66,11 @@ h1 { margin: 0 0 12px; font-size: clamp(34px, 7vw, 64px); line-height: 1; }
 .disabled { background: #ece9e0; color: #8b8b84; cursor: default; }
 
 .profileHeader { display: flex; justify-content: space-between; gap: 24px; align-items: flex-start; }
+.profileIdentity, .directoryIdentity { display: flex; align-items: flex-start; gap: 14px; min-width: 0; }
+.telegramAvatar { display: block; width: 72px; height: 72px; flex: none; object-fit: cover; border-radius: 50%; background: var(--bg); }
+.directoryIdentity .telegramAvatar { width: 48px; height: 48px; }
+.profileBio { white-space: pre-wrap; overflow-wrap: anywhere; max-width: 580px; }
+.directoryIdentity small { display: block; margin-top: 5px; max-width: 360px; white-space: pre-wrap; overflow-wrap: anywhere; }
 .profileHeader h1 { font-size: clamp(30px, 6vw, 52px); }
 .profileActions { display: flex; flex-wrap: wrap; gap: 10px; }
 .profileActions form { margin: 0; }

@@ -44,6 +44,7 @@ class FakeClient implements VerificationDatabaseClient {
       };
     }
     if (text.includes("FROM participants subject")) {
+      expect(text).not.toContain("phone_number");
       return {
         rowCount: 1,
         rows: [{

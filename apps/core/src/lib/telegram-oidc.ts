@@ -31,7 +31,7 @@ export function buildTelegramAuthorizationUrl(state: string, challenge: string):
   url.searchParams.set("client_id", clientId);
   url.searchParams.set("redirect_uri", redirectUri);
   url.searchParams.set("response_type", "code");
-  url.searchParams.set("scope", "openid profile");
+  url.searchParams.set("scope", "openid profile phone telegram:bot_access");
   url.searchParams.set("state", state);
   url.searchParams.set("code_challenge", challenge);
   url.searchParams.set("code_challenge_method", "S256");
@@ -75,6 +75,43 @@ function nullableString(value: unknown): string | null {
   return typeof value === "string" && value.length ? value : null;
 }
 
+export function telegramProfileFromClaims(payload: Record<string, unknown>): TelegramIdentityProfile {
+  if (typeof payload.sub !== "string" || !payload.sub) {
+    throw new Error("Telegram ID token has no subject");
+  }
+  const telegramUserId =
+    typeof payload.id === "number" || typeof payload.id === "string"
+      ? String(payload.id)
+      : payload.sub;
+  const username = nullableString(payload.preferred_username);
+  const firstName = nullableString(payload.given_name);
+  const lastName = nullableString(payload.family_name);
+  const name = nullableString(payload.name);
+  const displayName = name || [firstName, lastName].filter(Boolean).join(" ") ||
+    username || `Telegram ${telegramUserId}`;
+  const oidcProfile: Record<string, string | number | boolean> = {};
+  for (const key of ["name", "given_name", "family_name", "preferred_username", "picture", "phone_number"] as const) {
+    const value = nullableString(payload[key]);
+    if (value) oidcProfile[key] = value;
+  }
+  if (typeof payload.id === "number" || typeof payload.id === "string") {
+    oidcProfile.id = String(payload.id);
+  }
+  if (typeof payload.phone_number_verified === "boolean") {
+    oidcProfile.phone_number_verified = payload.phone_number_verified;
+  }
+  return {
+    subject: payload.sub,
+    telegramUserId,
+    username,
+    firstName,
+    lastName,
+    displayName,
+    avatarUrl: nullableString(payload.picture),
+    oidcProfile,
+  };
+}
+
 export async function authenticateTelegramCode(
   code: string,
   verifier: string,
@@ -89,28 +126,5 @@ export async function authenticateTelegramCode(
     algorithms: ["RS256"],
   });
 
-  if (!payload.sub) throw new Error("Telegram ID token has no subject");
-
-  const telegramUserId =
-    typeof payload.id === "number" || typeof payload.id === "string"
-      ? String(payload.id)
-      : String(payload.sub);
-  const username = nullableString(payload.preferred_username);
-  const firstName = nullableString(payload.given_name);
-  const lastName = nullableString(payload.family_name);
-  const displayName =
-    nullableString(payload.name) ??
-    [firstName, lastName].filter(Boolean).join(" ") ??
-    username ??
-    `Telegram ${telegramUserId}`;
-
-  return {
-    subject: String(payload.sub),
-    telegramUserId,
-    username,
-    firstName,
-    lastName,
-    displayName: displayName || username || `Telegram ${telegramUserId}`,
-    avatarUrl: nullableString(payload.picture),
-  };
+  return telegramProfileFromClaims(payload);
 }

@@ -106,7 +106,7 @@ npm run build
 
 ## 4. Настройка настоящего Telegram Login
 
-Telegram использует стандартный OIDC Authorization Code Flow. Для прототипа используются `openid profile`, PKCE S256 и серверная проверка ID token.
+Telegram использует стандартный OIDC Authorization Code Flow со scope `openid profile phone telegram:bot_access`, PKCE S256 и серверной проверкой ID token. Телефон сохраняется только если он присутствует в подтверждённом Telegram ID token после согласия пользователя.
 
 В BotFather для бота, представляющего DAO Rus:
 
@@ -124,10 +124,13 @@ APP_BASE_URL=https://core.daorus.org
 TELEGRAM_OIDC_CLIENT_ID=...
 TELEGRAM_OIDC_CLIENT_SECRET=...
 TELEGRAM_OIDC_REDIRECT_URI=https://core.daorus.org/api/auth/telegram/callback
+TELEGRAM_BOT_TOKEN=...
 DEV_AUTH_BYPASS=false
 ```
 
-`TELEGRAM_OIDC_CLIENT_SECRET` никогда не должен попадать в браузер, Telegram Mini App или Git.
+`TELEGRAM_OIDC_CLIENT_SECRET` и `TELEGRAM_BOT_TOKEN` никогда не должны попадать в браузер, Telegram Mini App, Git или логи. Bot API token должен принадлежать боту с `TELEGRAM_OIDC_CLIENT_ID`; без него OIDC login работает, но дополнение профиля через Bot API недоступно.
+
+После каждого успешного OIDC login Core обновляет отдельную Telegram identity: сохранённые OIDC claims и доступные поля `getChat`, текущего фото `getUserProfilePhotos` и аудио профиля `getUserProfileAudios`. Запросы к Bot API best-effort; отсутствующие optional-поля не удаляют прежние значения. Имя, выбранное в Core, не перезаписывается. Телефон доступен только владельцу на `/profile`; каталог и чужой профиль его не выбирают. Фото хранится как `file_id` и метаданные, без копии файла: авторизованный маршрут получает `getFile` URL заново и отдаёт только фото известного вошедшего Participant, не раскрывая токен. Telegram гарантирует ссылку `getFile` лишь на один час, поэтому её нельзя сохранять как публичный URL.
 
 После изменения `.env` пересоздай контейнер `web`, чтобы Docker Compose передал ему новые значения:
 

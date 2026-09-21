@@ -16,6 +16,7 @@ vi.mock("@/lib/participants-directory", () => ({
   listParticipantsDirectory: mocks.listParticipantsDirectory,
 }));
 vi.mock("@/lib/interface-texts", () => ({ readInterfaceTexts: mocks.readInterfaceTexts }));
+vi.mock("@/components/telegram-avatar", () => ({ TelegramAvatar: () => null }));
 
 import ParticipantsPage from "./page";
 
@@ -59,6 +60,8 @@ describe("/participants", () => {
         participantId,
         displayName: "Алиса",
         telegramUsername: "alice",
+        telegramBio: "Биография Алисы",
+        telegramPhoneNumber: "+79990000000",
         isVerified: true,
       },
       {
@@ -78,6 +81,8 @@ describe("/participants", () => {
     expect(text).toContain("Сеть");
     expect(text).toContain("Алиса");
     expect(text).toContain("@alice");
+    expect(text).toContain("Биография Алисы");
+    expect(text).not.toContain("+79990000000");
     expect(text).toContain("Личность подтверждена");
     expect(text).toContain("Пока не подтверждена");
     expect(text).not.toContain(participantId);

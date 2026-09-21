@@ -19,6 +19,7 @@ vi.mock("@/lib/verification", () => ({ getVerificationProfile: mocks.getVerifica
 vi.mock("@/lib/interface-texts", () => ({ readInterfaceTexts: mocks.readInterfaceTexts }));
 vi.mock("@/lib/config", () => ({ hasPrototypeAdminAccess: () => false }));
 vi.mock("@/components/local-date-time", () => ({ LocalDateTime: () => null }));
+vi.mock("@/components/telegram-avatar", () => ({ TelegramAvatar: () => null }));
 
 import ProfilePage from "./page";
 
@@ -35,6 +36,9 @@ describe("/profile copy", () => {
       id: "10000000-0000-4000-8000-000000000001",
       displayName: "Анна",
       telegramUsername: "anna",
+      telegramBio: "О себе в Telegram",
+      telegramPhoneNumber: "+79990000000",
+      telegramPhoneVerified: true,
       membershipStatus: "none",
       createdAt: new Date("2026-09-20T00:00:00Z"),
     });
@@ -49,5 +53,7 @@ describe("/profile copy", () => {
     expect(text).toContain("О себе");
     expect(text).toContain("Сеть");
     expect(text).not.toContain("Ядро");
+    expect(text).toContain("О себе в Telegram");
+    expect(text).toContain("+79990000000");
   });
 });

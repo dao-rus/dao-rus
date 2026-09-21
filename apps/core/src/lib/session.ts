@@ -78,7 +78,13 @@ export async function getCurrentParticipant() {
             p.created_at,
             e.username AS telegram_username,
             e.external_user_id AS telegram_user_id,
-            e.avatar_url
+            e.avatar_url,
+            e.oidc_profile->>'name' AS telegram_name,
+            e.oidc_profile->>'phone_number' AS telegram_phone_number,
+            e.oidc_profile->>'phone_number_verified' AS telegram_phone_verified,
+            e.bot_profile->>'bio' AS telegram_bio,
+            e.bot_profile->'photo'->>'file_id' AS telegram_photo_file_id,
+            e.bot_profile->>'photo_count' AS telegram_photo_count
        FROM sessions s
        JOIN participants p ON p.id = s.participant_id
        LEFT JOIN external_identities e
@@ -98,6 +104,12 @@ export async function getCurrentParticipant() {
     createdAt: new Date(row.created_at),
     telegramUsername: row.telegram_username ? String(row.telegram_username) : null,
     telegramUserId: row.telegram_user_id ? String(row.telegram_user_id) : null,
-    avatarUrl: row.avatar_url ? String(row.avatar_url) : null,
+    avatarUrl: row.telegram_photo_count !== "0" && row.avatar_url ? String(row.avatar_url) : null,
+    telegramName: row.telegram_name ? String(row.telegram_name) : null,
+    telegramPhoneNumber: row.telegram_phone_number ? String(row.telegram_phone_number) : null,
+    telegramPhoneVerified: row.telegram_phone_verified === null || row.telegram_phone_verified === undefined
+      ? null : row.telegram_phone_verified === "true",
+    telegramBio: row.telegram_bio ? String(row.telegram_bio) : null,
+    hasTelegramPhoto: Boolean(row.telegram_photo_file_id) && row.telegram_photo_count !== "0",
   };
 }

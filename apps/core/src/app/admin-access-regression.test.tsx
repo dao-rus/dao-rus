@@ -57,6 +57,7 @@ vi.mock("@/components/registry-field-editor", () => ({
 vi.mock("@/components/local-date-time", () => ({
   LocalDateTime: () => null,
 }));
+vi.mock("@/components/telegram-avatar", () => ({ TelegramAvatar: () => null }));
 
 import ParticipantRegistryPage from "./admin/participants/page";
 import ProfilePage from "./profile/page";

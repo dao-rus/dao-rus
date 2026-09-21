@@ -17,6 +17,19 @@ function participantFromRow(row: Record<string, unknown>): Participant {
   };
 }
 
+function telegramDisplayName(profile: TelegramIdentityProfile): string | null {
+  const bot = profile.botProfile ?? {};
+  const name = profile.oidcProfile?.name;
+  if (typeof name === "string" && name.trim()) return name;
+  const given = [profile.firstName, profile.lastName].filter(Boolean).join(" ");
+  if (given) return given;
+  if (profile.username) return profile.username;
+  const botName = [bot.first_name, bot.last_name]
+    .filter((part): part is string => typeof part === "string" && Boolean(part.trim()))
+    .join(" ");
+  return botName || (typeof bot.username === "string" ? bot.username : null);
+}
+
 async function findWithClient(
   client: PoolClient,
   profile: TelegramIdentityProfile,
@@ -62,10 +75,12 @@ export class PostgresIdentityStore implements IdentityStore {
         `UPDATE external_identities
             SET provider_subject = $2,
                 external_user_id = $3,
-                username = $4,
-                first_name = $5,
-                last_name = $6,
-                avatar_url = $7,
+                username = COALESCE($4, $9::jsonb->>'username', username),
+                first_name = COALESCE($5, $9::jsonb->>'first_name', first_name),
+                last_name = COALESCE($6, $9::jsonb->>'last_name', last_name),
+                avatar_url = COALESCE($7, avatar_url),
+                oidc_profile = oidc_profile || $8::jsonb,
+                bot_profile = bot_profile || $9::jsonb,
                 updated_at = now()
           WHERE participant_id = $1 AND provider = 'telegram'`,
         [
@@ -76,15 +91,18 @@ export class PostgresIdentityStore implements IdentityStore {
           profile.firstName,
           profile.lastName,
           profile.avatarUrl,
+          JSON.stringify(profile.oidcProfile ?? {}),
+          JSON.stringify(profile.botProfile ?? {}),
         ],
       );
-      await client.query(
+      const currentTelegramName = telegramDisplayName(profile);
+      if (currentTelegramName) await client.query(
         `UPDATE participants
             SET display_name = $2, updated_at = now()
           WHERE id = $1
             AND NOT display_name_chosen_in_core
             AND display_name IS DISTINCT FROM $2`,
-        [participantId, profile.displayName],
+        [participantId, currentTelegramName],
       );
       await linkTelegramRosterEntryWithClient(
         client,
@@ -119,7 +137,7 @@ export class PostgresIdentityStore implements IdentityStore {
         `INSERT INTO participants(display_name, membership_status)
          VALUES ($1, 'none')
          RETURNING id, display_name, membership_status, created_at`,
-        [profile.displayName],
+        [telegramDisplayName(profile) ?? profile.displayName],
       );
       const participant = participantFromRow(participantResult.rows[0]);
 
@@ -127,8 +145,8 @@ export class PostgresIdentityStore implements IdentityStore {
         await client.query(
           `INSERT INTO external_identities(
              participant_id, provider, provider_subject, external_user_id,
-             username, first_name, last_name, avatar_url
-           ) VALUES ($1, 'telegram', $2, $3, $4, $5, $6, $7)`,
+             username, first_name, last_name, avatar_url, oidc_profile, bot_profile
+           ) VALUES ($1, 'telegram', $2, $3, $4, $5, $6, $7, $8::jsonb, $9::jsonb)`,
           [
             participant.id,
             profile.subject,
@@ -137,6 +155,8 @@ export class PostgresIdentityStore implements IdentityStore {
             profile.firstName,
             profile.lastName,
             profile.avatarUrl,
+            JSON.stringify(profile.oidcProfile ?? {}),
+            JSON.stringify(profile.botProfile ?? {}),
           ],
         );
         await linkTelegramRosterEntryWithClient(

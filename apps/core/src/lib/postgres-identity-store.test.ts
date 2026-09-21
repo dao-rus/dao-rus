@@ -204,6 +204,27 @@ describe("PostgresIdentityStore Telegram roster link", () => {
       .toContain("NOT display_name_chosen_in_core");
   });
 
+  it("merges newly provided Telegram fields on repeat login without clearing absent optional fields", async () => {
+    const client = new FakeIdentityClient(participantId, participantId, true);
+    client.displayName = "Моё имя";
+    mocks.connect.mockResolvedValue(client);
+    await new PostgresIdentityStore().updateTelegramIdentity(participantId, {
+      ...profile,
+      username: null,
+      avatarUrl: null,
+      oidcProfile: { phone_number: "+79990000000", phone_number_verified: true },
+      botProfile: { bio: "О себе" },
+    });
+
+    const update = client.queries.find(({ text }) => text.includes("UPDATE external_identities"));
+    expect(update?.text).toContain("avatar_url = COALESCE($7, avatar_url)");
+    expect(update?.text).toContain("oidc_profile = oidc_profile || $8::jsonb");
+    expect(update?.text).toContain("bot_profile = bot_profile || $9::jsonb");
+    expect(update?.values?.[7]).toBe(JSON.stringify({ phone_number: "+79990000000", phone_number_verified: true }));
+    expect(update?.values?.[8]).toBe(JSON.stringify({ bio: "О себе" }));
+    expect(client.displayName).toBe("Моё имя");
+  });
+
   it("rolls back OIDC identity creation on a conflicting roster link", async () => {
     const client = new FakeIdentityClient(otherParticipantId);
     mocks.connect.mockResolvedValue(client);

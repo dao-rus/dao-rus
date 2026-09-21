@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { redirect } from "next/navigation";
 import { LocalDateTime } from "@/components/local-date-time";
+import { TelegramAvatar } from "@/components/telegram-avatar";
 import { getActivitySummary } from "@/lib/activity";
 import { hasPrototypeAdminAccess } from "@/lib/config";
 import { readInterfaceTexts } from "@/lib/interface-texts";
@@ -50,14 +51,22 @@ export default async function ProfilePage({ searchParams }: ProfilePageProps) {
     <main className="shell">
       <section className="card profile">
         <div className="profileHeader">
-          <div>
-            <div className="eyebrow">{texts["profile.eyebrow"]}</div>
-            <h1>{participant.displayName}</h1>
-            <p className="muted">
-              {participant.telegramUsername
-                ? `@${participant.telegramUsername}`
-                : "Вы вошли через Telegram"}
-            </p>
+          <div className="profileIdentity">
+            <TelegramAvatar participantId={participant.id} displayName={participant.displayName}
+              avatarUrl={participant.avatarUrl} hasTelegramPhoto={participant.hasTelegramPhoto} />
+            <div>
+              <div className="eyebrow">{texts["profile.eyebrow"]}</div>
+              <h1>{participant.displayName}</h1>
+              <p className="muted">
+                {participant.telegramUsername
+                  ? `@${participant.telegramUsername}`
+                  : "Вы вошли через Telegram"}
+              </p>
+              {participant.telegramName && participant.telegramName !== participant.displayName ? (
+                <p className="muted">В Telegram: {participant.telegramName}</p>
+              ) : null}
+              {participant.telegramBio ? <p className="profileBio">{participant.telegramBio}</p> : null}
+            </div>
           </div>
           <div className="profileActions">
             <Link className="button secondary" href="/participants">
@@ -105,6 +114,12 @@ export default async function ProfilePage({ searchParams }: ProfilePageProps) {
         </form>
 
         <dl className="facts">
+          {participant.telegramPhoneNumber ? (
+            <div>
+              <dt>Ваш номер в Telegram</dt>
+              <dd>{participant.telegramPhoneNumber}{participant.telegramPhoneVerified === true ? " · подтверждён Telegram" : ""}</dd>
+            </div>
+          ) : null}
           <div>
             <dt>Подтверждение личности</dt>
             <dd>

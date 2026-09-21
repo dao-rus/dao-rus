@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { redirect } from "next/navigation";
+import { TelegramAvatar } from "@/components/telegram-avatar";
 import { readInterfaceTexts } from "@/lib/interface-texts";
 import { listParticipantsDirectory } from "@/lib/participants-directory";
 import { getCurrentParticipant } from "@/lib/session";
@@ -50,13 +51,18 @@ export default async function ParticipantsPage({ searchParams }: ParticipantsPag
           <ul className="participantsDirectory">
             {participants.map((participant) => (
               <li key={participant.participantId}>
-                <div>
-                  <strong>{participant.displayName}</strong>
-                  <span className="muted">
-                    {participant.telegramUsername
-                      ? `@${participant.telegramUsername}`
-                      : "Имя в Telegram не указано"}
-                  </span>
+                <div className="directoryIdentity">
+                  <TelegramAvatar participantId={participant.participantId} displayName={participant.displayName}
+                    avatarUrl={participant.avatarUrl} hasTelegramPhoto={participant.hasTelegramPhoto} />
+                  <div>
+                    <strong>{participant.displayName}</strong>
+                    <span className="muted">
+                      {participant.telegramUsername
+                        ? `@${participant.telegramUsername}`
+                        : "Имя в Telegram не указано"}
+                    </span>
+                    {participant.telegramBio ? <small className="muted">{participant.telegramBio}</small> : null}
+                  </div>
                 </div>
                 <div className="participantDirectoryActions">
                   <span className={participant.isVerified ? "verificationBadge verified" : "verificationBadge"}>

@@ -5,6 +5,7 @@ const mocks = vi.hoisted(() => ({
   authenticateTelegramCode: vi.fn(),
   createSession: vi.fn(),
   resolveTelegramParticipant: vi.fn(),
+  enrichTelegramProfile: vi.fn(),
 }));
 
 vi.mock("@/lib/config", () => ({
@@ -23,6 +24,9 @@ vi.mock("@/lib/identity", () => ({
 
 vi.mock("@/lib/telegram-oidc", () => ({
   authenticateTelegramCode: mocks.authenticateTelegramCode,
+}));
+vi.mock("@/lib/telegram-bot-profile", () => ({
+  enrichTelegramProfile: mocks.enrichTelegramProfile,
 }));
 
 vi.mock("@/lib/session", () => ({
@@ -49,6 +53,7 @@ function callbackRequest(cookie?: string) {
 describe("GET /api/auth/telegram/callback", () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    mocks.enrichTelegramProfile.mockResolvedValue({});
   });
 
   it("rejects missing flow cookies and clears stale flow cookies", async () => {
@@ -62,7 +67,7 @@ describe("GET /api/auth/telegram/callback", () => {
   });
 
   it("continues only when state and verifier cookies are present", async () => {
-    mocks.authenticateTelegramCode.mockResolvedValue({ subject: "telegram-subject" });
+    mocks.authenticateTelegramCode.mockResolvedValue({ subject: "telegram-subject", telegramUserId: "42" });
     mocks.resolveTelegramParticipant.mockResolvedValue({
       participant: { id: "participant-id" },
     });
@@ -77,9 +82,24 @@ describe("GET /api/auth/telegram/callback", () => {
       "verifier-for-test",
     );
     expect(mocks.createSession).toHaveBeenCalledWith("participant-id");
+    expect(mocks.enrichTelegramProfile).toHaveBeenCalledWith("42");
     expect(response.status).toBe(303);
     expect(response.headers.get("location")).toBe(
       "https://dao-lab.trycloudflare.com/profile",
     );
+  });
+
+  it("completes OIDC login when Bot API enrichment fails", async () => {
+    mocks.authenticateTelegramCode.mockResolvedValue({ subject: "telegram-subject", telegramUserId: "42" });
+    mocks.enrichTelegramProfile.mockRejectedValue(new Error("Bot API timeout"));
+    mocks.resolveTelegramParticipant.mockResolvedValue({ participant: { id: "participant-id" } });
+    mocks.createSession.mockResolvedValue("session-for-test");
+
+    const response = await GET(callbackRequest("dao_tg_state=state-for-test; dao_tg_verifier=verifier-for-test"));
+    expect(response.status).toBe(303);
+    expect(mocks.resolveTelegramParticipant).toHaveBeenCalledWith(
+      expect.anything(), expect.objectContaining({ botProfile: {} }),
+    );
+    expect(mocks.createSession).toHaveBeenCalledWith("participant-id");
   });
 });

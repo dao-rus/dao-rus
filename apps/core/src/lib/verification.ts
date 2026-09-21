@@ -12,6 +12,11 @@ export type DerivedVerification = {
 export type VerificationProfile = {
   subjectId: string;
   displayName: string;
+  telegramName: string | null;
+  telegramUsername: string | null;
+  telegramBio: string | null;
+  avatarUrl: string | null;
+  hasTelegramPhoto: boolean;
   hasLoggedIn: boolean;
   membershipStatus: string;
   isRoot: boolean;
@@ -112,6 +117,11 @@ function profileFromRow(row: Record<string, unknown>): VerificationProfile {
   return {
     subjectId: String(row.subject_id),
     displayName: String(row.display_name),
+    telegramName: row.telegram_name ? String(row.telegram_name) : null,
+    telegramUsername: row.telegram_username ? String(row.telegram_username) : null,
+    telegramBio: row.telegram_bio ? String(row.telegram_bio) : null,
+    avatarUrl: row.telegram_photo_count !== "0" && row.avatar_url ? String(row.avatar_url) : null,
+    hasTelegramPhoto: Boolean(row.telegram_photo_file_id) && row.telegram_photo_count !== "0",
     hasLoggedIn: Boolean(row.has_logged_in),
     membershipStatus: String(row.membership_status),
     isRoot: Boolean(row.is_root),
@@ -134,6 +144,12 @@ export async function getVerificationProfileWithDatabase(
     `${VERIFIED_SUBJECTS_CTE}
      SELECT subject.id AS subject_id,
             subject.display_name,
+            telegram.oidc_profile->>'name' AS telegram_name,
+            telegram.username AS telegram_username,
+            telegram.bot_profile->>'bio' AS telegram_bio,
+            telegram.avatar_url,
+            telegram.bot_profile->'photo'->>'file_id' AS telegram_photo_file_id,
+            telegram.bot_profile->>'photo_count' AS telegram_photo_count,
             EXISTS (
               SELECT 1 FROM events login
                WHERE login.participant_id = subject.id
@@ -169,6 +185,8 @@ export async function getVerificationProfileWithDatabase(
                LIMIT 1
             ) AS viewer_attestation_id
        FROM participants subject
+       LEFT JOIN external_identities telegram
+         ON telegram.participant_id = subject.id AND telegram.provider = 'telegram'
       WHERE subject.id = $1::uuid`,
     [subjectId, viewerSubjectId],
   );

@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { PostgresIdentityStore } from "@/lib/postgres-identity-store";
 import { resolveTelegramParticipant } from "@/lib/identity";
 import { authenticateTelegramCode } from "@/lib/telegram-oidc";
+import { enrichTelegramProfile } from "@/lib/telegram-bot-profile";
 import { createSession, SESSION_COOKIE } from "@/lib/session";
 import {
   appBaseUrl,
@@ -52,6 +53,8 @@ export async function GET(request: NextRequest) {
 
   try {
     const profile = await authenticateTelegramCode(code, verifier);
+    // Bot API data is optional; its failure must never invalidate a verified OIDC login.
+    profile.botProfile = await enrichTelegramProfile(profile.telegramUserId).catch(() => ({}));
 
     const store = new PostgresIdentityStore();
     const { participant } = await resolveTelegramParticipant(store, profile);

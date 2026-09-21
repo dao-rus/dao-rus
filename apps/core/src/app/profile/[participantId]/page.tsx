@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { notFound, redirect } from "next/navigation";
 import { hasPrototypeAdminAccess } from "@/lib/config";
+import { TelegramAvatar } from "@/components/telegram-avatar";
 import { getCurrentParticipant } from "@/lib/session";
 import { getVerificationProfile } from "@/lib/verification";
 
@@ -55,9 +56,22 @@ export default async function SubjectProfilePage({
     <main className="shell">
       <section className="card profile">
         <div className="profileHeader">
-          <div>
-            <div className="eyebrow">Профиль</div>
-            <h1>{profile.hasLoggedIn ? profile.displayName : "Человек ещё не вошёл в Ядро"}</h1>
+          <div className="profileIdentity">
+            {profile.hasLoggedIn ? (
+              <TelegramAvatar participantId={profile.subjectId} displayName={profile.displayName}
+                avatarUrl={profile.avatarUrl} hasTelegramPhoto={profile.hasTelegramPhoto} />
+            ) : null}
+            <div>
+              <div className="eyebrow">Профиль</div>
+              <h1>{profile.hasLoggedIn ? profile.displayName : "Человек ещё не вошёл в Ядро"}</h1>
+              {profile.hasLoggedIn && profile.telegramUsername ? (
+                <p className="muted">{`@${profile.telegramUsername}`}</p>
+              ) : null}
+              {profile.hasLoggedIn && profile.telegramName && profile.telegramName !== profile.displayName ? (
+                <p className="muted">В Telegram: {profile.telegramName}</p>
+              ) : null}
+              {profile.hasLoggedIn && profile.telegramBio ? <p className="profileBio">{profile.telegramBio}</p> : null}
+            </div>
           </div>
           <Link className="button secondary" href="/profile">Ваш профиль</Link>
         </div>

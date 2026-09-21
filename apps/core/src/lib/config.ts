@@ -35,6 +35,13 @@ export function telegramIngestionConfig() {
   };
 }
 
+export function telegramBotToken(): string | undefined {
+  const token = env("TELEGRAM_BOT_TOKEN");
+  const { clientId } = telegramConfig();
+  // The Bot API token must belong to the bot that issued the OIDC identity.
+  return token && clientId && token.split(":", 1)[0] === clientId ? token : undefined;
+}
+
 export function prototypeAdminParticipantIds(): Set<string> {
   return new Set(
     (env("ADMIN_PARTICIPANT_IDS") ?? "")

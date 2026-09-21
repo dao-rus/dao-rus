@@ -33,17 +33,24 @@ describe("participants directory", () => {
     expect(queries[0].text).toContain("LEFT JOIN external_identities telegram");
     expect(queries[0].text).toContain("login.event_type = 'participant.logged_in'");
     expect(queries[0].text).not.toContain("telegram_roster_entries");
+    expect(queries[0].text).not.toContain("phone_number");
     expect(entries).toEqual([
       {
         participantId: "10000000-0000-4000-8000-000000000001",
         displayName: "Алиса",
         telegramUsername: "alice",
+        telegramBio: null,
+        avatarUrl: null,
+        hasTelegramPhoto: false,
         isVerified: true,
       },
       {
         participantId: "20000000-0000-4000-8000-000000000002",
         displayName: "Борис",
         telegramUsername: null,
+        telegramBio: null,
+        avatarUrl: null,
+        hasTelegramPhoto: false,
         isVerified: false,
       },
     ]);

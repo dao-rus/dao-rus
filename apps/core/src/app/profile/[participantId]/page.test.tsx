@@ -13,6 +13,7 @@ vi.mock("next/navigation", () => ({ redirect: mocks.redirect, notFound: mocks.no
 vi.mock("@/lib/session", () => ({ getCurrentParticipant: mocks.getCurrentParticipant }));
 vi.mock("@/lib/verification", () => ({ getVerificationProfile: mocks.getVerificationProfile }));
 vi.mock("@/lib/config", () => ({ hasPrototypeAdminAccess: mocks.hasPrototypeAdminAccess }));
+vi.mock("@/components/telegram-avatar", () => ({ TelegramAvatar: () => null }));
 
 import SubjectProfilePage from "./page";
 
@@ -57,6 +58,9 @@ describe("public subject profile name", () => {
       ...rosterProfile,
       displayName: "Имя из Telegram",
       hasLoggedIn: true,
+      telegramUsername: "telegram_name",
+      telegramBio: "Биография из Telegram",
+      telegramPhoneNumber: "+79990000000",
     });
     const page = await SubjectProfilePage({
       params: Promise.resolve({ participantId: "20000000-0000-4000-8000-000000000002" }),
@@ -64,5 +68,8 @@ describe("public subject profile name", () => {
     });
 
     expect(textContent(page)).toContain("Имя из Telegram");
+    expect(textContent(page)).toContain("@telegram_name");
+    expect(textContent(page)).toContain("Биография из Telegram");
+    expect(textContent(page)).not.toContain("+79990000000");
   });
 });

@@ -52,6 +52,7 @@ describe("production deployment", () => {
     const gitignore = await projectFile(".gitignore");
     const environment = await projectFile(".env.production.example");
     const caddy = await projectFile("Caddyfile");
+    const compose = await projectFile("compose.prod.yml");
 
     expect(gitignore).toContain(".env.production");
     expect(environment).toContain("APP_BASE_URL=https://core.daorus.org");
@@ -59,6 +60,9 @@ describe("production deployment", () => {
       "TELEGRAM_OIDC_REDIRECT_URI=https://core.daorus.org/api/auth/telegram/callback",
     );
     expect(environment).not.toMatch(/TELEGRAM_OIDC_CLIENT_SECRET=\S+/);
+    expect(environment).toContain("TELEGRAM_BOT_TOKEN=");
+    expect(environment).not.toMatch(/TELEGRAM_BOT_TOKEN=\S+/);
+    expect(compose).toContain("TELEGRAM_BOT_TOKEN: ${TELEGRAM_BOT_TOKEN:-}");
     expect(caddy).toContain("reverse_proxy web:3000");
   });
 
