@@ -77,4 +77,23 @@ describe("participants directory", () => {
       { participantId, displayName: "Имя из Telegram" },
     ]);
   });
+
+  it("keeps the OIDC avatar visible when Bot API reports no photo", async () => {
+    const entries = await listParticipantsDirectoryWithDatabase({
+      async query() {
+        return { rows: [{
+          participant_id: "10000000-0000-4000-8000-000000000001",
+          display_name: "Алиса",
+          avatar_url: "https://cdn.example/avatar.jpg",
+          telegram_photo_file_id: "old-photo",
+          telegram_photo_count: "0",
+          is_verified: false,
+        }] };
+      },
+    });
+    expect(entries[0]).toMatchObject({
+      avatarUrl: "https://cdn.example/avatar.jpg",
+      hasTelegramPhoto: false,
+    });
+  });
 });

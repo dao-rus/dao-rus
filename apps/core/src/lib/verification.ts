@@ -120,7 +120,7 @@ function profileFromRow(row: Record<string, unknown>): VerificationProfile {
     telegramName: row.telegram_name ? String(row.telegram_name) : null,
     telegramUsername: row.telegram_username ? String(row.telegram_username) : null,
     telegramBio: row.telegram_bio ? String(row.telegram_bio) : null,
-    avatarUrl: row.telegram_photo_count !== "0" && row.avatar_url ? String(row.avatar_url) : null,
+    avatarUrl: row.avatar_url ? String(row.avatar_url) : null,
     hasTelegramPhoto: Boolean(row.telegram_photo_file_id) && row.telegram_photo_count !== "0",
     hasLoggedIn: Boolean(row.has_logged_in),
     membershipStatus: String(row.membership_status),

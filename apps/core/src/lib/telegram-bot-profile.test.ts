@@ -54,4 +54,28 @@ describe("Telegram Bot API profile enrichment", () => {
     expect(fetchMock.mock.calls[1][0]).toContain("/photos/avatar.jpg");
     expect(JSON.stringify(photo)).not.toContain("private-token");
   });
+
+  it.each([
+    ["JPEG", [0xff, 0xd8, 0xff, 0xe0], "image/jpeg"],
+    ["PNG", [0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a], "image/png"],
+    ["WebP", [0x52, 0x49, 0x46, 0x46, 0, 0, 0, 0, 0x57, 0x45, 0x42, 0x50], "image/webp"],
+  ])("accepts %s photo with octet-stream", async (_format, bytes, expectedMime) => {
+    vi.stubGlobal("fetch", vi.fn()
+      .mockResolvedValueOnce(new Response(JSON.stringify({ ok: true, result: { file_path: "photos/avatar" } }), { status: 200 }))
+      .mockResolvedValueOnce(new Response(new Uint8Array(bytes), {
+        status: 200, headers: { "content-type": "application/octet-stream" },
+      })));
+    const photo = await downloadTelegramProfilePhoto("known-file-id");
+    expect(photo?.contentType).toBe(expectedMime);
+    expect(photo?.body.byteLength).toBe(bytes.length);
+  });
+
+  it("rejects unknown octet-stream binary", async () => {
+    vi.stubGlobal("fetch", vi.fn()
+      .mockResolvedValueOnce(new Response(JSON.stringify({ ok: true, result: { file_path: "photos/avatar" } }), { status: 200 }))
+      .mockResolvedValueOnce(new Response(new Uint8Array([1, 2, 3]), {
+        status: 200, headers: { "content-type": "application/octet-stream" },
+      })));
+    expect(await downloadTelegramProfilePhoto("known-file-id")).toBeNull();
+  });
 });

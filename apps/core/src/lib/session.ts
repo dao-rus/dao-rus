@@ -104,7 +104,7 @@ export async function getCurrentParticipant() {
     createdAt: new Date(row.created_at),
     telegramUsername: row.telegram_username ? String(row.telegram_username) : null,
     telegramUserId: row.telegram_user_id ? String(row.telegram_user_id) : null,
-    avatarUrl: row.telegram_photo_count !== "0" && row.avatar_url ? String(row.avatar_url) : null,
+    avatarUrl: row.avatar_url ? String(row.avatar_url) : null,
     telegramName: row.telegram_name ? String(row.telegram_name) : null,
     telegramPhoneNumber: row.telegram_phone_number ? String(row.telegram_phone_number) : null,
     telegramPhoneVerified: row.telegram_phone_verified === null || row.telegram_phone_verified === undefined

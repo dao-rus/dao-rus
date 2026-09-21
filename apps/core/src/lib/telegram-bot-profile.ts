@@ -152,6 +152,15 @@ export async function enrichTelegramProfile(telegramUserId: string): Promise<Rec
   };
 }
 
+function imageMimeFromSignature(bytes: Uint8Array): string | null {
+  if (bytes.length >= 3 && bytes[0] === 0xff && bytes[1] === 0xd8 && bytes[2] === 0xff) return "image/jpeg";
+  if (bytes.length >= 8 && [0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]
+    .every((byte, index) => bytes[index] === byte)) return "image/png";
+  if (bytes.length >= 12 && [0x52, 0x49, 0x46, 0x46].every((byte, index) => bytes[index] === byte)
+    && [0x57, 0x45, 0x42, 0x50].every((byte, index) => bytes[index + 8] === byte)) return "image/webp";
+  return null;
+}
+
 export async function downloadTelegramProfilePhoto(fileId: string): Promise<{ body: ArrayBuffer; contentType: string } | null> {
   const file = object(await botApi("getFile", { file_id: fileId }));
   const path = file && string(file.file_path);
@@ -164,10 +173,13 @@ export async function downloadTelegramProfilePhoto(fileId: string): Promise<{ bo
     });
     if (!response.ok) return null;
     const contentType = response.headers.get("content-type") ?? "";
-    if (!contentType.startsWith("image/")) return null;
+    if (!contentType.startsWith("image/") && contentType !== "application/octet-stream") return null;
     if (Number(response.headers.get("content-length") ?? 0) > 5_000_000) return null;
     const body = await response.arrayBuffer();
-    return body.byteLength <= 5_000_000 ? { body, contentType } : null;
+    if (body.byteLength > 5_000_000) return null;
+    const imageType = contentType === "application/octet-stream"
+      ? imageMimeFromSignature(new Uint8Array(body)) : contentType;
+    return imageType ? { body, contentType: imageType } : null;
   } catch {
     return null;
   }

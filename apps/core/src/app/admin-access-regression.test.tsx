@@ -35,6 +35,11 @@ vi.mock("@/lib/membership-history", () => ({
   membershipEventLabel: vi.fn(),
 }));
 
+vi.mock("@/lib/profile-about", () => ({
+  getProfileAbout: vi.fn().mockResolvedValue(null),
+  getVisibleProfileAbout: vi.fn().mockResolvedValue(null),
+}));
+
 vi.mock("@/lib/verification", () => ({
   getVerificationProfile: mocks.getVerificationProfile,
 }));

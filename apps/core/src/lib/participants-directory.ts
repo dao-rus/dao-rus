@@ -61,7 +61,7 @@ export async function listParticipantsDirectoryWithDatabase(
       ? String(row.telegram_username)
       : null,
     telegramBio: row.telegram_bio ? String(row.telegram_bio) : null,
-    avatarUrl: row.telegram_photo_count !== "0" && row.avatar_url ? String(row.avatar_url) : null,
+    avatarUrl: row.avatar_url ? String(row.avatar_url) : null,
     hasTelegramPhoto: Boolean(row.telegram_photo_file_id) && row.telegram_photo_count !== "0",
     isVerified: Boolean(row.is_verified),
   }));

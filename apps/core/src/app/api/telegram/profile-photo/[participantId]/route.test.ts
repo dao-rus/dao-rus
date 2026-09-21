@@ -48,4 +48,29 @@ describe("profile photo route", () => {
     expect((await GET(new Request("https://core.example/photo"), context(participantId))).status).toBe(404);
     expect(mocks.downloadTelegramProfilePhoto).not.toHaveBeenCalled();
   });
+
+  it("falls back to the saved OIDC picture when Bot API photo fails", async () => {
+    mocks.query.mockResolvedValue({ rows: [{ file_id: "stored-photo", oidc_picture: "https://cdn.example/avatar.jpg" }] });
+    mocks.downloadTelegramProfilePhoto.mockResolvedValue(null);
+    const response = await GET(new Request("https://core.example/photo"), context(participantId));
+    expect(response.status).toBe(307);
+    expect(response.headers.get("location")).toBe("https://cdn.example/avatar.jpg");
+    expect(response.headers.get("cache-control")).toBe("private, no-store");
+    expect(mocks.downloadTelegramProfilePhoto).toHaveBeenCalledWith("stored-photo");
+  });
+
+  it("uses the OIDC picture when Telegram reports no Bot API photo", async () => {
+    mocks.query.mockResolvedValue({ rows: [{ file_id: "old-photo", photo_count: "0", oidc_picture: "https://cdn.example/avatar.jpg" }] });
+    const response = await GET(new Request("https://core.example/photo"), context(participantId));
+    expect(response.status).toBe(307);
+    expect(mocks.downloadTelegramProfilePhoto).not.toHaveBeenCalled();
+  });
+
+  it("does not redirect to an unsafe fallback URL", async () => {
+    mocks.query.mockResolvedValue({ rows: [{ file_id: "stored-photo", oidc_picture: "https://api.telegram.org/file/botsecret/avatar.jpg" }] });
+    mocks.downloadTelegramProfilePhoto.mockResolvedValue(null);
+    const response = await GET(new Request("https://core.example/photo"), context(participantId));
+    expect(response.status).toBe(503);
+    expect(response.headers.get("location")).toBeNull();
+  });
 });
