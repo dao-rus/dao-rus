@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { devAuthEnabled, isTelegramConfigured } from "@/lib/config";
+import { readInterfaceTexts } from "@/lib/interface-texts";
 import { getCurrentParticipant } from "@/lib/session";
 
 export const dynamic = "force-dynamic";
@@ -9,19 +10,20 @@ export default async function Home({
 }: {
   searchParams: Promise<{ auth_error?: string }>;
 }) {
-  const participant = await getCurrentParticipant();
-  const params = await searchParams;
+  const [participant, params, { values: texts }] = await Promise.all([
+    getCurrentParticipant(),
+    searchParams,
+    readInterfaceTexts(),
+  ]);
   const telegramReady = isTelegramConfigured();
   const devReady = devAuthEnabled();
 
   return (
     <main className="shell">
       <section className="hero card">
-        <div className="eyebrow">Ядро</div>
-        <h1>ДАО Русь</h1>
-        <p className="lead">
-          Пространство, где мы узнаём друг друга, сохраняем историю участия и вместе строим ДАО Русь.
-        </p>
+        <div className="eyebrow">{texts["home.eyebrow"]}</div>
+        <h1>{texts["home.title"]}</h1>
+        <p className="lead">{texts["home.lead"]}</p>
 
         {params.auth_error ? (
           <p className="alert">Не удалось войти через Telegram. Попробуйте ещё раз.</p>
@@ -30,14 +32,14 @@ export default async function Home({
         {participant ? (
           <div className="actions">
             <Link className="button primary" href="/profile">
-              Открыть профиль
+              {texts["home.profile_button"]}
             </Link>
           </div>
         ) : (
           <div className="actions">
             {telegramReady ? (
               <a className="button primary" href="/api/auth/telegram/start">
-                Войти через Telegram
+                {texts["home.login_button"]}
               </a>
             ) : (
               <span className="button disabled">Telegram пока не настроен</span>

@@ -62,9 +62,14 @@ export default async function ProfilePage({ searchParams }: ProfilePageProps) {
               Ядро
             </Link>
             {hasAdminAccess ? (
-              <Link className="button secondary" href="/admin/participants">
-                Реестр ДАО
-              </Link>
+              <>
+                <Link className="button secondary" href="/admin/participants">
+                  Реестр ДАО
+                </Link>
+                <Link className="button secondary" href="/admin/interface">
+                  Тексты интерфейса
+                </Link>
+              </>
             ) : null}
             <Link className="button secondary" href="/proposals">
               Предложения

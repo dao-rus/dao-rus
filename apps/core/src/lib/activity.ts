@@ -19,6 +19,7 @@ export const activityEventLabels: Record<string, string> = {
   "participant.created": "Регистрация в DAO Core",
   "participant.logged_in": "Вход в DAO Core",
   "participant.profile_updated": "Изменение имени профиля",
+  "interface.texts_updated": "Изменение текстов интерфейса",
   "proposal.created": "Создание предложения",
   "participant_registry.membership_status_changed": "Изменение статуса членства в реестре",
   "participant_registry.identity_verification_changed": "Изменение верификации в реестре",

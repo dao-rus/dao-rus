@@ -254,6 +254,16 @@ Caddy автоматически получает и обновляет TLS-се
 `core.daorus.org` указывает на VPS и внешние TCP-порты 80/443 доступны. UDP 443
 публикуется для HTTP/3.
 
+### Тексты главной страницы
+
+Администратор из существующего `ADMIN_PARTICIPANT_IDS` может редактировать пять
+текстов главной страницы на `/admin/interface`. Это фиксированный список ключей,
+а не произвольные страницы или HTML. Значения хранятся в `ui_text_overrides`;
+отсутствие записи означает default из кода. Отдельное поле можно вернуть к
+default галочкой в форме. Только фактическое изменение override создаёт
+`interface.texts_updated` с UUID администратора и списком изменённых ключей,
+без содержимого текстов в событии.
+
 ## 6. Одноразовый Telegram Roster v0.1
 
 Bot API не предоставляет надёжный полный список участников закрытого supergroup/forum. Для лабораторного snapshot используется отдельный локальный MTProto-клиент под пользовательским Telegram-аккаунтом. Официальные точки отсчёта: [получение `api_id`/`api_hash`](https://core.telegram.org/api/obtaining_api_id), [авторизация пользователя](https://core.telegram.org/api/auth) и [`channels.getParticipants`](https://core.telegram.org/method/channels.getParticipants).
