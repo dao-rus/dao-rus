@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { redirect } from "next/navigation";
+import { readInterfaceTexts } from "@/lib/interface-texts";
 import { listParticipantsDirectory } from "@/lib/participants-directory";
 import { getCurrentParticipant } from "@/lib/session";
 
@@ -14,7 +15,10 @@ export default async function ParticipantsPage({ searchParams }: ParticipantsPag
   if (!viewer) redirect("/");
 
   const { q = "" } = await searchParams;
-  const participants = await listParticipantsDirectory(q);
+  const [participants, { values: texts }] = await Promise.all([
+    listParticipantsDirectory(q),
+    readInterfaceTexts(),
+  ]);
 
   return (
     <main className="shell">
@@ -22,7 +26,7 @@ export default async function ParticipantsPage({ searchParams }: ParticipantsPag
         <div className="profileHeader">
           <div>
             <div className="eyebrow">ДАО Русь</div>
-            <h1>Ядро</h1>
+            <h1>{texts["participants.title"]}</h1>
             <p className="muted">Найдено: {participants.length}.</p>
           </div>
           <Link className="button secondary" href="/profile">Ваш профиль</Link>

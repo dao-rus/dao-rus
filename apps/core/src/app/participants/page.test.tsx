@@ -4,6 +4,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 const mocks = vi.hoisted(() => ({
   getCurrentParticipant: vi.fn(),
   listParticipantsDirectory: vi.fn(),
+  readInterfaceTexts: vi.fn(),
   redirect: vi.fn(),
 }));
 
@@ -14,6 +15,7 @@ vi.mock("@/lib/session", () => ({
 vi.mock("@/lib/participants-directory", () => ({
   listParticipantsDirectory: mocks.listParticipantsDirectory,
 }));
+vi.mock("@/lib/interface-texts", () => ({ readInterfaceTexts: mocks.readInterfaceTexts }));
 
 import ParticipantsPage from "./page";
 
@@ -37,6 +39,7 @@ describe("/participants", () => {
     mocks.redirect.mockImplementation((destination: string) => {
       throw new Error(`redirect:${destination}`);
     });
+    mocks.readInterfaceTexts.mockResolvedValue({ values: { "participants.title": "Сеть" } });
   });
 
   it("requires an authenticated Participant", async () => {
@@ -45,6 +48,7 @@ describe("/participants", () => {
     await expect(ParticipantsPage({ searchParams: Promise.resolve({}) }))
       .rejects.toThrow("redirect:/");
     expect(mocks.listParticipantsDirectory).not.toHaveBeenCalled();
+    expect(mocks.readInterfaceTexts).not.toHaveBeenCalled();
   });
 
   it("shows only public Core profile fields and forwards search", async () => {
@@ -71,6 +75,7 @@ describe("/participants", () => {
     const text = textContent(page);
 
     expect(mocks.listParticipantsDirectory).toHaveBeenCalledWith("alice");
+    expect(text).toContain("Сеть");
     expect(text).toContain("Алиса");
     expect(text).toContain("@alice");
     expect(text).toContain("Личность подтверждена");
@@ -81,5 +86,15 @@ describe("/participants", () => {
     expect(text).not.toContain("Последний раз в Telegram");
     expect(hrefs(page)).toContain(`/profile/${participantId}`);
     expect(hrefs(page)).not.toContain("/admin/participants");
+  });
+
+  it("shows the overridden section title", async () => {
+    mocks.getCurrentParticipant.mockResolvedValue({ id: "viewer" });
+    mocks.listParticipantsDirectory.mockResolvedValue([]);
+    mocks.readInterfaceTexts.mockResolvedValue({ values: { "participants.title": "Моя сеть" } });
+
+    const page = await ParticipantsPage({ searchParams: Promise.resolve({}) });
+
+    expect(textContent(page)).toContain("Моя сеть");
   });
 });

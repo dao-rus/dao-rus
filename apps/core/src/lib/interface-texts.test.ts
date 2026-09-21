@@ -97,4 +97,21 @@ describe("interface texts", () => {
       .toEqual([]);
     expect(database.events).toHaveLength(1);
   });
+
+  it("overrides and restores the participants title", async () => {
+    const database = new FakeDatabase();
+    const form = formWithDefaults();
+    form.set("participants.title", "Своя сеть");
+
+    expect(await saveInterfaceTextsWithDatabase(database, "admin-id", parseInterfaceTextForm(form)))
+      .toEqual(["participants.title"]);
+    expect((await readInterfaceTextsWithDatabase(database)).values["participants.title"])
+      .toBe("Своя сеть");
+
+    form.set("reset.participants.title", "on");
+    expect(await saveInterfaceTextsWithDatabase(database, "admin-id", parseInterfaceTextForm(form)))
+      .toEqual(["participants.title"]);
+    expect((await readInterfaceTextsWithDatabase(database)).values["participants.title"])
+      .toBe("Сеть");
+  });
 });

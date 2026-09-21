@@ -18,6 +18,7 @@ vi.mock("@/lib/interface-texts", () => ({
     { key: "home.lead", label: "Основной текст", defaultValue: "Текст", multiline: true },
     { key: "home.login_button", label: "Кнопка входа", defaultValue: "Войти", multiline: false },
     { key: "home.profile_button", label: "Кнопка профиля", defaultValue: "Профиль", multiline: false },
+    { key: "participants.title", label: "Заголовок раздела «Ядро»", defaultValue: "Сеть", multiline: false },
   ],
   readInterfaceTexts: mocks.readInterfaceTexts,
 }));
@@ -48,7 +49,7 @@ describe("/admin/interface", () => {
     expect(mocks.readInterfaceTexts).not.toHaveBeenCalled();
   });
 
-  it("shows five fixed text fields to an admin", async () => {
+  it("shows the fixed text fields to an admin", async () => {
     mocks.getCurrentParticipant.mockResolvedValue({ id: "admin" });
     mocks.hasPrototypeAdminAccess.mockReturnValue(true);
     mocks.readInterfaceTexts.mockResolvedValue({
@@ -58,6 +59,7 @@ describe("/admin/interface", () => {
         "home.lead": "Текст",
         "home.login_button": "Войти",
         "home.profile_button": "Профиль",
+        "participants.title": "Сеть",
       },
       overrides: {
         "home.eyebrow": null,
@@ -65,6 +67,7 @@ describe("/admin/interface", () => {
         "home.lead": null,
         "home.login_button": null,
         "home.profile_button": null,
+        "participants.title": null,
       },
     });
 
@@ -75,6 +78,7 @@ describe("/admin/interface", () => {
     expect(text).toContain("Основной текст");
     expect(text).toContain("Кнопка входа");
     expect(text).toContain("Кнопка профиля");
+    expect(text).toContain("Заголовок раздела «Ядро»");
     expect(text).toContain("Сохранить тексты");
   });
 });

@@ -9,6 +9,7 @@ export const interfaceTextFields = [
   },
   { key: "home.login_button", label: "Кнопка входа", defaultValue: "Войти через Telegram", multiline: false },
   { key: "home.profile_button", label: "Кнопка профиля", defaultValue: "Открыть профиль", multiline: false },
+  { key: "participants.title", label: "Заголовок раздела «Ядро»", defaultValue: "Сеть", multiline: false },
 ] as const;
 
 export type InterfaceTextKey = (typeof interfaceTextFields)[number]["key"];
