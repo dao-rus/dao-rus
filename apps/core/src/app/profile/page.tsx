@@ -50,6 +50,7 @@ const visibilityLabels: Record<string, string> = {
 
 const bioVisibilityOptions = ["public", "members", "private"] as const;
 const matchableVisibilityOptions = ["public", "members", "match_only", "private"] as const;
+const residenceTypeOptions = ["город", "п.г.т.", "деревня", "село"] as const;
 
 type ProfilePageProps = {
   searchParams: Promise<{ profile_update?: string; about_update?: string }>;
@@ -140,12 +141,16 @@ export default async function ProfilePage({ searchParams }: ProfilePageProps) {
             <div className="residenceFields">
               <input id="residence-name" form="profile-form" name="residence_name" maxLength={120}
                 defaultValue={about?.residence?.name ?? ""} placeholder="Название, например Казань" />
-              <input form="profile-form" name="residence_type" maxLength={80}
-                defaultValue={about?.residence?.type ?? ""} placeholder="Тип, например город" aria-label="Тип населённого пункта" />
+              <select form="profile-form" name="residence_type" defaultValue={about?.residence?.type ?? "город"}
+                aria-label="Тип населённого пункта">
+                {about?.residence?.type && !residenceTypeOptions.some((type) => type === about.residence?.type)
+                  ? <option value={about.residence.type}>{about.residence.type}</option> : null}
+                {residenceTypeOptions.map((type) => <option key={type} value={type}>{type}</option>)}
+              </select>
               <input form="profile-form" name="residence_country" maxLength={120}
-                defaultValue={about?.residence?.country ?? ""} placeholder="Страна" aria-label="Страна" />
+                defaultValue={about?.residence?.country ?? "Россия"} placeholder="Страна" aria-label="Страна" />
             </div>
-            <p className="muted privacyHint">Можно оставить все поля пустыми. Если указываете место, заполните все три. Его видно только вошедшим участникам.</p>
+            <p className="muted privacyHint">Место жительства необязательно. Оставьте название пустым, если не хотите его указывать. Указанное место видно только вошедшим участникам.</p>
             <button className="button primary" type="submit" form="profile-form">Сохранить профиль</button>
             {updateMessage ? (
               <p className={params.profile_update === "empty_name" || params.profile_update === "invalid" ? "formError" : "formNotice"}>{updateMessage}</p>

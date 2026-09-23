@@ -101,6 +101,21 @@ describe("/profile copy", () => {
     expect(findProps(page, (props) => props.name === "residence_name")?.form).toBe("profile-form");
     expect(findProps(page, (props) => props.name === "residence_type")?.form).toBe("profile-form");
     expect(findProps(page, (props) => props.name === "residence_country")?.form).toBe("profile-form");
+    expect(text).toContain("п.г.т.");
+    expect(text).toContain("деревня");
+    expect(text).toContain("село");
+    mocks.getProfileAbout.mockResolvedValue({ bio: "", bioVisibility: "members", residence: null,
+      interests: [], signals: [],
+    });
+    const blankPage = await ProfilePage({ searchParams: Promise.resolve({}) });
+    expect(findProps(blankPage, (props) => props.name === "residence_type")?.defaultValue).toBe("город");
+    expect(findProps(blankPage, (props) => props.name === "residence_country")?.defaultValue).toBe("Россия");
+    mocks.getProfileAbout.mockResolvedValue({ bio: "", bioVisibility: "members",
+      residence: { name: "Кущёвская", type: "станица", country: "Россия" }, interests: [], signals: [],
+    });
+    const legacyPage = await ProfilePage({ searchParams: Promise.resolve({}) });
+    expect(findProps(legacyPage, (props) => props.name === "residence_type")?.defaultValue).toBe("станица");
+    expect(textContent(legacyPage)).toContain("станица");
     expect(text).not.toContain("Сохранить био");
     expect(findProps(page, (props) => props.id === "profile-form")?.action).toBe("/api/profile");
     expect(findProps(page, (props) => props.name === "bio")?.form).toBe("profile-form");

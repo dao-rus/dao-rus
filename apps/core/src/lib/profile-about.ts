@@ -93,8 +93,8 @@ export function normalizeResidence(values: { name: unknown; type: unknown; count
     throw new ProfileAboutValidationError("Residence must be text");
   }
   const [name, type, country] = (parts as string[]).map((value) => value.trim().replace(/\s+/gu, " "));
-  if (!name && !type && !country) return null;
-  if (!name || !type || !country || name.length > 120 || type.length > 80 || country.length > 120) {
+  if (!name) return null;
+  if (!type || !country || name.length > 120 || type.length > 80 || country.length > 120) {
     throw new ProfileAboutValidationError("Invalid residence");
   }
   return { name, type, country };

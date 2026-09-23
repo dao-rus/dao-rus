@@ -37,6 +37,9 @@ describe("profile-about validation", () => {
 
   it("allows an omitted residence and normalizes a complete one", () => {
     expect(normalizeResidence({ name: " ", type: "", country: " " })).toBeNull();
+    expect(normalizeResidence({ name: "", type: "город", country: "Россия" })).toBeNull();
+    expect(normalizeResidence({ name: " Москва ", type: "город", country: "Россия" }))
+      .toEqual({ name: "Москва", type: "город", country: "Россия" });
     expect(normalizeResidence({ name: "  Нижний   Новгород  ", type: " город ", country: " Россия " }))
       .toEqual({ name: "Нижний Новгород", type: "город", country: "Россия" });
     expect(() => normalizeResidence({ name: "Казань", type: "", country: "Россия" }))
@@ -144,6 +147,13 @@ describe("saveProfileWithDatabase", () => {
       name: "", type: "", country: "",
     })).toEqual({ changed: true });
     expect(clearClient.queries.find(({ text }) => text.includes("SET display_name = $2"))?.values?.slice(5))
+      .toEqual([null, null, null]);
+
+    const defaultClient = new ProfileClient(current);
+    expect(await saveProfileWithDatabase(profileDatabase(defaultClient), participantId, "Анна", "", "members", {
+      name: "", type: "город", country: "Россия",
+    })).toEqual({ changed: false });
+    expect(defaultClient.queries.find(({ text }) => text.includes("SET display_name = $2"))?.values?.slice(5))
       .toEqual([null, null, null]);
   });
 });

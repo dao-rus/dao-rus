@@ -413,6 +413,7 @@ dd { margin: 6px 0 0; }
 .aboutForm textarea,
 .aboutForm select,
 .residenceFields input,
+.residenceFields select,
 .inlineAboutForm input,
 .inlineAboutForm select {
   width: 100%;
