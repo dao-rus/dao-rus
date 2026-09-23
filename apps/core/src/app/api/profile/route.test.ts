@@ -2,6 +2,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 
 const mocks = vi.hoisted(() => ({
   getCurrentParticipant: vi.fn(),
+  saveProfile: vi.fn(),
   updateParticipantDisplayName: vi.fn(),
 }));
 
@@ -18,6 +19,11 @@ vi.mock("@/lib/profile", () => ({
   updateParticipantDisplayName: mocks.updateParticipantDisplayName,
 }));
 
+vi.mock("@/lib/profile-about", () => ({
+  ProfileAboutValidationError: class ProfileAboutValidationError extends Error {},
+  saveProfile: mocks.saveProfile,
+}));
+
 import { POST } from "./route";
 
 function profileRequest(fields: Record<string, string>) {
@@ -32,20 +38,24 @@ describe("POST /api/profile", () => {
     vi.clearAllMocks();
   });
 
-  it("updates only the participant from the current session", async () => {
+  it("saves name and bio only for the participant from the current session", async () => {
     mocks.getCurrentParticipant.mockResolvedValue({ id: "current-participant" });
-    mocks.updateParticipantDisplayName.mockResolvedValue({ changed: true });
+    mocks.saveProfile.mockResolvedValue({ changed: true });
 
     const response = await POST(
       profileRequest({
         display_name: "Новое имя",
+        bio: "О себе",
+        visibility: "members",
         participant_id: "another-participant",
       }),
     );
 
-    expect(mocks.updateParticipantDisplayName).toHaveBeenCalledWith(
+    expect(mocks.saveProfile).toHaveBeenCalledWith(
       "current-participant",
       "Новое имя",
+      "О себе",
+      "members",
     );
     expect(response.status).toBe(303);
     expect(response.headers.get("location")).toBe(
@@ -58,8 +68,20 @@ describe("POST /api/profile", () => {
 
     const response = await POST(profileRequest({ display_name: "Новое имя" }));
 
+    expect(mocks.saveProfile).not.toHaveBeenCalled();
     expect(mocks.updateParticipantDisplayName).not.toHaveBeenCalled();
     expect(response.status).toBe(303);
     expect(response.headers.get("location")).toBe("http://localhost:3000/");
+  });
+
+  it("keeps existing name-only submissions working", async () => {
+    mocks.getCurrentParticipant.mockResolvedValue({ id: "current-participant" });
+    mocks.updateParticipantDisplayName.mockResolvedValue({ changed: true });
+
+    const response = await POST(profileRequest({ display_name: "Новое имя" }));
+
+    expect(mocks.updateParticipantDisplayName).toHaveBeenCalledWith("current-participant", "Новое имя");
+    expect(mocks.saveProfile).not.toHaveBeenCalled();
+    expect(response.headers.get("location")).toBe("http://localhost:3000/profile?profile_update=updated");
   });
 });

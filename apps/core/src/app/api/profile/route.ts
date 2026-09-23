@@ -1,9 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { appBaseUrl } from "@/lib/config";
-import {
-  DisplayNameValidationError,
-  updateParticipantDisplayName,
-} from "@/lib/profile";
+import { DisplayNameValidationError, updateParticipantDisplayName } from "@/lib/profile";
+import { ProfileAboutValidationError, saveProfile } from "@/lib/profile-about";
 import { getCurrentParticipant } from "@/lib/session";
 
 export const runtime = "nodejs";
@@ -21,16 +19,20 @@ export async function POST(request: NextRequest) {
   }
 
   const formData = await request.formData();
+  const bio = formData.get("bio");
+  const visibility = formData.get("visibility");
 
   try {
-    const result = await updateParticipantDisplayName(
-      participant.id,
-      formData.get("display_name"),
-    );
+    const result = bio === null && visibility === null
+      ? await updateParticipantDisplayName(participant.id, formData.get("display_name"))
+      : await saveProfile(participant.id, formData.get("display_name"), bio, visibility);
     return profileRedirect(result.changed ? "updated" : "unchanged");
   } catch (error) {
     if (error instanceof DisplayNameValidationError) {
       return profileRedirect("empty_name");
+    }
+    if (error instanceof ProfileAboutValidationError) {
+      return profileRedirect("invalid");
     }
     throw error;
   }

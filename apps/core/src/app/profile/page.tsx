@@ -56,9 +56,10 @@ type ProfilePageProps = {
 };
 
 const updateMessages: Record<string, string> = {
-  updated: "Имя профиля обновлено.",
-  unchanged: "Имя не изменилось.",
+  updated: "Профиль сохранён.",
+  unchanged: "Профиль не изменился.",
   empty_name: "Введите непустое имя.",
+  invalid: "Проверьте введённые данные.",
 };
 
 const aboutMessages: Record<string, string> = {
@@ -113,15 +114,11 @@ export default async function ProfilePage({ searchParams }: ProfilePageProps) {
           </div>
         </div>
 
-        <form className="profileEdit" action="/api/profile" method="post">
+        <form id="profile-form" className="profileEdit" action="/api/profile" method="post">
           <label htmlFor="display-name">Отображаемое имя</label>
           <div>
             <input id="display-name" name="display_name" defaultValue={participant.displayName} required />
-            <button className="button primary" type="submit">Сохранить</button>
           </div>
-          {updateMessage ? (
-            <p className={params.profile_update === "empty_name" ? "formError" : "formNotice"}>{updateMessage}</p>
-          ) : null}
         </form>
 
         <section className="profileAbout">
@@ -132,16 +129,18 @@ export default async function ProfilePage({ searchParams }: ProfilePageProps) {
             </div>
           </div>
 
-          <form className="aboutForm" action="/api/profile/about" method="post">
-            <input type="hidden" name="action" value="update_bio" />
+          <div className="aboutForm">
             <label htmlFor="profile-bio">Био</label>
-            <textarea id="profile-bio" name="bio" maxLength={2000} defaultValue={about?.bio ?? ""} placeholder="Несколько слов о себе" />
+            <textarea id="profile-bio" form="profile-form" name="bio" maxLength={2000} defaultValue={about?.bio ?? ""} placeholder="Несколько слов о себе" />
             <label htmlFor="bio-visibility">Кому видно</label>
-            <select id="bio-visibility" name="visibility" defaultValue={about?.bioVisibility ?? "members"}>
+            <select id="bio-visibility" form="profile-form" name="visibility" defaultValue={about?.bioVisibility ?? "members"}>
               {bioVisibilityOptions.map((value) => <option key={value} value={value}>{visibilityLabels[value]}</option>)}
             </select>
-            <button className="button primary" type="submit">Сохранить био</button>
-          </form>
+            <button className="button primary" type="submit" form="profile-form">Сохранить профиль</button>
+            {updateMessage ? (
+              <p className={params.profile_update === "empty_name" || params.profile_update === "invalid" ? "formError" : "formNotice"}>{updateMessage}</p>
+            ) : null}
+          </div>
 
           <div className="aboutBlock">
             <h3>Интересы</h3>

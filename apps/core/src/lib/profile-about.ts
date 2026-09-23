@@ -1,3 +1,5 @@
+import { normalizeDisplayName } from "./profile";
+
 export const PROFILE_VISIBILITIES = [
   "public",
   "members",
@@ -261,6 +263,60 @@ export async function updateProfileBioWithDatabase(
   });
 }
 
+export async function saveProfileWithDatabase(
+  database: ProfileAboutDatabase,
+  participantId: string,
+  displayNameValue: unknown,
+  bioValue: unknown,
+  visibilityValue: unknown,
+): Promise<{ changed: boolean }> {
+  const displayName = normalizeDisplayName(displayNameValue);
+  const bio = normalizeProfileBio(bioValue);
+  const visibility = normalizeProfileVisibility(visibilityValue);
+
+  return withProfileTransaction(database, async (client) => {
+    const result = await client.query(
+      `SELECT display_name, profile_bio, profile_bio_visibility
+         FROM participants
+        WHERE id = $1::uuid
+        FOR UPDATE`,
+      [participantId],
+    );
+    if (!result.rowCount) throw new Error("Participant not found");
+
+    const previous = result.rows[0];
+    const oldDisplayName = String(previous.display_name);
+    const nameChanged = oldDisplayName !== displayName;
+    const bioChanged = String(previous.profile_bio ?? "") !== bio
+      || String(previous.profile_bio_visibility) !== visibility;
+    const changed = nameChanged || bioChanged;
+
+    await client.query(
+      `UPDATE participants
+          SET display_name = $2,
+              display_name_chosen_in_core = true,
+              profile_bio = $3,
+              profile_bio_visibility = $4,
+              updated_at = CASE WHEN $5::boolean THEN now() ELSE updated_at END
+        WHERE id = $1::uuid`,
+      [participantId, displayName, bio, visibility, changed],
+    );
+    if (nameChanged) {
+      await recordEvent(client, participantId, "participant.profile_updated", {
+        old_display_name: oldDisplayName,
+        new_display_name: displayName,
+      });
+    }
+    if (bioChanged) {
+      await recordEvent(client, participantId, "participant.about_updated", {
+        field: "bio",
+        visibility,
+      });
+    }
+    return { changed };
+  });
+}
+
 export async function addProfileInterestWithDatabase(
   database: ProfileAboutDatabase,
   participantId: string,
@@ -380,6 +436,16 @@ export async function updateProfileBio(
 ) {
   const { pool } = await import("./db");
   return updateProfileBioWithDatabase(pool, participantId, bio, visibility);
+}
+
+export async function saveProfile(
+  participantId: string,
+  displayName: unknown,
+  bio: unknown,
+  visibility: unknown,
+) {
+  const { pool } = await import("./db");
+  return saveProfileWithDatabase(pool, participantId, displayName, bio, visibility);
 }
 
 export async function addProfileInterest(

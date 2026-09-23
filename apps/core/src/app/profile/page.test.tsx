@@ -36,6 +36,18 @@ function textContent(node: ReactNode): string {
   return textContent((node.props as { children?: ReactNode }).children);
 }
 
+function findProps(node: ReactNode, matches: (props: Record<string, unknown>) => boolean): Record<string, unknown> | null {
+  if (Array.isArray(node)) {
+    for (const child of node) {
+      const found = findProps(child, matches);
+      if (found) return found;
+    }
+  }
+  if (!isValidElement(node)) return null;
+  const props = node.props as Record<string, unknown>;
+  return matches(props) ? props : findProps(props.children as ReactNode, matches);
+}
+
 describe("/profile copy", () => {
   it("shows the editable eyebrow, about section and a fixed Сеть link label", async () => {
     mocks.getCurrentParticipant.mockResolvedValue({
@@ -79,5 +91,11 @@ describe("/profile copy", () => {
     expect(text).toContain("0.100000");
     expect(text).toContain("История начислений");
     expect(text).toMatch(/Положительных сигналов:\s+2/);
+    expect(text).toContain("Сохранить профиль");
+    expect(text).not.toContain("Сохранить био");
+    expect(findProps(page, (props) => props.id === "profile-form")?.action).toBe("/api/profile");
+    expect(findProps(page, (props) => props.name === "bio")?.form).toBe("profile-form");
+    expect(findProps(page, (props) => props.name === "visibility" && props.id === "bio-visibility")?.form).toBe("profile-form");
+    expect(findProps(page, (props) => props.children === "Сохранить профиль")?.form).toBe("profile-form");
   });
 });

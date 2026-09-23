@@ -72,6 +72,7 @@ vi.mock("@/components/local-date-time", () => ({
 }));
 vi.mock("@/components/telegram-avatar", () => ({ TelegramAvatar: () => null }));
 vi.mock("@/components/darus-reward-celebration", () => ({ DarusRewardCelebration: () => null }));
+vi.mock("@/components/positive-experience-feedback", () => ({ PositiveExperienceFeedback: () => null }));
 
 import ParticipantRegistryPage from "./admin/participants/page";
 import AdminPage from "./admin/page";
