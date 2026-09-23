@@ -460,7 +460,11 @@ dd { margin: 6px 0 0; }
   color: var(--ink);
   text-decoration: none;
 }
-.interestChips a:hover, .interestChips a:focus-visible { border-color: var(--accent); text-decoration: underline; }
+.interestChips a:hover, .interestChips a:focus-visible {
+  border-color: var(--accent);
+  text-decoration: none;
+  box-shadow: 0 3px 0 rgba(45, 93, 67, 0.28);
+}
 
 @media (max-width: 620px) {
   .inlineAboutForm { grid-template-columns: 1fr; }
