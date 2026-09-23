@@ -17,7 +17,7 @@ vi.mock("@/lib/session", () => ({ getCurrentParticipant: mocks.getCurrentPartici
 vi.mock("@/lib/verification", () => ({ getVerificationProfile: mocks.getVerificationProfile }));
 vi.mock("@/lib/profile-about", () => ({
   getVisibleProfileAbout: mocks.getVisibleProfileAbout,
-  residenceLabel: ({ name, type, country }: { name: string; type: string; country: string }) => `${type} ${name}, ${country}`,
+  residenceLabel: ({ name, country }: { name: string; country: string }) => `${name}, ${country}`,
   residenceDirectoryHref: () => "/participants?residence_name=Kazan",
 }));
 vi.mock("@/lib/reputation", () => ({ getReputationSummary: mocks.getReputationSummary }));
@@ -133,7 +133,7 @@ describe("public subject profile name", () => {
     expect(text).toContain("Биография из Telegram");
     expect(text).toContain("Моё био в ДАО");
     expect(text).toContain("История");
-    expect(text).toContain("город Казань, Россия");
+    expect(text).toContain("Казань, Россия");
     expect(hrefs(page)).toContain("/participants?residence_name=Kazan");
     expect(hrefs(page)).toContain(`/participants?interest=${encodeURIComponent("История")}`);
     expect(text).toContain("Могу редактировать тексты");

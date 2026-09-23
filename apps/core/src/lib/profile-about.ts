@@ -101,7 +101,7 @@ export function normalizeResidence(values: { name: unknown; type: unknown; count
 }
 
 export function residenceLabel(residence: Residence): string {
-  return `${residence.type} ${residence.name}, ${residence.country}`;
+  return `${residence.name}, ${residence.country}`;
 }
 
 export function residenceDirectoryHref(residence: Residence): string {

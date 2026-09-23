@@ -19,7 +19,7 @@ vi.mock("@/lib/interface-texts", () => ({ readInterfaceTexts: mocks.readInterfac
 vi.mock("@/lib/profile-about", () => ({
   normalizeResidence: ({ name, type, country }: { name: string; type: string; country: string }) =>
     name && type && country ? { name: name.trim(), type: type.trim(), country: country.trim() } : null,
-  residenceLabel: ({ name, type, country }: { name: string; type: string; country: string }) => `${type} ${name}, ${country}`,
+  residenceLabel: ({ name, country }: { name: string; country: string }) => `${name}, ${country}`,
 }));
 vi.mock("@/components/telegram-avatar", () => ({ TelegramAvatar: () => null }));
 
@@ -137,7 +137,7 @@ describe("/participants", () => {
     expect(mocks.listParticipantsDirectory).toHaveBeenCalledWith("Анна", {
       interest: "", residence: { name: "Казань", type: "город", country: "Россия" }, viewerParticipantId: "viewer",
     });
-    expect(textContent(page)).toMatch(/Место жительства:\s+город Казань, Россия/);
+    expect(textContent(page)).toMatch(/Место жительства:\s+Казань, Россия/);
     expect(hrefs(page)).toContain("/participants?residence_name=%D0%9A%D0%B0%D0%B7%D0%B0%D0%BD%D1%8C&residence_type=%D0%B3%D0%BE%D1%80%D0%BE%D0%B4&residence_country=%D0%A0%D0%BE%D1%81%D1%81%D0%B8%D1%8F");
   });
 });

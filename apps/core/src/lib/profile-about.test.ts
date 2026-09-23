@@ -9,6 +9,7 @@ import {
   normalizeSignalBody,
   normalizeSignalKind,
   ProfileAboutValidationError,
+  residenceLabel,
   saveProfileWithDatabase,
   type ProfileAboutDatabase,
   type ProfileAboutDatabaseClient,
@@ -44,6 +45,7 @@ describe("profile-about validation", () => {
       .toEqual({ name: "Нижний Новгород", type: "город", country: "Россия" });
     expect(() => normalizeResidence({ name: "Казань", type: "", country: "Россия" }))
       .toThrow(ProfileAboutValidationError);
+    expect(residenceLabel({ name: "Москва", type: "город", country: "Россия" })).toBe("Москва, Россия");
   });
 });
 

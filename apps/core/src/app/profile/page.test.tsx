@@ -21,7 +21,7 @@ vi.mock("@/lib/membership-history", () => ({
 vi.mock("@/lib/verification", () => ({ getVerificationProfile: mocks.getVerificationProfile }));
 vi.mock("@/lib/profile-about", () => ({
   getProfileAbout: mocks.getProfileAbout,
-  residenceLabel: ({ name, type, country }: { name: string; type: string; country: string }) => `${type} ${name}, ${country}`,
+  residenceLabel: ({ name, country }: { name: string; country: string }) => `${name}, ${country}`,
   residenceDirectoryHref: () => "/participants?residence_name=Kazan",
 }));
 vi.mock("@/lib/interface-texts", () => ({ readInterfaceTexts: mocks.readInterfaceTexts }));
@@ -97,7 +97,7 @@ describe("/profile copy", () => {
     expect(text).toContain("История начислений");
     expect(text).toMatch(/Положительных сигналов:\s+2/);
     expect(text).toContain("Сохранить профиль");
-    expect(text).toContain("город Казань, Россия");
+    expect(text).toContain("Казань, Россия");
     expect(findProps(page, (props) => props.name === "residence_name")?.form).toBe("profile-form");
     expect(findProps(page, (props) => props.name === "residence_type")?.form).toBe("profile-form");
     expect(findProps(page, (props) => props.name === "residence_country")?.form).toBe("profile-form");
