@@ -50,6 +50,13 @@ function textContent(node: ReactNode): string {
   return textContent((node.props as { children?: ReactNode }).children);
 }
 
+function hrefs(node: ReactNode): string[] {
+  if (Array.isArray(node)) return node.flatMap(hrefs);
+  if (!isValidElement(node)) return [];
+  const props = node.props as { children?: ReactNode; href?: string };
+  return [...(props.href ? [props.href] : []), ...hrefs(props.children)];
+}
+
 function hasCelebration(node: ReactNode): boolean {
   if (Array.isArray(node)) return node.some(hasCelebration);
   if (!isValidElement(node)) return false;
@@ -116,6 +123,7 @@ describe("public subject profile name", () => {
     expect(text).toContain("Биография из Telegram");
     expect(text).toContain("Моё био в ДАО");
     expect(text).toContain("История");
+    expect(hrefs(page)).toContain(`/participants?interest=${encodeURIComponent("История")}`);
     expect(text).toContain("Могу редактировать тексты");
     expect(text).not.toContain("+79990000000");
   });

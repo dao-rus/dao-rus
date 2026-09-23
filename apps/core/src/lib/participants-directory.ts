@@ -21,8 +21,10 @@ export type ParticipantDirectoryDatabase = {
 export async function listParticipantsDirectoryWithDatabase(
   database: ParticipantDirectoryDatabase,
   search = "",
+  filters: { interest?: string; viewerParticipantId?: string } = {},
 ): Promise<ParticipantDirectoryEntry[]> {
   const normalizedSearch = search.trim().replace(/^@+/, "");
+  const normalizedInterest = filters.interest?.trim().toLocaleLowerCase("ru-RU") ?? "";
   const result = await database.query(
     `${VERIFIED_SUBJECTS_CTE}
      SELECT participant.id AS participant_id,
@@ -50,8 +52,20 @@ export async function listParticipantsDirectoryWithDatabase(
           OR participant.display_name ILIKE '%' || $1 || '%'
           OR COALESCE(telegram.username, '') ILIKE '%' || $1 || '%'
         )
+        AND (
+          $2::text = ''
+          OR EXISTS (
+            SELECT 1 FROM participant_interests interest
+             WHERE interest.participant_id = participant.id
+               AND interest.normalized_label = $2
+               AND (
+                 interest.visibility IN ('public', 'members')
+                 OR interest.participant_id = $3::uuid
+               )
+          )
+        )
       ORDER BY lower(participant.display_name), participant.id`,
-    [normalizedSearch],
+    [normalizedSearch, normalizedInterest, filters.viewerParticipantId ?? null],
   );
 
   return result.rows.map((row) => ({
@@ -67,7 +81,10 @@ export async function listParticipantsDirectoryWithDatabase(
   }));
 }
 
-export async function listParticipantsDirectory(search = "") {
+export async function listParticipantsDirectory(
+  search = "",
+  filters: { interest?: string; viewerParticipantId?: string } = {},
+) {
   const { pool } = await import("./db");
-  return listParticipantsDirectoryWithDatabase(pool, search);
+  return listParticipantsDirectoryWithDatabase(pool, search, filters);
 }

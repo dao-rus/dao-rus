@@ -77,7 +77,7 @@ describe("/participants", () => {
     });
     const text = textContent(page);
 
-    expect(mocks.listParticipantsDirectory).toHaveBeenCalledWith("alice");
+    expect(mocks.listParticipantsDirectory).toHaveBeenCalledWith("alice", { interest: "", viewerParticipantId: "viewer" });
     expect(text).toContain("Сеть");
     expect(text).toContain("Алиса");
     expect(text).toContain("@alice");
@@ -101,5 +101,21 @@ describe("/participants", () => {
     const page = await ParticipantsPage({ searchParams: Promise.resolve({}) });
 
     expect(textContent(page)).toContain("Моя сеть");
+  });
+
+  it("shows an interest filter and preserves it while searching by name", async () => {
+    mocks.getCurrentParticipant.mockResolvedValue({ id: "viewer" });
+    mocks.listParticipantsDirectory.mockResolvedValue([]);
+
+    const page = await ParticipantsPage({
+      searchParams: Promise.resolve({ q: "Анна", interest: " История " }),
+    });
+
+    expect(mocks.listParticipantsDirectory).toHaveBeenCalledWith("Анна", {
+      interest: "История", viewerParticipantId: "viewer",
+    });
+    expect(textContent(page)).toMatch(/Интерес:\s+История/);
+    expect(hrefs(page)).toContain("/participants?interest=%D0%98%D1%81%D1%82%D0%BE%D1%80%D0%B8%D1%8F");
+    expect(hrefs(page)).toContain("/participants");
   });
 });

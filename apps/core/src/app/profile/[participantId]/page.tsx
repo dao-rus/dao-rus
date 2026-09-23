@@ -104,7 +104,10 @@ export default async function SubjectProfilePage({ params, searchParams }: Subje
             {about.interests.length ? (
               <div className="aboutBlock">
                 <h3>Интересы</h3>
-                <div className="interestChips">{about.interests.map((interest) => <span key={interest.id}>{interest.label}</span>)}</div>
+                <div className="interestChips">{about.interests.map((interest) => (
+                  <Link key={interest.id} href={`/participants?interest=${encodeURIComponent(interest.label)}`}
+                    aria-label={`Найти людей с интересом «${interest.label}»`}>{interest.label}</Link>
+                ))}</div>
               </div>
             ) : null}
             {about.signals.length ? (

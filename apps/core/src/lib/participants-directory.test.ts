@@ -27,7 +27,7 @@ describe("participants directory", () => {
     }, "  @alice  ");
 
     expect(queries).toHaveLength(1);
-    expect(queries[0].values).toEqual(["alice"]);
+    expect(queries[0].values).toEqual(["alice", "", null]);
     expect(queries[0].text).toContain("WITH RECURSIVE verified");
     expect(queries[0].text).toContain("FROM participants participant");
     expect(queries[0].text).toContain("LEFT JOIN external_identities telegram");
@@ -95,5 +95,22 @@ describe("participants directory", () => {
       avatarUrl: "https://cdn.example/avatar.jpg",
       hasTelegramPhoto: false,
     });
+  });
+
+  it("filters by a normalized interest visible to the viewer, including the viewer's own interest", async () => {
+    const queries: Array<{ text: string; values?: unknown[] }> = [];
+    const viewerParticipantId = "10000000-0000-4000-8000-000000000001";
+    await listParticipantsDirectoryWithDatabase({
+      async query(text, values) {
+        queries.push({ text, values });
+        return { rows: [] };
+      },
+    }, "", { interest: "  История  ", viewerParticipantId });
+
+    expect(queries[0].values).toEqual(["", "история", viewerParticipantId]);
+    expect(queries[0].text).toContain("interest.normalized_label = $2");
+    expect(queries[0].text).toContain("interest.visibility IN ('public', 'members')");
+    expect(queries[0].text).toContain("interest.participant_id = $3::uuid");
+    expect(queries[0].text).toContain("login.event_type = 'participant.logged_in'");
   });
 });

@@ -8,16 +8,18 @@ import { getCurrentParticipant } from "@/lib/session";
 export const dynamic = "force-dynamic";
 
 type ParticipantsPageProps = {
-  searchParams: Promise<{ q?: string }>;
+  searchParams: Promise<{ q?: string; interest?: string }>;
 };
 
 export default async function ParticipantsPage({ searchParams }: ParticipantsPageProps) {
   const viewer = await getCurrentParticipant();
   if (!viewer) redirect("/");
 
-  const { q = "" } = await searchParams;
+  const { q = "", interest = "" } = await searchParams;
+  const interestFilter = typeof interest === "string" ? interest.trim() : "";
+  const interestHref = `/participants?interest=${encodeURIComponent(interestFilter)}`;
   const [participants, { values: texts }] = await Promise.all([
-    listParticipantsDirectory(q),
+    listParticipantsDirectory(q, { interest: interestFilter, viewerParticipantId: viewer.id }),
     readInterfaceTexts(),
   ]);
 
@@ -29,12 +31,16 @@ export default async function ParticipantsPage({ searchParams }: ParticipantsPag
             <div className="eyebrow">ДАО Русь</div>
             <h1>{texts["participants.title"]}</h1>
             <p className="muted">Найдено: {participants.length}.</p>
+            {interestFilter ? (
+              <p className="muted">Интерес: {interestFilter} · <Link href="/participants">Показать всех</Link></p>
+            ) : null}
           </div>
           <Link className="button secondary" href="/profile">Ваш профиль</Link>
         </div>
 
         <form className="participantsSearch" method="get">
           <label htmlFor="participants-search">Имя или имя в Telegram</label>
+          {interestFilter ? <input type="hidden" name="interest" value={interestFilter} /> : null}
           <div>
             <input
               id="participants-search"
@@ -43,7 +49,7 @@ export default async function ParticipantsPage({ searchParams }: ParticipantsPag
               placeholder="Например, Анна или @username"
             />
             <button className="button primary" type="submit">Найти</button>
-            {q ? <Link className="button secondary" href="/participants">Сбросить</Link> : null}
+            {q ? <Link className="button secondary" href={interestFilter ? interestHref : "/participants"}>Сбросить</Link> : null}
           </div>
         </form>
 
@@ -78,7 +84,7 @@ export default async function ParticipantsPage({ searchParams }: ParticipantsPag
             ))}
           </ul>
         ) : (
-          <p className="muted">Профили по этому запросу не найдены.</p>
+          <p className="muted">{interestFilter ? (q ? "Участники с этим интересом по запросу не найдены." : "Участники с этим интересом не найдены.") : "Профили по этому запросу не найдены."}</p>
         )}
       </section>
     </main>

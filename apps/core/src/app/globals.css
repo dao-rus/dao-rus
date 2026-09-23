@@ -452,12 +452,15 @@ dd { margin: 6px 0 0; }
 .privacyHint { margin: 2px 0 4px; font-size: 12px; line-height: 1.45; }
 .publicAbout { padding-top: 22px; }
 .interestChips { display: flex; flex-wrap: wrap; gap: 8px; }
-.interestChips span {
+.interestChips a {
   padding: 7px 10px;
   border: 1px solid var(--line);
   border-radius: 999px;
   font-size: 13px;
+  color: var(--ink);
+  text-decoration: none;
 }
+.interestChips a:hover, .interestChips a:focus-visible { border-color: var(--accent); text-decoration: underline; }
 
 @media (max-width: 620px) {
   .inlineAboutForm { grid-template-columns: 1fr; }
