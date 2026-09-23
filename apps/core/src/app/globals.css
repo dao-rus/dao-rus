@@ -291,6 +291,19 @@ dd { margin: 6px 0 0; }
 }
 .darusRewardToast strong, .darusRewardToast small { display: block; }
 .darusRewardToast small { margin-top: 2px; font-size: 12px; }
+.reputationFeedbackToast {
+  position: fixed; top: max(16px, env(safe-area-inset-top)); left: 50%; z-index: 50;
+  display: flex; align-items: center; gap: 10px;
+  width: max-content; max-width: calc(100vw - 32px); padding: 12px 18px;
+  border: 1px solid #80b794; border-radius: 14px;
+  background: #e5f5e9; color: #245c38; box-shadow: 0 14px 36px #245c3833;
+  pointer-events: none; animation: darusRewardToast 2.2s ease-out both;
+}
+.reputationFeedbackIcon {
+  display: inline-grid; place-items: center; flex: none;
+  width: 28px; height: 28px; border-radius: 50%;
+  background: #2c854c; color: white; font-weight: 800;
+}
 @keyframes darusRewardRise {
   0% { opacity: 0; transform: translateY(16px) scale(.75); }
   30% { opacity: 1; transform: translateY(0) scale(1.12); }
@@ -303,8 +316,8 @@ dd { margin: 6px 0 0; }
   100% { opacity: 0; transform: translate(-50%, -16px); }
 }
 @media (prefers-reduced-motion: reduce) {
-  .darusRewardMarker, .darusRewardToast { animation: none; }
-  .darusRewardToast { transform: translateX(-50%); }
+  .darusRewardMarker, .darusRewardToast, .reputationFeedbackToast { animation: none; }
+  .darusRewardToast, .reputationFeedbackToast { transform: translateX(-50%); }
 }
 
 .participantsSearch {

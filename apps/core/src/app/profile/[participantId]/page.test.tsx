@@ -24,6 +24,9 @@ vi.mock("@/lib/tokenization", () => ({
 vi.mock("@/components/darus-reward-celebration", () => ({
   DarusRewardCelebration: "darus-reward-celebration",
 }));
+vi.mock("@/components/positive-experience-feedback", () => ({
+  PositiveExperienceFeedback: "positive-experience-feedback",
+}));
 vi.mock("@/lib/config", () => ({ hasPrototypeAdminAccess: mocks.hasPrototypeAdminAccess }));
 vi.mock("@/components/telegram-avatar", () => ({ TelegramAvatar: () => null }));
 
@@ -52,6 +55,13 @@ function hasCelebration(node: ReactNode): boolean {
   if (!isValidElement(node)) return false;
   return node.type === "darus-reward-celebration"
     || hasCelebration((node.props as { children?: ReactNode }).children);
+}
+
+function hasPositiveFeedback(node: ReactNode): boolean {
+  if (Array.isArray(node)) return node.some(hasPositiveFeedback);
+  if (!isValidElement(node)) return false;
+  return node.type === "positive-experience-feedback"
+    || hasPositiveFeedback((node.props as { children?: ReactNode }).children);
 }
 
 describe("public subject profile name", () => {
@@ -164,5 +174,32 @@ describe("public subject profile name", () => {
     expect(textContent(page)).toContain("Ваше подтверждение сохранено.");
     expect(textContent(page)).not.toContain("Начислено");
     expect(hasCelebration(page)).toBe(false);
+  });
+
+  it("acknowledges a newly saved positive experience without DARUS feedback", async () => {
+    mocks.getReputationSummary.mockResolvedValue({ positiveCount: 3, viewerSignal: "positive" });
+    const page = await SubjectProfilePage({
+      params: Promise.resolve({ participantId: rosterProfile.subjectId }),
+      searchParams: Promise.resolve({ reputation_action: "created", reputation_signal: "positive" }),
+    });
+    expect(textContent(page)).toContain("Хороший опыт учтён.");
+    expect(textContent(page)).not.toContain("Начислено");
+    expect(hasPositiveFeedback(page)).toBe(true);
+  });
+
+  it("does not celebrate an unchanged or non-positive signal", async () => {
+    mocks.getReputationSummary.mockResolvedValue({ positiveCount: 2, viewerSignal: "positive" });
+    const unchanged = await SubjectProfilePage({
+      params: Promise.resolve({ participantId: rosterProfile.subjectId }),
+      searchParams: Promise.resolve({ reputation_action: "unchanged", reputation_signal: "positive" }),
+    });
+    expect(hasPositiveFeedback(unchanged)).toBe(false);
+
+    mocks.getReputationSummary.mockResolvedValue({ positiveCount: 2, viewerSignal: "quality_flag" });
+    const qualityFlag = await SubjectProfilePage({
+      params: Promise.resolve({ participantId: rosterProfile.subjectId }),
+      searchParams: Promise.resolve({ reputation_action: "created" }),
+    });
+    expect(hasPositiveFeedback(qualityFlag)).toBe(false);
   });
 });

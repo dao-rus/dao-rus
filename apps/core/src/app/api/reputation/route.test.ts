@@ -34,8 +34,20 @@ describe("reputation API", () => {
     expect(mocks.setReputationSignal).not.toHaveBeenCalled();
     mocks.getCurrentParticipant.mockResolvedValue({ id: "actor" });
     mocks.setReputationSignal.mockResolvedValue("created");
-    expect((await POST(request("positive"))).status).toBe(303);
+    const response = await POST(request("positive"));
+    expect(response.status).toBe(303);
+    expect(response.headers.get("location")).toBe(
+      `http://localhost:3000/profile/${subjectId}?reputation_action=created&reputation_signal=positive`,
+    );
     expect(mocks.setReputationSignal).toHaveBeenCalledWith("actor", subjectId, "positive");
+  });
+
+  it("only marks an actual positive change for feedback", async () => {
+    mocks.getCurrentParticipant.mockResolvedValue({ id: "actor" });
+    mocks.setReputationSignal.mockResolvedValueOnce("changed").mockResolvedValueOnce("unchanged").mockResolvedValueOnce("created");
+    expect((await POST(request("positive"))).headers.get("location")).toContain("reputation_signal=positive");
+    expect((await POST(request("positive"))).headers.get("location")).not.toContain("reputation_signal");
+    expect((await POST(request("quality_flag"))).headers.get("location")).not.toContain("reputation_signal");
   });
 
   it("rejects invalid subjects and signal types", async () => {

@@ -2,6 +2,7 @@ import Link from "next/link";
 import { notFound, redirect } from "next/navigation";
 import { hasPrototypeAdminAccess } from "@/lib/config";
 import { DarusRewardCelebration } from "@/components/darus-reward-celebration";
+import { PositiveExperienceFeedback } from "@/components/positive-experience-feedback";
 import { TelegramAvatar } from "@/components/telegram-avatar";
 import { getVisibleProfileAbout } from "@/lib/profile-about";
 import { getReputationSummary } from "@/lib/reputation";
@@ -20,7 +21,7 @@ const signalLabels: Record<string, string> = {
 
 type SubjectProfilePageProps = {
   params: Promise<{ participantId: string }>;
-  searchParams: Promise<{ verification_action?: string; verification_reward?: string; verification_root?: string; reputation_action?: string }>;
+  searchParams: Promise<{ verification_action?: string; verification_reward?: string; verification_root?: string; reputation_action?: string; reputation_signal?: string }>;
 };
 
 const actionMessages: Record<string, string> = {
@@ -65,7 +66,10 @@ export default async function SubjectProfilePage({ params, searchParams }: Subje
     ? `Ваше подтверждение сохранено. Начислено +${formattedReward} DARUS.`
     : query.verification_action ? actionMessages[query.verification_action] : null;
   const rootMessage = query.verification_root ? rootMessages[query.verification_root] : null;
-  const reputationMessage = query.reputation_action ? ({
+  const positiveExperienceSaved = query.reputation_signal === "positive"
+    && (query.reputation_action === "created" || query.reputation_action === "changed")
+    && reputation.viewerSignal === "positive";
+  const reputationMessage = positiveExperienceSaved ? "Хороший опыт учтён." : query.reputation_action ? ({
     created: "Ваш опыт сохранён.",
     changed: "Ваш опыт изменён.",
     revoked: "Ваш опыт отозван.",
@@ -186,7 +190,8 @@ export default async function SubjectProfilePage({ params, searchParams }: Subje
                 </form>
               ) : null}
             </div>
-            {reputationMessage ? <p className="formNotice">{reputationMessage}</p> : null}
+            {positiveExperienceSaved ? <PositiveExperienceFeedback /> : null}
+            {reputationMessage ? <p className="formNotice" role="status">{reputationMessage}</p> : null}
           </section>
         ) : null}
 

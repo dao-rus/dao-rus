@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { appBaseUrl } from "@/lib/config";
 import { parseReputationAction, ReputationValidationError, setReputationSignal } from "@/lib/reputation";
+import type { ReputationAction } from "@/lib/reputation";
 import { getCurrentParticipant } from "@/lib/session";
 
 export const runtime = "nodejs";
@@ -18,13 +19,18 @@ export async function POST(request: NextRequest) {
   }
 
   let status: string;
+  let action: ReputationAction | null = null;
   try {
-    status = await setReputationSignal(participant.id, subjectId, parseReputationAction(form.get("action")));
+    action = parseReputationAction(form.get("action"));
+    status = await setReputationSignal(participant.id, subjectId, action);
   } catch (error) {
     if (!(error instanceof ReputationValidationError)) throw error;
     status = participant.id === subjectId ? "self" : "invalid";
   }
   const url = new URL(`/profile/${subjectId}`, appBaseUrl());
   url.searchParams.set("reputation_action", status);
+  if (action === "positive" && (status === "created" || status === "changed")) {
+    url.searchParams.set("reputation_signal", "positive");
+  }
   return NextResponse.redirect(url, 303);
 }
