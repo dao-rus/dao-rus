@@ -27,7 +27,7 @@ describe("participants directory", () => {
     }, "  @alice  ");
 
     expect(queries).toHaveLength(1);
-    expect(queries[0].values).toEqual(["alice", "", null]);
+    expect(queries[0].values).toEqual(["alice", "", null, "", "", ""]);
     expect(queries[0].text).toContain("WITH RECURSIVE verified");
     expect(queries[0].text).toContain("FROM participants participant");
     expect(queries[0].text).toContain("LEFT JOIN external_identities telegram");
@@ -43,6 +43,7 @@ describe("participants directory", () => {
         avatarUrl: null,
         hasTelegramPhoto: false,
         isVerified: true,
+        residence: null,
       },
       {
         participantId: "20000000-0000-4000-8000-000000000002",
@@ -52,6 +53,7 @@ describe("participants directory", () => {
         avatarUrl: null,
         hasTelegramPhoto: false,
         isVerified: false,
+        residence: null,
       },
     ]);
   });
@@ -107,10 +109,31 @@ describe("participants directory", () => {
       },
     }, "", { interest: "  История  ", viewerParticipantId });
 
-    expect(queries[0].values).toEqual(["", "история", viewerParticipantId]);
+    expect(queries[0].values).toEqual(["", "история", viewerParticipantId, "", "", ""]);
     expect(queries[0].text).toContain("interest.normalized_label = $2");
     expect(queries[0].text).toContain("interest.visibility IN ('public', 'members')");
     expect(queries[0].text).toContain("interest.participant_id = $3::uuid");
     expect(queries[0].text).toContain("login.event_type = 'participant.logged_in'");
+  });
+
+  it("aggregates a complete residence without admitting never-logged-in profiles", async () => {
+    const queries: Array<{ text: string; values?: unknown[] }> = [];
+    const residence = { name: "Казань", type: "город", country: "Россия" };
+    const entries = await listParticipantsDirectoryWithDatabase({
+      async query(text, values) {
+        queries.push({ text, values });
+        return { rows: [{
+          participant_id: "10000000-0000-4000-8000-000000000001",
+          display_name: "Анна", is_verified: false,
+          residence_name: "Казань", residence_type: "город", residence_country: "Россия",
+        }] };
+      },
+    }, "", { residence });
+    expect(queries[0].values).toEqual(["", "", null, "казань", "город", "россия"]);
+    expect(queries[0].text).toContain("lower(participant.residence_name) = $4");
+    expect(queries[0].text).toContain("lower(participant.residence_type) = $5");
+    expect(queries[0].text).toContain("lower(participant.residence_country) = $6");
+    expect(queries[0].text).toContain("login.event_type = 'participant.logged_in'");
+    expect(entries[0].residence).toEqual(residence);
   });
 });

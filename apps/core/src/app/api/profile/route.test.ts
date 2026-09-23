@@ -56,6 +56,7 @@ describe("POST /api/profile", () => {
       "Новое имя",
       "О себе",
       "members",
+      undefined,
     );
     expect(response.status).toBe(303);
     expect(response.headers.get("location")).toBe(
@@ -83,5 +84,32 @@ describe("POST /api/profile", () => {
     expect(mocks.updateParticipantDisplayName).toHaveBeenCalledWith("current-participant", "Новое имя");
     expect(mocks.saveProfile).not.toHaveBeenCalled();
     expect(response.headers.get("location")).toBe("http://localhost:3000/profile?profile_update=updated");
+  });
+
+  it("passes all three optional residence fields from the authenticated form", async () => {
+    mocks.getCurrentParticipant.mockResolvedValue({ id: "current-participant" });
+    mocks.saveProfile.mockResolvedValue({ changed: true });
+
+    await POST(profileRequest({ display_name: "Анна", bio: "", visibility: "members",
+      residence_name: "Казань", residence_type: "город", residence_country: "Россия",
+    }));
+
+    expect(mocks.saveProfile).toHaveBeenCalledWith("current-participant", "Анна", "", "members", {
+      name: "Казань", type: "город", country: "Россия",
+    });
+  });
+
+  it("accepts a profile form with no bio or residence", async () => {
+    mocks.getCurrentParticipant.mockResolvedValue({ id: "current-participant" });
+    mocks.saveProfile.mockResolvedValue({ changed: false });
+
+    const response = await POST(profileRequest({ display_name: "Анна", bio: "", visibility: "members",
+      residence_name: "", residence_type: "", residence_country: "",
+    }));
+
+    expect(mocks.saveProfile).toHaveBeenCalledWith("current-participant", "Анна", "", "members", {
+      name: "", type: "", country: "",
+    });
+    expect(response.headers.get("location")).toBe("http://localhost:3000/profile?profile_update=unchanged");
   });
 });

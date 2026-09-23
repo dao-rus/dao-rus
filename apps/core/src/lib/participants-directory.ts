@@ -1,4 +1,5 @@
 import { VERIFIED_SUBJECTS_CTE } from "./verification";
+import type { Residence } from "./profile-about";
 
 export type ParticipantDirectoryEntry = {
   participantId: string;
@@ -8,7 +9,10 @@ export type ParticipantDirectoryEntry = {
   avatarUrl: string | null;
   hasTelegramPhoto: boolean;
   isVerified: boolean;
+  residence: Residence | null;
 };
+
+type DirectoryFilters = { interest?: string; residence?: Residence | null; viewerParticipantId?: string };
 
 type QueryResult = {
   rows: Array<Record<string, unknown>>;
@@ -21,10 +25,11 @@ export type ParticipantDirectoryDatabase = {
 export async function listParticipantsDirectoryWithDatabase(
   database: ParticipantDirectoryDatabase,
   search = "",
-  filters: { interest?: string; viewerParticipantId?: string } = {},
+  filters: DirectoryFilters = {},
 ): Promise<ParticipantDirectoryEntry[]> {
   const normalizedSearch = search.trim().replace(/^@+/, "");
   const normalizedInterest = filters.interest?.trim().toLocaleLowerCase("ru-RU") ?? "";
+  const residence = filters.residence;
   const result = await database.query(
     `${VERIFIED_SUBJECTS_CTE}
      SELECT participant.id AS participant_id,
@@ -34,6 +39,9 @@ export async function listParticipantsDirectoryWithDatabase(
             telegram.avatar_url,
             telegram.bot_profile->'photo'->>'file_id' AS telegram_photo_file_id,
             telegram.bot_profile->>'photo_count' AS telegram_photo_count,
+            participant.residence_name,
+            participant.residence_type,
+            participant.residence_country,
             EXISTS (
               SELECT 1 FROM verified
                WHERE verified.subject_id = participant.id
@@ -64,8 +72,19 @@ export async function listParticipantsDirectoryWithDatabase(
                )
           )
         )
+        AND (
+          $4::text = ''
+          OR (
+            lower(participant.residence_name) = $4
+            AND lower(participant.residence_type) = $5
+            AND lower(participant.residence_country) = $6
+          )
+        )
       ORDER BY lower(participant.display_name), participant.id`,
-    [normalizedSearch, normalizedInterest, filters.viewerParticipantId ?? null],
+    [normalizedSearch, normalizedInterest, filters.viewerParticipantId ?? null,
+      residence?.name.toLocaleLowerCase("ru-RU") ?? "",
+      residence?.type.toLocaleLowerCase("ru-RU") ?? "",
+      residence?.country.toLocaleLowerCase("ru-RU") ?? ""],
   );
 
   return result.rows.map((row) => ({
@@ -78,12 +97,19 @@ export async function listParticipantsDirectoryWithDatabase(
     avatarUrl: row.avatar_url ? String(row.avatar_url) : null,
     hasTelegramPhoto: Boolean(row.telegram_photo_file_id) && row.telegram_photo_count !== "0",
     isVerified: Boolean(row.is_verified),
+    residence: row.residence_name && row.residence_type && row.residence_country
+      ? {
+          name: String(row.residence_name),
+          type: String(row.residence_type),
+          country: String(row.residence_country),
+        }
+      : null,
   }));
 }
 
 export async function listParticipantsDirectory(
   search = "",
-  filters: { interest?: string; viewerParticipantId?: string } = {},
+  filters: DirectoryFilters = {},
 ) {
   const { pool } = await import("./db");
   return listParticipantsDirectoryWithDatabase(pool, search, filters);

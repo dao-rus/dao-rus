@@ -15,7 +15,11 @@ const mocks = vi.hoisted(() => ({
 vi.mock("next/navigation", () => ({ redirect: mocks.redirect, notFound: mocks.notFound }));
 vi.mock("@/lib/session", () => ({ getCurrentParticipant: mocks.getCurrentParticipant }));
 vi.mock("@/lib/verification", () => ({ getVerificationProfile: mocks.getVerificationProfile }));
-vi.mock("@/lib/profile-about", () => ({ getVisibleProfileAbout: mocks.getVisibleProfileAbout }));
+vi.mock("@/lib/profile-about", () => ({
+  getVisibleProfileAbout: mocks.getVisibleProfileAbout,
+  residenceLabel: ({ name, type, country }: { name: string; type: string; country: string }) => `${type} ${name}, ${country}`,
+  residenceDirectoryHref: () => "/participants?residence_name=Kazan",
+}));
 vi.mock("@/lib/reputation", () => ({ getReputationSummary: mocks.getReputationSummary }));
 vi.mock("@/lib/tokenization", () => ({
   getVerificationRewardForFeedback: mocks.getVerificationRewardForFeedback,
@@ -87,6 +91,10 @@ describe("public subject profile name", () => {
   });
 
   it("hides a roster name before the person's own login", async () => {
+    mocks.getVisibleProfileAbout.mockResolvedValue({
+      bio: "", bioVisibility: "members", interests: [], signals: [],
+      residence: { name: "Казань", type: "город", country: "Россия" },
+    });
     const page = await SubjectProfilePage({
       params: Promise.resolve({ participantId: "20000000-0000-4000-8000-000000000002" }),
       searchParams: Promise.resolve({}),
@@ -94,6 +102,7 @@ describe("public subject profile name", () => {
 
     expect(textContent(page)).toContain("Человек ещё не вошёл в Ядро");
     expect(textContent(page)).not.toContain("Имя из контактов экспортёра");
+    expect(textContent(page)).not.toContain("Казань");
   });
 
   it("shows the Core name after the person's own login", async () => {
@@ -108,6 +117,7 @@ describe("public subject profile name", () => {
     mocks.getVisibleProfileAbout.mockResolvedValue({
       bio: "Моё био в ДАО",
       bioVisibility: "members",
+      residence: { name: "Казань", type: "город", country: "Россия" },
       interests: [{ id: "i1", label: "История", visibility: "members" }],
       signals: [{ id: "s1", kind: "can", body: "Могу редактировать тексты", visibility: "members" }],
     });
@@ -123,6 +133,8 @@ describe("public subject profile name", () => {
     expect(text).toContain("Биография из Telegram");
     expect(text).toContain("Моё био в ДАО");
     expect(text).toContain("История");
+    expect(text).toContain("город Казань, Россия");
+    expect(hrefs(page)).toContain("/participants?residence_name=Kazan");
     expect(hrefs(page)).toContain(`/participants?interest=${encodeURIComponent("История")}`);
     expect(text).toContain("Могу редактировать тексты");
     expect(text).not.toContain("+79990000000");

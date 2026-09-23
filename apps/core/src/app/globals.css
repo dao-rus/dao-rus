@@ -412,6 +412,7 @@ dd { margin: 6px 0 0; }
 }
 .aboutForm textarea,
 .aboutForm select,
+.residenceFields input,
 .inlineAboutForm input,
 .inlineAboutForm select {
   width: 100%;
@@ -423,6 +424,8 @@ dd { margin: 6px 0 0; }
 }
 .aboutForm textarea { min-height: 110px; resize: vertical; }
 .aboutForm .button { justify-self: start; }
+.residenceFields { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; }
+.residenceLink { color: var(--accent); }
 .inlineAboutForm {
   display: grid;
   grid-template-columns: minmax(0, 1fr) auto auto;
@@ -467,6 +470,7 @@ dd { margin: 6px 0 0; }
 }
 
 @media (max-width: 620px) {
+  .residenceFields { grid-template-columns: 1fr; }
   .inlineAboutForm { grid-template-columns: 1fr; }
   .profileItems li { flex-direction: column; }
 }

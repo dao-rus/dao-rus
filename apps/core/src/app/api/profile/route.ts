@@ -21,11 +21,17 @@ export async function POST(request: NextRequest) {
   const formData = await request.formData();
   const bio = formData.get("bio");
   const visibility = formData.get("visibility");
+  const residenceFields = ["residence_name", "residence_type", "residence_country"] as const;
+  const residence = residenceFields.some((field) => formData.has(field)) ? {
+    name: formData.get("residence_name"),
+    type: formData.get("residence_type"),
+    country: formData.get("residence_country"),
+  } : undefined;
 
   try {
     const result = bio === null && visibility === null
       ? await updateParticipantDisplayName(participant.id, formData.get("display_name"))
-      : await saveProfile(participant.id, formData.get("display_name"), bio, visibility);
+      : await saveProfile(participant.id, formData.get("display_name"), bio, visibility, residence);
     return profileRedirect(result.changed ? "updated" : "unchanged");
   } catch (error) {
     if (error instanceof DisplayNameValidationError) {

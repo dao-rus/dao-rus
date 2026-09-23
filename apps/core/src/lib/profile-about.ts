@@ -26,9 +26,16 @@ export type ProfileSignal = {
   visibility: ProfileVisibility;
 };
 
+export type Residence = {
+  name: string;
+  type: string;
+  country: string;
+};
+
 export type ProfileAbout = {
   bio: string;
   bioVisibility: ProfileVisibility;
+  residence: Residence | null;
   interests: ProfileInterest[];
   signals: ProfileSignal[];
 };
@@ -80,6 +87,32 @@ export function normalizeProfileBio(value: unknown): string {
   return normalized;
 }
 
+export function normalizeResidence(values: { name: unknown; type: unknown; country: unknown }): Residence | null {
+  const parts = [values.name, values.type, values.country];
+  if (parts.some((value) => typeof value !== "string")) {
+    throw new ProfileAboutValidationError("Residence must be text");
+  }
+  const [name, type, country] = (parts as string[]).map((value) => value.trim().replace(/\s+/gu, " "));
+  if (!name && !type && !country) return null;
+  if (!name || !type || !country || name.length > 120 || type.length > 80 || country.length > 120) {
+    throw new ProfileAboutValidationError("Invalid residence");
+  }
+  return { name, type, country };
+}
+
+export function residenceLabel(residence: Residence): string {
+  return `${residence.type} ${residence.name}, ${residence.country}`;
+}
+
+export function residenceDirectoryHref(residence: Residence): string {
+  const params = new URLSearchParams({
+    residence_name: residence.name,
+    residence_type: residence.type,
+    residence_country: residence.country,
+  });
+  return `/participants?${params.toString()}`;
+}
+
 export function normalizeInterest(value: unknown): string {
   return normalizeBoundedText(value, "Interest", 80);
 }
@@ -116,6 +149,13 @@ function aboutFromRows(
   return {
     bio: String(participantRow.profile_bio ?? ""),
     bioVisibility: String(participantRow.profile_bio_visibility) as ProfileVisibility,
+    residence: participantRow.residence_name && participantRow.residence_type && participantRow.residence_country
+      ? {
+          name: String(participantRow.residence_name),
+          type: String(participantRow.residence_type),
+          country: String(participantRow.residence_country),
+        }
+      : null,
     interests: interestRows.map((row) => ({
       id: String(row.id),
       label: String(row.label),
@@ -136,7 +176,8 @@ export async function getProfileAboutWithDatabase(
 ): Promise<ProfileAbout | null> {
   const [participant, interests, signals] = await Promise.all([
     database.query(
-      `SELECT profile_bio, profile_bio_visibility
+      `SELECT profile_bio, profile_bio_visibility,
+              residence_name, residence_type, residence_country
          FROM participants
         WHERE id = $1::uuid`,
       [participantId],
@@ -177,7 +218,8 @@ export async function getVisibleProfileAboutWithDatabase(
                   THEN profile_bio
                 ELSE ''
               END AS profile_bio,
-              profile_bio_visibility
+              profile_bio_visibility,
+              residence_name, residence_type, residence_country
          FROM participants
         WHERE id = $1::uuid`,
       [participantId],
@@ -269,14 +311,17 @@ export async function saveProfileWithDatabase(
   displayNameValue: unknown,
   bioValue: unknown,
   visibilityValue: unknown,
+  residenceValues?: { name: unknown; type: unknown; country: unknown },
 ): Promise<{ changed: boolean }> {
   const displayName = normalizeDisplayName(displayNameValue);
   const bio = normalizeProfileBio(bioValue);
   const visibility = normalizeProfileVisibility(visibilityValue);
+  const residence = residenceValues === undefined ? undefined : normalizeResidence(residenceValues);
 
   return withProfileTransaction(database, async (client) => {
     const result = await client.query(
-      `SELECT display_name, profile_bio, profile_bio_visibility
+      `SELECT display_name, profile_bio, profile_bio_visibility,
+              residence_name, residence_type, residence_country
          FROM participants
         WHERE id = $1::uuid
         FOR UPDATE`,
@@ -289,7 +334,18 @@ export async function saveProfileWithDatabase(
     const nameChanged = oldDisplayName !== displayName;
     const bioChanged = String(previous.profile_bio ?? "") !== bio
       || String(previous.profile_bio_visibility) !== visibility;
-    const changed = nameChanged || bioChanged;
+    const previousResidence = previous.residence_name && previous.residence_type && previous.residence_country
+      ? {
+          name: String(previous.residence_name),
+          type: String(previous.residence_type),
+          country: String(previous.residence_country),
+        }
+      : null;
+    const nextResidence = residence === undefined ? previousResidence : residence;
+    const residenceChanged = previousResidence?.name !== nextResidence?.name
+      || previousResidence?.type !== nextResidence?.type
+      || previousResidence?.country !== nextResidence?.country;
+    const changed = nameChanged || bioChanged || residenceChanged;
 
     await client.query(
       `UPDATE participants
@@ -297,9 +353,13 @@ export async function saveProfileWithDatabase(
               display_name_chosen_in_core = true,
               profile_bio = $3,
               profile_bio_visibility = $4,
+              residence_name = $6,
+              residence_type = $7,
+              residence_country = $8,
               updated_at = CASE WHEN $5::boolean THEN now() ELSE updated_at END
         WHERE id = $1::uuid`,
-      [participantId, displayName, bio, visibility, changed],
+      [participantId, displayName, bio, visibility, changed,
+        nextResidence?.name ?? null, nextResidence?.type ?? null, nextResidence?.country ?? null],
     );
     if (nameChanged) {
       await recordEvent(client, participantId, "participant.profile_updated", {
@@ -312,6 +372,9 @@ export async function saveProfileWithDatabase(
         field: "bio",
         visibility,
       });
+    }
+    if (residenceChanged) {
+      await recordEvent(client, participantId, "participant.about_updated", { field: "residence" });
     }
     return { changed };
   });
@@ -443,9 +506,10 @@ export async function saveProfile(
   displayName: unknown,
   bio: unknown,
   visibility: unknown,
+  residence?: { name: unknown; type: unknown; country: unknown },
 ) {
   const { pool } = await import("./db");
-  return saveProfileWithDatabase(pool, participantId, displayName, bio, visibility);
+  return saveProfileWithDatabase(pool, participantId, displayName, bio, visibility, residence);
 }
 
 export async function addProfileInterest(

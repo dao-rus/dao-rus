@@ -16,6 +16,11 @@ vi.mock("@/lib/participants-directory", () => ({
   listParticipantsDirectory: mocks.listParticipantsDirectory,
 }));
 vi.mock("@/lib/interface-texts", () => ({ readInterfaceTexts: mocks.readInterfaceTexts }));
+vi.mock("@/lib/profile-about", () => ({
+  normalizeResidence: ({ name, type, country }: { name: string; type: string; country: string }) =>
+    name && type && country ? { name: name.trim(), type: type.trim(), country: country.trim() } : null,
+  residenceLabel: ({ name, type, country }: { name: string; type: string; country: string }) => `${type} ${name}, ${country}`,
+}));
 vi.mock("@/components/telegram-avatar", () => ({ TelegramAvatar: () => null }));
 
 import ParticipantsPage from "./page";
@@ -77,7 +82,7 @@ describe("/participants", () => {
     });
     const text = textContent(page);
 
-    expect(mocks.listParticipantsDirectory).toHaveBeenCalledWith("alice", { interest: "", viewerParticipantId: "viewer" });
+    expect(mocks.listParticipantsDirectory).toHaveBeenCalledWith("alice", { interest: "", residence: null, viewerParticipantId: "viewer" });
     expect(text).toContain("Сеть");
     expect(text).toContain("Алиса");
     expect(text).toContain("@alice");
@@ -112,10 +117,27 @@ describe("/participants", () => {
     });
 
     expect(mocks.listParticipantsDirectory).toHaveBeenCalledWith("Анна", {
-      interest: "История", viewerParticipantId: "viewer",
+      interest: "История", residence: null, viewerParticipantId: "viewer",
     });
     expect(textContent(page)).toMatch(/Интерес:\s+История/);
     expect(hrefs(page)).toContain("/participants?interest=%D0%98%D1%81%D1%82%D0%BE%D1%80%D0%B8%D1%8F");
     expect(hrefs(page)).toContain("/participants");
+  });
+
+  it("filters the directory by residence and keeps that filter in name search", async () => {
+    mocks.getCurrentParticipant.mockResolvedValue({ id: "viewer" });
+    mocks.listParticipantsDirectory.mockResolvedValue([{ participantId: "owner", displayName: "Анна",
+      residence: { name: "Казань", type: "город", country: "Россия" }, isVerified: false,
+    }]);
+
+    const page = await ParticipantsPage({ searchParams: Promise.resolve({
+      q: "Анна", residence_name: "Казань", residence_type: "город", residence_country: "Россия",
+    }) });
+
+    expect(mocks.listParticipantsDirectory).toHaveBeenCalledWith("Анна", {
+      interest: "", residence: { name: "Казань", type: "город", country: "Россия" }, viewerParticipantId: "viewer",
+    });
+    expect(textContent(page)).toMatch(/Место жительства:\s+город Казань, Россия/);
+    expect(hrefs(page)).toContain("/participants?residence_name=%D0%9A%D0%B0%D0%B7%D0%B0%D0%BD%D1%8C&residence_type=%D0%B3%D0%BE%D1%80%D0%BE%D0%B4&residence_country=%D0%A0%D0%BE%D1%81%D1%81%D0%B8%D1%8F");
   });
 });

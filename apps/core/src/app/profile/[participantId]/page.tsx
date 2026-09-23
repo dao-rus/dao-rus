@@ -4,7 +4,7 @@ import { hasPrototypeAdminAccess } from "@/lib/config";
 import { DarusRewardCelebration } from "@/components/darus-reward-celebration";
 import { PositiveExperienceFeedback } from "@/components/positive-experience-feedback";
 import { TelegramAvatar } from "@/components/telegram-avatar";
-import { getVisibleProfileAbout } from "@/lib/profile-about";
+import { getVisibleProfileAbout, residenceDirectoryHref, residenceLabel } from "@/lib/profile-about";
 import { getReputationSummary } from "@/lib/reputation";
 import { getCurrentParticipant } from "@/lib/session";
 import { formatDarusAmount, getVerificationRewardForFeedback } from "@/lib/tokenization";
@@ -98,9 +98,17 @@ export default async function SubjectProfilePage({ params, searchParams }: Subje
           <Link className="button secondary" href="/profile">Ваш профиль</Link>
         </div>
 
-        {about && (about.bio || about.interests.length || about.signals.length) ? (
+        {profile.hasLoggedIn && about && (about.bio || about.residence || about.interests.length || about.signals.length) ? (
           <section className="profileAbout publicAbout">
             {about.bio ? <div className="aboutBlock"><h2>О себе</h2><p className="profileBio">{about.bio}</p></div> : null}
+            {about.residence ? (
+              <div className="aboutBlock">
+                <h3>Место жительства</h3>
+                <Link className="residenceLink" href={residenceDirectoryHref(about.residence)}>
+                  {residenceLabel(about.residence)}
+                </Link>
+              </div>
+            ) : null}
             {about.interests.length ? (
               <div className="aboutBlock">
                 <h3>Интересы</h3>

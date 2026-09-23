@@ -9,7 +9,7 @@ import {
   getMembershipHistory,
   membershipEventLabel,
 } from "@/lib/membership-history";
-import { getProfileAbout } from "@/lib/profile-about";
+import { getProfileAbout, residenceDirectoryHref, residenceLabel } from "@/lib/profile-about";
 import { getReputationSummary } from "@/lib/reputation";
 import { getCurrentParticipant } from "@/lib/session";
 import { getDarusBalance } from "@/lib/tokenization";
@@ -136,11 +136,30 @@ export default async function ProfilePage({ searchParams }: ProfilePageProps) {
             <select id="bio-visibility" form="profile-form" name="visibility" defaultValue={about?.bioVisibility ?? "members"}>
               {bioVisibilityOptions.map((value) => <option key={value} value={value}>{visibilityLabels[value]}</option>)}
             </select>
+            <label htmlFor="residence-name">Место жительства</label>
+            <div className="residenceFields">
+              <input id="residence-name" form="profile-form" name="residence_name" maxLength={120}
+                defaultValue={about?.residence?.name ?? ""} placeholder="Название, например Казань" />
+              <input form="profile-form" name="residence_type" maxLength={80}
+                defaultValue={about?.residence?.type ?? ""} placeholder="Тип, например город" aria-label="Тип населённого пункта" />
+              <input form="profile-form" name="residence_country" maxLength={120}
+                defaultValue={about?.residence?.country ?? ""} placeholder="Страна" aria-label="Страна" />
+            </div>
+            <p className="muted privacyHint">Можно оставить все поля пустыми. Если указываете место, заполните все три. Его видно только вошедшим участникам.</p>
             <button className="button primary" type="submit" form="profile-form">Сохранить профиль</button>
             {updateMessage ? (
               <p className={params.profile_update === "empty_name" || params.profile_update === "invalid" ? "formError" : "formNotice"}>{updateMessage}</p>
             ) : null}
           </div>
+
+          {about?.residence ? (
+            <div className="aboutBlock">
+              <h3>Место жительства</h3>
+              <Link className="residenceLink" href={residenceDirectoryHref(about.residence)}>
+                {residenceLabel(about.residence)}
+              </Link>
+            </div>
+          ) : null}
 
           <div className="aboutBlock">
             <h3>Интересы</h3>
