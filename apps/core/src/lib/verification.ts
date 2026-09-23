@@ -229,6 +229,7 @@ async function subjectIsVerified(
 export type AttestationChange = {
   changed: boolean;
   attestationId: string | null;
+  rewardEntryId?: string;
 };
 
 export async function createVerificationAttestationWithDatabase(
@@ -318,9 +319,10 @@ export async function createVerificationAttestationWithDatabase(
        ) current_rule
        WHERE active AND (effective_to IS NULL OR effective_to > clock_timestamp())`,
     );
+    let rewardEntryId: string | undefined;
     if (reward.rowCount) {
       const rule = reward.rows[0];
-      await client.query(
+      const ledgerInsert = await client.query(
         `INSERT INTO darus_ledger(
            participant_id, amount, reward_rule_id, reward_rule_version,
            source_type, source_attestation_id, source_subject_id
@@ -328,12 +330,14 @@ export async function createVerificationAttestationWithDatabase(
                    'verification_created', $5::uuid, $6::uuid)
          ON CONFLICT (participant_id, source_subject_id)
            WHERE source_type = 'verification_created'
-         DO NOTHING`,
+         DO NOTHING
+         RETURNING id`,
         [verifierSubjectId, String(rule.amount), String(rule.id), Number(rule.version), attestationId, subjectId],
       );
+      if (ledgerInsert.rowCount) rewardEntryId = String(ledgerInsert.rows[0].id);
     }
     await client.query("COMMIT");
-    return { changed: true, attestationId };
+    return { changed: true, attestationId, ...(rewardEntryId ? { rewardEntryId } : {}) };
   } catch (error) {
     try {
       await client.query("ROLLBACK");

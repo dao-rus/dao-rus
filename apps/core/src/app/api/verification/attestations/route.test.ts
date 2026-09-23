@@ -54,4 +54,25 @@ describe("POST /api/verification/attestations", () => {
       "http://localhost:3000/profile/target-subject?verification_action=created",
     );
   });
+
+  it("redirects with a reward ID only when the ledger inserted a new entry", async () => {
+    mocks.getCurrentParticipant.mockResolvedValue({ id: "session-subject" });
+    mocks.create.mockResolvedValue({ changed: true, attestationId: "attestation", rewardEntryId: "reward-entry" });
+    const rewarded = await POST(request({ action: "create", subject_id: "target-subject" }));
+    expect(rewarded.headers.get("location")).toBe(
+      "http://localhost:3000/profile/target-subject?verification_action=created&verification_reward=reward-entry",
+    );
+
+    mocks.create.mockResolvedValue({ changed: true, attestationId: "another-attestation" });
+    const withoutReward = await POST(request({ action: "create", subject_id: "target-subject" }));
+    expect(withoutReward.headers.get("location")).toBe(
+      "http://localhost:3000/profile/target-subject?verification_action=created",
+    );
+
+    mocks.revoke.mockResolvedValue({ changed: true, attestationId: "attestation" });
+    const revoked = await POST(request({ action: "revoke", subject_id: "target-subject" }));
+    expect(revoked.headers.get("location")).toBe(
+      "http://localhost:3000/profile/target-subject?verification_action=revoked",
+    );
+  });
 });

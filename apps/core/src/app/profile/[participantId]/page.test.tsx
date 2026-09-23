@@ -6,6 +6,7 @@ const mocks = vi.hoisted(() => ({
   getVerificationProfile: vi.fn(),
   getVisibleProfileAbout: vi.fn(),
   getReputationSummary: vi.fn(),
+  getVerificationRewardForFeedback: vi.fn(),
   hasPrototypeAdminAccess: vi.fn(),
   redirect: vi.fn(),
   notFound: vi.fn(),
@@ -16,6 +17,13 @@ vi.mock("@/lib/session", () => ({ getCurrentParticipant: mocks.getCurrentPartici
 vi.mock("@/lib/verification", () => ({ getVerificationProfile: mocks.getVerificationProfile }));
 vi.mock("@/lib/profile-about", () => ({ getVisibleProfileAbout: mocks.getVisibleProfileAbout }));
 vi.mock("@/lib/reputation", () => ({ getReputationSummary: mocks.getReputationSummary }));
+vi.mock("@/lib/tokenization", () => ({
+  getVerificationRewardForFeedback: mocks.getVerificationRewardForFeedback,
+  formatDarusAmount: (amount: string) => amount === "0.100000" ? "0,1" : amount,
+}));
+vi.mock("@/components/darus-reward-celebration", () => ({
+  DarusRewardCelebration: "darus-reward-celebration",
+}));
 vi.mock("@/lib/config", () => ({ hasPrototypeAdminAccess: mocks.hasPrototypeAdminAccess }));
 vi.mock("@/components/telegram-avatar", () => ({ TelegramAvatar: () => null }));
 
@@ -37,6 +45,13 @@ function textContent(node: ReactNode): string {
   if (Array.isArray(node)) return node.map(textContent).join(" ");
   if (!isValidElement(node)) return "";
   return textContent((node.props as { children?: ReactNode }).children);
+}
+
+function hasCelebration(node: ReactNode): boolean {
+  if (Array.isArray(node)) return node.some(hasCelebration);
+  if (!isValidElement(node)) return false;
+  return node.type === "darus-reward-celebration"
+    || hasCelebration((node.props as { children?: ReactNode }).children);
 }
 
 describe("public subject profile name", () => {
@@ -116,5 +131,38 @@ describe("public subject profile name", () => {
       searchParams: Promise.resolve({}),
     });
     expect(textContent(page)).not.toContain("Опыт взаимодействия");
+  });
+
+  it("shows the actual ledger reward after a new attestation", async () => {
+    mocks.getVerificationRewardForFeedback.mockResolvedValue("0.100000");
+    const page = await SubjectProfilePage({
+      params: Promise.resolve({ participantId: rosterProfile.subjectId }),
+      searchParams: Promise.resolve({
+        verification_action: "created",
+        verification_reward: "60000000-0000-4000-8000-000000000001",
+      }),
+    });
+    expect(mocks.getVerificationRewardForFeedback).toHaveBeenCalledWith(
+      "60000000-0000-4000-8000-000000000001",
+      "10000000-0000-4000-8000-000000000001",
+      rosterProfile.subjectId,
+    );
+    expect(textContent(page)).toContain("Начислено +0,1 DARUS.");
+    expect(textContent(page)).toContain("Баланс DARUS →");
+    expect(hasCelebration(page)).toBe(true);
+  });
+
+  it("keeps ordinary confirmation feedback when no ledger entry belongs to this action", async () => {
+    mocks.getVerificationRewardForFeedback.mockResolvedValue(null);
+    const page = await SubjectProfilePage({
+      params: Promise.resolve({ participantId: rosterProfile.subjectId }),
+      searchParams: Promise.resolve({
+        verification_action: "created",
+        verification_reward: "60000000-0000-4000-8000-000000000001",
+      }),
+    });
+    expect(textContent(page)).toContain("Ваше подтверждение сохранено.");
+    expect(textContent(page)).not.toContain("Начислено");
+    expect(hasCelebration(page)).toBe(false);
   });
 });

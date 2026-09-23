@@ -3,6 +3,8 @@ import { describe, expect, it } from "vitest";
 import {
   getDarusBalanceWithDatabase,
   getDarusHistoryWithDatabase,
+  getVerificationRewardForFeedbackWithDatabase,
+  formatDarusAmount,
   parseDarusAmount,
   saveRewardRuleWithDatabase,
   RewardRuleValidationError,
@@ -26,6 +28,29 @@ class FakeClient implements TokenizationClient {
 const actorId = "10000000-0000-4000-8000-000000000001";
 
 describe("DARUS tokenization", () => {
+  it("formats exact decimal amounts for reward feedback", () => {
+    expect(formatDarusAmount("0.100000")).toBe("0,1");
+    expect(formatDarusAmount("1.000001")).toBe("1,000001");
+    expect(formatDarusAmount("2.000000")).toBe("2");
+  });
+
+  it("reads a reward only for its verifier and subject", async () => {
+    const entryId = "60000000-0000-4000-8000-000000000001";
+    const subjectId = "20000000-0000-4000-8000-000000000001";
+    const queries: Array<{ text: string; values?: unknown[] }> = [];
+    const database = { async query(text: string, values?: unknown[]) {
+      queries.push({ text, values });
+      return { rowCount: 1, rows: [{ amount: "0.100000" }] };
+    } };
+    expect(await getVerificationRewardForFeedbackWithDatabase(database, entryId, actorId, subjectId))
+      .toBe("0.100000");
+    expect(queries[0].values).toEqual([entryId, actorId, subjectId]);
+    expect(queries[0].text).toContain("ledger.participant_id = $2::uuid");
+    expect(queries[0].text).toContain("attestation.subject_id = $3::uuid");
+    expect(await getVerificationRewardForFeedbackWithDatabase(database, "invalid", actorId, subjectId))
+      .toBeNull();
+    expect(queries).toHaveLength(1);
+  });
   it("requires positive decimal amounts of at most six fractional places", () => {
     expect(parseDarusAmount("0.1")).toBe("0.1");
     expect(parseDarusAmount("1.000001")).toBe("1.000001");

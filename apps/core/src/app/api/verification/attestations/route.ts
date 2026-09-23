@@ -11,9 +11,10 @@ import {
 
 export const runtime = "nodejs";
 
-function profileRedirect(subjectId: string, status: string) {
+function profileRedirect(subjectId: string, status: string, rewardEntryId?: string) {
   const url = new URL(`/profile/${subjectId}`, appBaseUrl());
   url.searchParams.set("verification_action", status);
+  if (rewardEntryId) url.searchParams.set("verification_reward", rewardEntryId);
   return NextResponse.redirect(url, 303);
 }
 
@@ -39,6 +40,7 @@ export async function POST(request: NextRequest) {
       result.changed
         ? action === "create" ? "created" : "revoked"
         : "unchanged",
+      action === "create" && result.changed ? result.rewardEntryId : undefined,
     );
   } catch (error) {
     if (error instanceof VerificationValidationError) {

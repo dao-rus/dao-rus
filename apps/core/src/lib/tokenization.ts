@@ -30,6 +30,44 @@ export type DarusEntry = {
   tariff: string;
 };
 
+const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+
+export function formatDarusAmount(amount: string): string {
+  return amount.replace(/(\.\d*?[1-9])0+$|\.0+$/, "$1").replace(".", ",");
+}
+
+export async function getVerificationRewardForFeedbackWithDatabase(
+  database: Pick<TokenizationDatabase, "query">,
+  entryId: string,
+  verifierId: string,
+  subjectId: string,
+): Promise<string | null> {
+  if (![entryId, verifierId, subjectId].every((id) => UUID_PATTERN.test(id))) return null;
+  const result = await database.query(
+    `SELECT ledger.amount
+       FROM darus_ledger ledger
+       JOIN verification_attestations attestation
+         ON attestation.id = ledger.source_attestation_id
+      WHERE ledger.id = $1::uuid
+        AND ledger.participant_id = $2::uuid
+        AND ledger.source_subject_id = $3::uuid
+        AND ledger.source_type = 'verification_created'
+        AND attestation.verifier_subject_id = $2::uuid
+        AND attestation.subject_id = $3::uuid`,
+    [entryId, verifierId, subjectId],
+  );
+  return result.rowCount ? String(result.rows[0].amount) : null;
+}
+
+export async function getVerificationRewardForFeedback(
+  entryId: string,
+  verifierId: string,
+  subjectId: string,
+): Promise<string | null> {
+  const { pool } = await import("./db");
+  return getVerificationRewardForFeedbackWithDatabase(pool, entryId, verifierId, subjectId);
+}
+
 export class RewardRuleValidationError extends Error {
   constructor() {
     super("Invalid DARUS reward rule");

@@ -18,6 +18,7 @@ const subjectA = "20000000-0000-4000-8000-000000000001";
 const subjectB = "30000000-0000-4000-8000-000000000001";
 const subjectC = "40000000-0000-4000-8000-000000000001";
 const attestationId = "50000000-0000-4000-8000-000000000001";
+const rewardEntryId = "60000000-0000-4000-8000-000000000001";
 const happenedAt = "2026-09-20T10:00:00.000Z";
 
 class FakeClient implements VerificationDatabaseClient {
@@ -87,7 +88,9 @@ class FakeClient implements VerificationDatabaseClient {
         : { rowCount: 1, rows: [{ id: root, version: 1, amount: "0.100000" }] };
     }
     if (text.includes("INSERT INTO darus_ledger")) {
-      return { rowCount: this.options.rewardAlreadyIssued ? 0 : 1, rows: [] };
+      return this.options.rewardAlreadyIssued
+        ? { rowCount: 0, rows: [] }
+        : { rowCount: 1, rows: [{ id: rewardEntryId }] };
     }
     return { rowCount: 1, rows: [] };
   }
@@ -185,7 +188,7 @@ describe("VerificationAttestation persistence", () => {
       subjectB,
     );
 
-    expect(result).toEqual({ changed: true, attestationId });
+    expect(result).toEqual({ changed: true, attestationId, rewardEntryId });
     const event = client.queries.find(({ text }) =>
       text.includes("verification.attestation_created")
     );
@@ -198,6 +201,7 @@ describe("VerificationAttestation persistence", () => {
     const reward = client.queries.find(({ text }) => text.includes("INSERT INTO darus_ledger"));
     expect(reward?.values).toEqual([subjectA, "0.100000", root, 1, attestationId, subjectB]);
     expect(reward?.text).toContain("ON CONFLICT (participant_id, source_subject_id)");
+    expect(reward?.text).toContain("RETURNING id");
     expect(client.queries.at(-1)?.text).toBe("COMMIT");
   });
 
@@ -220,7 +224,7 @@ describe("VerificationAttestation persistence", () => {
   it("creates an attestation without DARUS when the current rule is disabled", async () => {
     const client = new FakeClient({ rewardActive: false });
     const result = await createVerificationAttestationWithDatabase(database(client), subjectA, subjectB);
-    expect(result.changed).toBe(true);
+    expect(result).toEqual({ changed: true, attestationId });
     expect(client.queries.some(({ text }) => text.includes("INSERT INTO darus_ledger"))).toBe(false);
     expect(client.queries.at(-1)?.text).toBe("COMMIT");
   });
@@ -228,7 +232,7 @@ describe("VerificationAttestation persistence", () => {
   it("keeps a new attestation after revoke without a second pair reward", async () => {
     const client = new FakeClient({ rewardAlreadyIssued: true });
     const result = await createVerificationAttestationWithDatabase(database(client), subjectA, subjectB);
-    expect(result.changed).toBe(true);
+    expect(result).toEqual({ changed: true, attestationId });
     expect(client.queries.some(({ text }) => text.includes("INSERT INTO darus_ledger"))).toBe(true);
     expect(client.queries.at(-1)?.text).toBe("COMMIT");
   });

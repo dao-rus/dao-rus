@@ -1,10 +1,12 @@
 import Link from "next/link";
 import { notFound, redirect } from "next/navigation";
 import { hasPrototypeAdminAccess } from "@/lib/config";
+import { DarusRewardCelebration } from "@/components/darus-reward-celebration";
 import { TelegramAvatar } from "@/components/telegram-avatar";
 import { getVisibleProfileAbout } from "@/lib/profile-about";
 import { getReputationSummary } from "@/lib/reputation";
 import { getCurrentParticipant } from "@/lib/session";
+import { formatDarusAmount, getVerificationRewardForFeedback } from "@/lib/tokenization";
 import { getVerificationProfile } from "@/lib/verification";
 
 export const dynamic = "force-dynamic";
@@ -18,7 +20,7 @@ const signalLabels: Record<string, string> = {
 
 type SubjectProfilePageProps = {
   params: Promise<{ participantId: string }>;
-  searchParams: Promise<{ verification_action?: string; verification_root?: string; reputation_action?: string }>;
+  searchParams: Promise<{ verification_action?: string; verification_reward?: string; verification_root?: string; reputation_action?: string }>;
 };
 
 const actionMessages: Record<string, string> = {
@@ -49,11 +51,19 @@ export default async function SubjectProfilePage({ params, searchParams }: Subje
   ]);
   if (!profile) notFound();
 
-  const reputation = await getReputationSummary(profile.subjectId, viewer.id);
+  const [reputation, rewardAmount] = await Promise.all([
+    getReputationSummary(profile.subjectId, viewer.id),
+    query.verification_action === "created" && query.verification_reward
+      ? getVerificationRewardForFeedback(query.verification_reward, viewer.id, profile.subjectId)
+      : Promise.resolve(null),
+  ]);
 
   const ownProfile = viewer.id === profile.subjectId;
   const admin = hasPrototypeAdminAccess(viewer.id);
-  const actionMessage = query.verification_action ? actionMessages[query.verification_action] : null;
+  const formattedReward = rewardAmount ? formatDarusAmount(rewardAmount) : null;
+  const actionMessage = formattedReward
+    ? `Ваше подтверждение сохранено. Начислено +${formattedReward} DARUS.`
+    : query.verification_action ? actionMessages[query.verification_action] : null;
   const rootMessage = query.verification_root ? rootMessages[query.verification_root] : null;
   const reputationMessage = query.reputation_action ? ({
     created: "Ваш опыт сохранён.",
@@ -121,23 +131,31 @@ export default async function SubjectProfilePage({ params, searchParams }: Subje
           <strong>{profile.verificationPoints} подтверждений от других</strong>
           <p className="muted">Здесь учитываются подтверждения от людей, чья личность уже подтверждена в сети доверия.</p>
           {!ownProfile ? <p className="muted">Подтверждайте только тех, кого можете лично узнать и отличить от других.</p> : null}
-          {!ownProfile && profile.viewerAttestationId ? (
-            <form action="/api/verification/attestations" method="post">
-              <input type="hidden" name="subject_id" value={profile.subjectId} />
-              <input type="hidden" name="action" value="revoke" />
-              <button className="button secondary" type="submit">Отозвать подтверждение</button>
-            </form>
-          ) : null}
-          {!ownProfile && !profile.viewerAttestationId && profile.viewerIsVerified ? (
-            <form action="/api/verification/attestations" method="post">
-              <input type="hidden" name="subject_id" value={profile.subjectId} />
-              <input type="hidden" name="action" value="create" />
-              <button className="button primary" type="submit">Подтвердить, что знаю этого человека</button>
-            </form>
-          ) : null}
+          <div className="verificationRewardAnchor">
+            {!ownProfile && profile.viewerAttestationId ? (
+              <form action="/api/verification/attestations" method="post">
+                <input type="hidden" name="subject_id" value={profile.subjectId} />
+                <input type="hidden" name="action" value="revoke" />
+                <button className="button secondary" type="submit">Отозвать подтверждение</button>
+              </form>
+            ) : null}
+            {!ownProfile && !profile.viewerAttestationId && profile.viewerIsVerified ? (
+              <form action="/api/verification/attestations" method="post">
+                <input type="hidden" name="subject_id" value={profile.subjectId} />
+                <input type="hidden" name="action" value="create" />
+                <button className="button primary" type="submit">Подтвердить, что знаю этого человека</button>
+              </form>
+            ) : null}
+            {formattedReward && query.verification_reward ? (
+              <DarusRewardCelebration key={query.verification_reward}
+                entryId={query.verification_reward} amount={formattedReward} />
+            ) : null}
+          </div>
           {!ownProfile && !profile.viewerIsVerified ? <p className="muted">Подтверждать других можно после подтверждения вашей личности.</p> : null}
           {ownProfile ? <p className="muted">Нельзя подтвердить самого себя.</p> : null}
-          {actionMessage ? <p className="formNotice">{actionMessage}</p> : null}
+          {actionMessage ? <p className="formNotice" role="status">
+            {actionMessage} {formattedReward ? <Link href="/profile/tokens">Баланс DARUS →</Link> : null}
+          </p> : null}
         </section>
 
         {!ownProfile ? (

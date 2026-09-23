@@ -266,6 +266,46 @@ dd { margin: 6px 0 0; }
 }
 .verificationBadge.verified { background: #e1efe5; color: var(--accent); }
 .verificationAdmin h2 { margin-top: 0; font-size: 20px; }
+.verificationCard > .verificationRewardAnchor { display: block; position: relative; }
+.darusCoin {
+  display: inline-grid; place-items: center; flex: none;
+  width: 34px; height: 34px; border-radius: 50%;
+  background: radial-gradient(circle at 30% 25%, #fff2ac, #e6a92e 65%, #a86614);
+  border: 2px solid #a86614; color: #653d0c; font-weight: 800;
+  box-shadow: 0 2px 8px #7a480044;
+}
+.darusRewardMarker {
+  position: absolute; left: 0; top: -35px; z-index: 2;
+  display: inline-flex; align-items: center; gap: 7px;
+  color: #8d5714; font-weight: 800; pointer-events: none;
+  animation: darusRewardRise 1.5s ease-out both;
+}
+.darusRewardMarker .darusCoin { width: 26px; height: 26px; font-size: 13px; }
+.darusRewardToast {
+  position: fixed; top: max(16px, env(safe-area-inset-top)); left: 50%; z-index: 50;
+  display: flex; align-items: center; gap: 12px;
+  width: max-content; max-width: calc(100vw - 32px); padding: 12px 18px;
+  border: 1px solid #d59a28; border-radius: 14px;
+  background: #fff5d1; color: #4e340f; box-shadow: 0 14px 36px #4e340f33;
+  pointer-events: none; animation: darusRewardToast 2.2s ease-out both;
+}
+.darusRewardToast strong, .darusRewardToast small { display: block; }
+.darusRewardToast small { margin-top: 2px; font-size: 12px; }
+@keyframes darusRewardRise {
+  0% { opacity: 0; transform: translateY(16px) scale(.75); }
+  30% { opacity: 1; transform: translateY(0) scale(1.12); }
+  80% { opacity: 1; transform: translateY(-10px) scale(1); }
+  100% { opacity: 0; transform: translateY(-24px) scale(1); }
+}
+@keyframes darusRewardToast {
+  0% { opacity: 0; transform: translate(-50%, -46px); }
+  18%, 78% { opacity: 1; transform: translate(-50%, 0); }
+  100% { opacity: 0; transform: translate(-50%, -16px); }
+}
+@media (prefers-reduced-motion: reduce) {
+  .darusRewardMarker, .darusRewardToast { animation: none; }
+  .darusRewardToast { transform: translateX(-50%); }
+}
 
 .participantsSearch {
   display: grid;
