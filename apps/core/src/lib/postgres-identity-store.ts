@@ -73,7 +73,7 @@ export class PostgresIdentityStore implements IdentityStore {
       await client.query("BEGIN");
       await client.query(
         `UPDATE external_identities
-            SET provider_subject = $2,
+            SET provider_subject = CASE WHEN $10::boolean THEN provider_subject ELSE $2 END,
                 external_user_id = $3,
                 username = COALESCE($4, $9::jsonb->>'username', username),
                 first_name = COALESCE($5, $9::jsonb->>'first_name', first_name),
@@ -93,6 +93,7 @@ export class PostgresIdentityStore implements IdentityStore {
           profile.avatarUrl,
           JSON.stringify(profile.oidcProfile ?? {}),
           JSON.stringify(profile.botProfile ?? {}),
+          profile.identitySource === "mini_app",
         ],
       );
       const currentTelegramName = telegramDisplayName(profile);

@@ -7,6 +7,7 @@ vi.mock("@/lib/session", () => ({ getCurrentParticipant: mocks.getCurrentPartici
 vi.mock("@/lib/config", () => ({ isTelegramConfigured: () => true }));
 
 import NeedPage from "./page";
+import { telegramEntryMode } from "./need-auth-gate";
 
 function textContent(node: ReactNode): string {
   if (typeof node === "string" || typeof node === "number") return String(node);
@@ -35,6 +36,9 @@ describe("/need entry", () => {
     const page = await NeedPage({ searchParams: Promise.resolve({}) });
     expect(textContent(page)).toContain("Что вам нужно?");
     expect(findProps(page, (props) => props.href === "/api/auth/telegram/start?next=%2Fneed")).not.toBeNull();
+    expect(telegramEntryMode(undefined)).toBe("browser");
+    expect(telegramEntryMode("")).toBe("browser");
+    expect(telegramEntryMode("signed-data")).toBe("mini_app");
   });
 
   it("shows the existing members default and a clear save confirmation", async () => {

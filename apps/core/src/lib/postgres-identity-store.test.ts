@@ -86,7 +86,7 @@ class FakeIdentityClient {
     }
 
     if (text.includes("UPDATE external_identities")) {
-      this.providerSubject = String(values?.[1]);
+      if (values?.[9] !== true) this.providerSubject = String(values?.[1]);
       return { rowCount: 1, rows: [] };
     }
 
@@ -146,6 +146,27 @@ describe("PostgresIdentityStore Telegram roster link", () => {
     expect(client.released).toBe(true);
   });
 
+  it("creates a normal Telegram participant for a first Mini App login", async () => {
+    const client = new FakeIdentityClient();
+    mocks.connect.mockResolvedValue(client);
+    const miniAppProfile: TelegramIdentityProfile = {
+      ...profile,
+      subject: "miniapp:" + profile.telegramUserId,
+      identitySource: "mini_app",
+    };
+
+    const result = await resolveTelegramParticipant(new PostgresIdentityStore(), miniAppProfile);
+
+    expect(result.created).toBe(true);
+    expect(result.participant.id).toBe(participantId);
+    const insert = client.queries.find(({ text }) => text.includes("INSERT INTO external_identities"));
+    expect(insert?.values?.slice(0, 3)).toEqual([
+      participantId,
+      miniAppProfile.subject,
+      profile.telegramUserId,
+    ]);
+    expect(client.queries.at(-1)?.text).toBe("COMMIT");
+  });
   it("links a roster entry on a later login for an existing Participant", async () => {
     const client = new FakeIdentityClient();
     mocks.connect.mockResolvedValue(client);
@@ -191,6 +212,26 @@ describe("PostgresIdentityStore Telegram roster link", () => {
     ]);
   });
 
+  it("reuses an existing OIDC identity by Telegram user ID without replacing its subject", async () => {
+    const client = new FakeIdentityClient(participantId, participantId);
+    client.providerSubject = profile.subject;
+    mocks.connect.mockResolvedValue(client);
+
+    const miniAppProfile: TelegramIdentityProfile = {
+      ...profile,
+      subject: "miniapp:" + profile.telegramUserId,
+      identitySource: "mini_app",
+    };
+    const result = await resolveTelegramParticipant(new PostgresIdentityStore(), miniAppProfile);
+
+    expect(result.created).toBe(false);
+    expect(result.participant.id).toBe(participantId);
+    expect(client.providerSubject).toBe(profile.subject);
+    expect(client.queries.some(({ text }) => text.includes("INSERT INTO participants"))).toBe(false);
+    const update = client.queries.find(({ text }) => text.includes("UPDATE external_identities"));
+    expect(update?.text).toContain("CASE WHEN $10::boolean THEN provider_subject ELSE $2 END");
+    expect(update?.values?.[9]).toBe(true);
+  });
   it("keeps a name chosen in Core on later Telegram login", async () => {
     const client = new FakeIdentityClient(participantId, participantId, true);
     client.displayName = "Моё имя";

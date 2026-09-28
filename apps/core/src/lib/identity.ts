@@ -17,6 +17,7 @@ export type TelegramIdentityProfile = {
   avatarUrl: string | null;
   oidcProfile?: Record<string, string | number | boolean>;
   botProfile?: Record<string, unknown>;
+  identitySource?: "mini_app";
 };
 
 export interface IdentityStore {
