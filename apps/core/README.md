@@ -142,6 +142,28 @@ docker compose up -d --force-recreate web
 
 При тестировании через туннель открывай приложение и начинай Telegram login с того же публичного HTTPS origin, который указан в `APP_BASE_URL`. Если начать flow с `localhost`, host-only cookies с `state` и PKCE verifier останутся на `localhost`, и callback на домене туннеля их не получит.
 
+### Вход «Мне нужно» из @DAORusDev_bot
+
+Постоянная кнопка меню в личном чате бота открывает https://core.daorus.org/need.
+Текст кнопки — «Мне нужно». Telegram поддерживает такую кнопку через
+setChatMenuButton или настройку Menu Button в BotFather. Это кнопка в чате
+с ботом, а не глобальная кнопка во всех чатах Telegram.
+
+На /need вошедший участник сразу вводит текст. Если сессии Core нет, экран
+предлагает существующий Telegram OIDC login и после него возвращает на /need.
+Сохранение вызывает существующий addProfileSignal с kind=need, а запись
+появляется в обычном /profile. Видимость выбирается явно; исходное значение
+members совпадает с формой профиля. match_only пока лишь хранит запись для
+будущего сопоставления и не создаёт match.
+
+Кнопку нужно назначать после публикации маршрута /need. Используй токен
+того же бота, что указан в TELEGRAM_OIDC_CLIENT_ID, и проверь текущую кнопку
+через getChatMenuButton до изменения. Параметры setChatMenuButton для кнопки
+по умолчанию: menu_button={"type":"web_app","text":"Мне нужно",
+"web_app":{"url":"https://core.daorus.org/need"}}. Токен не выводить в лог
+и не сохранять в репозитории. После назначения проверь getChatMenuButton
+и открытие кнопки в личном чате @DAORusDev_bot.
+
 ## 5. Лабораторное подключение Telegram Ingestion v0.1
 
 Поток данных:

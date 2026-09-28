@@ -1,4 +1,4 @@
-import { NextResponse } from "next/server";
+import { NextRequest, NextResponse } from "next/server";
 import { isTelegramConfigured, secureCookies } from "@/lib/config";
 import {
   buildTelegramAuthorizationUrl,
@@ -10,7 +10,7 @@ export const runtime = "nodejs";
 
 const FLOW_TTL_SECONDS = 600;
 
-export async function GET() {
+export async function GET(request: NextRequest) {
   if (!isTelegramConfigured()) {
     return new NextResponse("Telegram OIDC is not configured", { status: 503 });
   }
@@ -29,5 +29,10 @@ export async function GET() {
 
   response.cookies.set("dao_tg_state", state, options);
   response.cookies.set("dao_tg_verifier", verifier, options);
+  const returnTo = request.nextUrl.searchParams.get("next") === "/need" ? "/need" : "";
+  response.cookies.set("dao_tg_return_to", returnTo, {
+    ...options,
+    maxAge: returnTo ? FLOW_TTL_SECONDS : 0,
+  });
   return response;
 }

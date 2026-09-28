@@ -1,3 +1,4 @@
+import { NextRequest } from "next/server";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 const mocks = vi.hoisted(() => ({
@@ -33,7 +34,7 @@ describe("GET /api/auth/telegram/start", () => {
     mocks.buildTelegramAuthorizationUrl.mockReturnValue(
       new URL("https://oauth.telegram.org/auth?request=test"),
     );
-    const response = await GET();
+    const response = await GET(new NextRequest("https://core.daorus.org/api/auth/telegram/start"));
 
     const setCookie = response.headers.get("set-cookie") ?? "";
     expect(setCookie).toContain("dao_tg_state=state-for-test");
@@ -43,5 +44,17 @@ describe("GET /api/auth/telegram/start", () => {
     expect(setCookie).toContain("Secure");
     expect(setCookie).toContain("HttpOnly");
     expect(setCookie).toContain("SameSite=lax");
+  });
+
+  it("stores only the fixed Need return path", async () => {
+    mocks.createOidcState.mockReturnValue("state-for-test");
+    mocks.createPkce.mockReturnValue({ verifier: "verifier", challenge: "challenge" });
+    mocks.buildTelegramAuthorizationUrl.mockReturnValue(new URL("https://oauth.telegram.org/auth"));
+
+    const need = await GET(new NextRequest("https://core.daorus.org/api/auth/telegram/start?next=%2Fneed"));
+    expect(need.cookies.get("dao_tg_return_to")?.value).toBe("/need");
+
+    const external = await GET(new NextRequest("https://core.daorus.org/api/auth/telegram/start?next=https%3A%2F%2Fevil.example"));
+    expect(external.cookies.get("dao_tg_return_to")?.value).toBe("");
   });
 });

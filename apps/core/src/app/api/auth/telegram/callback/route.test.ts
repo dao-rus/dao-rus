@@ -89,6 +89,18 @@ describe("GET /api/auth/telegram/callback", () => {
     );
   });
 
+  it("returns to Need only for the fixed OIDC return cookie", async () => {
+    mocks.authenticateTelegramCode.mockResolvedValue({ subject: "telegram-subject", telegramUserId: "42" });
+    mocks.resolveTelegramParticipant.mockResolvedValue({ participant: { id: "participant-id" } });
+    mocks.createSession.mockResolvedValue("session-for-test");
+
+    const response = await GET(callbackRequest(
+      "dao_tg_state=state-for-test; dao_tg_verifier=verifier-for-test; dao_tg_return_to=%2Fneed",
+    ));
+    expect(response.headers.get("location")).toBe("https://dao-lab.trycloudflare.com/need");
+    expect(response.cookies.get("dao_tg_return_to")?.value).toBe("");
+  });
+
   it("completes OIDC login when Bot API enrichment fails", async () => {
     mocks.authenticateTelegramCode.mockResolvedValue({ subject: "telegram-subject", telegramUserId: "42" });
     mocks.enrichTelegramProfile.mockRejectedValue(new Error("Bot API timeout"));

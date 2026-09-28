@@ -13,7 +13,7 @@ import {
 export const runtime = "nodejs";
 
 function clearFlowCookies(response: NextResponse) {
-  for (const name of ["dao_tg_state", "dao_tg_verifier"]) {
+  for (const name of ["dao_tg_state", "dao_tg_verifier", "dao_tg_return_to"]) {
     response.cookies.set(name, "", {
       httpOnly: true,
       sameSite: "lax",
@@ -61,8 +61,10 @@ export async function GET(request: NextRequest) {
 
     const sessionToken = await createSession(participant.id);
 
+    const returnTo = request.cookies.get("dao_tg_return_to")?.value === "/need"
+      ? "/need" : "/profile";
     const response = NextResponse.redirect(
-      new URL("/profile", appBaseUrl()),
+      new URL(returnTo, appBaseUrl()),
       303
     );
 
