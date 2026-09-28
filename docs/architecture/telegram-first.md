@@ -48,7 +48,7 @@ Participant / Core Subject
 
 Telegram roster — наблюдаемый технический список аккаунтов. Он не является источником человеческой верификации или канонического членства.
 
-Для Mini App Core проверяет подпись initData токеном действующего бота и время auth_date, затем связывает подтверждённый Telegram user id с той же external identity и создаёт обычную Core session. OIDC остаётся входом для браузера. Mini App не заменяет уже сохранённый OIDC subject у существующей identity.
+Для Mini App Core проверяет подпись initData токеном действующего бота и время auth_date, затем связывает подтверждённый Telegram user id с той же external identity и создаёт обычную Core session. OIDC остаётся входом для браузера. Mini App не заменяет уже сохранённый OIDC subject у существующей identity. После успешного входа интерфейс обновляет текущий route без полной перезагрузки: Telegram WebApp может сохранять initData при навигации, поэтому полный reload способен повторить авторизацию по кругу.
 
 Human Verification строится как web of trust. Базовая запись — `VerificationAttestation`, в которой один уже достаточно верифицированный субъект подтверждает другого как реального отдельного человека.
 

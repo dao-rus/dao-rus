@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState, type ReactNode } from "react";
+import { useRouter } from "next/navigation";
 
 type TelegramWindow = Window & {
   Telegram?: { WebApp?: { initData?: string; ready?: () => void } };
@@ -16,6 +17,7 @@ export function NeedAuthGate({
   children: ReactNode;
 }) {
   const [mode, setMode] = useState<"checking" | "browser" | "error">("checking");
+  const router = useRouter();
 
   useEffect(() => {
     let active = true;
@@ -37,7 +39,10 @@ export function NeedAuthGate({
           cache: "no-store",
         });
         if (!response.ok) throw new Error("Mini App login failed");
-        if (active) window.location.replace("/need");
+        if (active) {
+          router.refresh();
+          setMode("browser");
+        }
       } catch {
         if (active) setMode("error");
       }
@@ -63,7 +68,7 @@ export function NeedAuthGate({
       };
     }
     return () => { active = false; };
-  }, []);
+  }, [router]);
 
   if (mode === "checking") {
     return <p className="muted" role="status">Проверяем вход через Telegram…</p>;
