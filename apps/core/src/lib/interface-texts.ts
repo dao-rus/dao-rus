@@ -8,7 +8,7 @@ export const interfaceTextFields = [
     multiline: true,
   },
   { key: "home.login_button", label: "Кнопка входа", defaultValue: "Войти через Telegram", multiline: false },
-  { key: "home.profile_button", label: "Кнопка профиля", defaultValue: "Открыть профиль", multiline: false },
+  { key: "home.profile_button", label: "Кнопка профиля", defaultValue: "Ваш профиль", multiline: false },
   { key: "participants.title", label: "Заголовок раздела «Ядро»", defaultValue: "Сеть", multiline: false },
   { key: "profile.eyebrow", label: "Надпись над именем в профиле", defaultValue: "Профиль", multiline: false },
 ] as const;

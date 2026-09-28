@@ -8,7 +8,7 @@ export type ParticipantDirectoryEntry = {
   telegramBio: string | null;
   avatarUrl: string | null;
   hasTelegramPhoto: boolean;
-  isVerified: boolean;
+  verificationPoints: number;
   residence: Residence | null;
 };
 
@@ -42,10 +42,14 @@ export async function listParticipantsDirectoryWithDatabase(
             participant.residence_name,
             participant.residence_type,
             participant.residence_country,
-            EXISTS (
-              SELECT 1 FROM verified
-               WHERE verified.subject_id = participant.id
-            ) AS is_verified
+            (
+              SELECT count(*)::integer
+                FROM verification_attestations incoming
+                JOIN verified verifier
+                  ON verifier.subject_id = incoming.verifier_subject_id
+               WHERE incoming.subject_id = participant.id
+                 AND incoming.revoked_at IS NULL
+            ) AS verification_points
        FROM participants participant
        LEFT JOIN external_identities telegram
          ON telegram.participant_id = participant.id
@@ -96,7 +100,7 @@ export async function listParticipantsDirectoryWithDatabase(
     telegramBio: row.telegram_bio ? String(row.telegram_bio) : null,
     avatarUrl: row.avatar_url ? String(row.avatar_url) : null,
     hasTelegramPhoto: Boolean(row.telegram_photo_file_id) && row.telegram_photo_count !== "0",
-    isVerified: Boolean(row.is_verified),
+    verificationPoints: Number(row.verification_points),
     residence: row.residence_name && row.residence_type && row.residence_country
       ? {
           name: String(row.residence_name),

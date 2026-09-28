@@ -108,7 +108,7 @@ export default async function ProfilePage({ searchParams }: ProfilePageProps) {
           <div className="profileActions">
             <Link className="button secondary" href="/participants">Сеть</Link>
             {hasAdminAccess ? <Link className="button secondary" href="/admin">Управление</Link> : null}
-            <Link className="button secondary" href="/proposals">Предложения</Link>
+            <Link className="button secondary" href="/veche">Вече</Link>
             <form action="/api/auth/logout" method="post">
               <button className="button secondary" type="submit">Выйти</button>
             </form>

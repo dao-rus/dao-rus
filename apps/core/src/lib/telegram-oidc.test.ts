@@ -7,9 +7,9 @@ vi.mock("./config", () => ({
 import { buildTelegramAuthorizationUrl, telegramProfileFromClaims } from "./telegram-oidc";
 
 describe("Telegram OIDC profile", () => {
-  it("requests profile, consented phone and bot access", () => {
+  it("requests profile and bot access without requiring a phone", () => {
     const url = buildTelegramAuthorizationUrl("state", "challenge");
-    expect(url.searchParams.get("scope")).toBe("openid profile phone telegram:bot_access");
+    expect(url.searchParams.get("scope")).toBe("openid profile telegram:bot_access");
   });
 
   it("keeps all provided user-authored claims and their OIDC provenance", () => {

@@ -48,5 +48,7 @@ describe("home interface texts", () => {
     mocks.getCurrentParticipant.mockResolvedValue({ id: "participant" });
     const page = await Home({ searchParams: Promise.resolve({}) });
     expect(textContent(page)).toContain("Свой профиль");
+    expect(textContent(page)).toContain("Сеть");
+    expect(textContent(page)).toContain("Вече");
   });
 });

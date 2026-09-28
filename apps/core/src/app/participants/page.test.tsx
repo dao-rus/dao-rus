@@ -67,13 +67,13 @@ describe("/participants", () => {
         telegramUsername: "alice",
         telegramBio: "Биография Алисы",
         telegramPhoneNumber: "+79990000000",
-        isVerified: true,
+        verificationPoints: 2,
       },
       {
         participantId: "20000000-0000-4000-8000-000000000002",
         displayName: "Борис",
         telegramUsername: null,
-        isVerified: false,
+        verificationPoints: 0,
       },
     ]);
 
@@ -88,8 +88,10 @@ describe("/participants", () => {
     expect(text).toContain("@alice");
     expect(text).toContain("Биография Алисы");
     expect(text).not.toContain("+79990000000");
-    expect(text).toContain("Личность подтверждена");
-    expect(text).toContain("Пока не подтверждена");
+    expect(text).toMatch(/Подтвердили:\s+2/);
+    expect(text).toMatch(/Подтвердили:\s+0/);
+    expect(hrefs(page)).toContain("/");
+    expect(hrefs(page)).toContain("/veche");
     expect(text).not.toContain(participantId);
     expect(text).not.toContain("Telegram ID");
     expect(text).not.toContain("Статус в ДАО");
@@ -127,7 +129,7 @@ describe("/participants", () => {
   it("filters the directory by residence and keeps that filter in name search", async () => {
     mocks.getCurrentParticipant.mockResolvedValue({ id: "viewer" });
     mocks.listParticipantsDirectory.mockResolvedValue([{ participantId: "owner", displayName: "Анна",
-      residence: { name: "Казань", type: "город", country: "Россия" }, isVerified: false,
+      residence: { name: "Казань", type: "город", country: "Россия" }, verificationPoints: 0,
     }]);
 
     const page = await ParticipantsPage({ searchParams: Promise.resolve({

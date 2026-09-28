@@ -38,12 +38,14 @@ export default async function ProposalsPage({ searchParams }: ProposalsPageProps
         <div className="profileHeader">
           <div>
             <div className="eyebrow">Governance · Proposal v0.1</div>
-            <h1>Предложения</h1>
+            <h1>Вече</h1>
             <p className="muted">Простые открытые предложения участников ДАО.</p>
           </div>
-          <Link className="button secondary" href="/profile">
-            К профилю
-          </Link>
+          <div className="profileActions">
+            <Link className="button secondary" href="/">Главная</Link>
+            <Link className="button secondary" href="/participants">Сеть</Link>
+            <Link className="button secondary" href="/profile">Ваш профиль</Link>
+          </div>
         </div>
 
         {proposalCreationAllowed ? (

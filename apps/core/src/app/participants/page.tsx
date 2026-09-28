@@ -61,7 +61,11 @@ export default async function ParticipantsPage({ searchParams }: ParticipantsPag
               <p className="muted">Место жительства: {residenceLabel(residenceFilter)} · <Link href="/participants">Показать всех</Link></p>
             ) : null}
           </div>
-          <Link className="button secondary" href="/profile">Ваш профиль</Link>
+          <div className="profileActions">
+            <Link className="button secondary" href="/">Главная</Link>
+            <Link className="button secondary" href="/veche">Вече</Link>
+            <Link className="button secondary" href="/profile">Ваш профиль</Link>
+          </div>
         </div>
 
         <form className="participantsSearch" method="get">
@@ -103,10 +107,8 @@ export default async function ParticipantsPage({ searchParams }: ParticipantsPag
                   </div>
                 </div>
                 <div className="participantDirectoryActions">
-                  <span className={participant.isVerified ? "verificationBadge verified" : "verificationBadge"}>
-                    {participant.isVerified
-                      ? "✓ Личность подтверждена"
-                      : "Пока не подтверждена"}
+                  <span className={participant.verificationPoints > 0 ? "verificationBadge verified" : "verificationBadge"}>
+                    Подтвердили: {participant.verificationPoints}
                   </span>
                   <Link className="button secondary" href={`/profile/${participant.participantId}`}>
                     Открыть профиль

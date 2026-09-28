@@ -11,7 +11,7 @@ import { getCurrentParticipant } from "@/lib/session";
 export const runtime = "nodejs";
 
 function proposalsRedirect(status: string) {
-  const url = new URL("/proposals", appBaseUrl());
+  const url = new URL("/veche", appBaseUrl());
   url.searchParams.set("proposal_create", status);
   return NextResponse.redirect(url, 303);
 }

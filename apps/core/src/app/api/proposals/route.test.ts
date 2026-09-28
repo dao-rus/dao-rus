@@ -67,7 +67,7 @@ describe("POST /api/proposals", () => {
     );
     expect(response.status).toBe(303);
     expect(response.headers.get("location")).toBe(
-      "http://localhost:3000/proposals?proposal_create=created",
+      "http://localhost:3000/veche?proposal_create=created",
     );
   });
 
@@ -99,7 +99,7 @@ describe("POST /api/proposals", () => {
       expect(mocks.deleteSession).not.toHaveBeenCalled();
       expect(response.status).toBe(303);
       expect(response.headers.get("location")).toBe(
-        "http://localhost:3000/proposals?proposal_create=not_eligible",
+        "http://localhost:3000/veche?proposal_create=not_eligible",
       );
     },
   );

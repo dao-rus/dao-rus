@@ -13,13 +13,13 @@ describe("participants directory", () => {
               participant_id: "10000000-0000-4000-8000-000000000001",
               display_name: "Алиса",
               telegram_username: "alice",
-              is_verified: true,
+              verification_points: 2,
             },
             {
               participant_id: "20000000-0000-4000-8000-000000000002",
               display_name: "Борис",
               telegram_username: null,
-              is_verified: false,
+              verification_points: 0,
             },
           ],
         };
@@ -29,6 +29,8 @@ describe("participants directory", () => {
     expect(queries).toHaveLength(1);
     expect(queries[0].values).toEqual(["alice", "", null, "", "", ""]);
     expect(queries[0].text).toContain("WITH RECURSIVE verified");
+    expect(queries[0].text).toContain("JOIN verified verifier");
+    expect(queries[0].text).toContain("incoming.revoked_at IS NULL");
     expect(queries[0].text).toContain("FROM participants participant");
     expect(queries[0].text).toContain("LEFT JOIN external_identities telegram");
     expect(queries[0].text).toContain("login.event_type = 'participant.logged_in'");
@@ -42,7 +44,7 @@ describe("participants directory", () => {
         telegramBio: null,
         avatarUrl: null,
         hasTelegramPhoto: false,
-        isVerified: true,
+        verificationPoints: 2,
         residence: null,
       },
       {
@@ -52,7 +54,7 @@ describe("participants directory", () => {
         telegramBio: null,
         avatarUrl: null,
         hasTelegramPhoto: false,
-        isVerified: false,
+        verificationPoints: 0,
         residence: null,
       },
     ]);
@@ -89,7 +91,7 @@ describe("participants directory", () => {
           avatar_url: "https://cdn.example/avatar.jpg",
           telegram_photo_file_id: "old-photo",
           telegram_photo_count: "0",
-          is_verified: false,
+          verification_points: 0,
         }] };
       },
     });
@@ -124,7 +126,7 @@ describe("participants directory", () => {
         queries.push({ text, values });
         return { rows: [{
           participant_id: "10000000-0000-4000-8000-000000000001",
-          display_name: "Анна", is_verified: false,
+          display_name: "Анна", verification_points: 0,
           residence_name: "Казань", residence_type: "город", residence_country: "Россия",
         }] };
       },

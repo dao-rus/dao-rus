@@ -24,7 +24,7 @@
 - профиль `/profile`;
 - изменение `display_name` текущим авторизованным участником;
 - страница `/profile/activity` со статистикой за 7 и 30 дней и последними событиями;
-- создание простых предложений и список `/proposals`;
+- создание простых предложений и список `/veche`;
 - приём сообщений одного разрешённого Telegram-чата через защищённый webhook;
 - одноразовый импорт Telegram roster snapshot без создания Participant;
 - защищённый прототипный Participant Registry для ручной классификации roster;
@@ -106,7 +106,7 @@ npm run build
 
 ## 4. Настройка настоящего Telegram Login
 
-Telegram использует стандартный OIDC Authorization Code Flow со scope `openid profile phone telegram:bot_access`, PKCE S256 и серверной проверкой ID token. Телефон сохраняется только если он присутствует в подтверждённом Telegram ID token после согласия пользователя.
+Telegram использует стандартный OIDC Authorization Code Flow со scope `openid profile telegram:bot_access`, PKCE S256 и серверной проверкой ID token. Номер телефона не запрашивается; уже сохранённый телефон остаётся необязательным полем профиля.
 
 В BotFather для бота, представляющего DAO Rus:
 
@@ -634,7 +634,7 @@ Legacy bridge был переходником между старым Telegram L
 
 ## 10. Проверка Proposal v0.1
 
-1. авторизованный Participant с canonical `membership_status = 'participant'` открывает `/proposals`;
+1. авторизованный Participant с canonical `membership_status = 'participant'` открывает `/veche`;
 2. создаёт предложение с непустыми заголовком и текстом;
 3. предложение появляется первым в списке;
 4. в `events` появляется `proposal.created` с ID и заголовком предложения;
