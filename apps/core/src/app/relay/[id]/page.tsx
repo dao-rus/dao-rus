@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { notFound, redirect } from "next/navigation";
 import { getCurrentParticipant } from "@/lib/session";
+import { readInterfaceTexts } from "@/lib/interface-texts";
 import { getRelayEncounter, listRelayMessages, RelayValidationError } from "@/lib/relay";
 
 export const dynamic = "force-dynamic";
@@ -20,7 +21,10 @@ export default async function RelayDetailPage({
     throw error;
   }
   if (!encounter) notFound();
-  const messages = await listRelayMessages(participant.id, encounter.id);
+  const [messages, { values: texts }] = await Promise.all([
+    listRelayMessages(participant.id, encounter.id),
+    readInterfaceTexts(),
+  ]);
   const otherRole = encounter.role === "author" ? "Откликнувшийся" : "Автор сигнала";
   const writable = encounter.status !== "cancelled";
 
@@ -28,7 +32,7 @@ export default async function RelayDetailPage({
     <main className="shell">
       <section className="card exchangePage">
         <div className="eyebrow">DAO Rus · Анонимный диалог</div>
-        <h1>Диалог</h1>
+        <h1>{texts["relay.dialog_title"]}</h1>
         <p className="relaySignal">{encounter.body}</p>
         <p className="muted">Вы: {encounter.role === "author" ? "Автор сигнала" : "Откликнувшийся"}</p>
         {encounter.other ? (
@@ -50,7 +54,7 @@ export default async function RelayDetailPage({
               <strong>{message.mine ? "Вы" : encounter.other?.name ?? otherRole}</strong>
               <p>{message.body}</p>
             </article>
-          )) : <p className="muted">Сообщений пока нет.</p>}
+          )) : <p className="muted">{texts["relay.messages_empty"]}</p>}
         </div>
         {writable ? (
           <>
@@ -80,9 +84,9 @@ export default async function RelayDetailPage({
         ) : null}
         <div className="actions">
           <Link className="button secondary" href={writable ? "/relay" : "/relay?archive=1"}>
-            {writable ? "Диалоги" : "Архив"}
+            {writable ? texts["relay.list_title"] : "Архив"}
           </Link>
-          <Link className="button secondary" href="/exchange">Нужно / есть</Link>
+          <Link className="button secondary" href="/exchange">{texts["exchange.title"]}</Link>
         </div>
       </section>
     </main>

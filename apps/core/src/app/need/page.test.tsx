@@ -2,9 +2,10 @@ import { isValidElement, type ReactElement, type ReactNode } from "react";
 import { NextRequest } from "next/server";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
-const mocks = vi.hoisted(() => ({ getCurrentParticipant: vi.fn(), addProfileSignal: vi.fn() }));
+const mocks = vi.hoisted(() => ({ getCurrentParticipant: vi.fn(), addProfileSignal: vi.fn(), readInterfaceTexts: vi.fn() }));
 
 vi.mock("@/lib/session", () => ({ getCurrentParticipant: mocks.getCurrentParticipant }));
+vi.mock("@/lib/interface-texts", () => ({ readInterfaceTexts: mocks.readInterfaceTexts }));
 vi.mock("@/lib/config", () => ({ isTelegramConfigured: () => true, appBaseUrl: () => "https://core.daorus.org" }));
 vi.mock("@/lib/profile-about", () => ({
   addProfileSignal: mocks.addProfileSignal,
@@ -47,7 +48,14 @@ function findElement(node: ReactNode, matches: (element: ReactElement) => boolea
 }
 
 describe("/need entry", () => {
-  beforeEach(() => vi.clearAllMocks());
+  beforeEach(() => {
+    vi.clearAllMocks();
+    mocks.readInterfaceTexts.mockResolvedValue({ values: {
+      "need.title": "Что вам нужно?",
+      "need.lead": "Опишите потребность своими словами. Запись появится в вашем профиле.",
+      "exchange.title": "Нужно / есть",
+    } });
+  });
 
   it("asks the question and offers direct login to the same screen", async () => {
     mocks.getCurrentParticipant.mockResolvedValue(null);
@@ -59,6 +67,18 @@ describe("/need entry", () => {
     expect(telegramEntryMode("signed-data")).toBe("mini_app");
   });
 
+  it("uses the edited Need title and lead", async () => {
+    mocks.getCurrentParticipant.mockResolvedValue({ id: "participant-id" });
+    mocks.readInterfaceTexts.mockResolvedValue({ values: {
+      "need.title": "Расскажите, что нужно",
+      "need.lead": "Свободный текст потребности",
+      "exchange.title": "Обмен",
+    } });
+    const page = await NeedPage({ searchParams: Promise.resolve({}) });
+    expect(textContent(page)).toContain("Расскажите, что нужно");
+    expect(textContent(page)).toContain("Свободный текст потребности");
+    expect(textContent(page)).toContain("Обмен");
+  });
   it("shows a prominent confirmation and blank next form after a successful Mini App Need save", async () => {
     mocks.getCurrentParticipant.mockResolvedValue({ id: "participant-id" });
     mocks.addProfileSignal.mockResolvedValue(undefined);

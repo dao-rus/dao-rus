@@ -6,21 +6,19 @@ const mocks = vi.hoisted(() => ({
   hasPrototypeAdminAccess: vi.fn(),
   readInterfaceTexts: vi.fn(),
   redirect: vi.fn(),
+  fields: [
+    { section: "Главная", key: "home.title", label: "Заголовок", defaultValue: "ДАО Русь", multiline: false },
+    { section: "Нужно / есть", key: "exchange.title", label: "Заголовок", defaultValue: "Нужно / есть", multiline: false },
+    { section: "Нужно / есть", key: "exchange.lead", label: "Вводный текст", defaultValue: "Текст", multiline: true },
+    { section: "Мне нужно", key: "need.title", label: "Заголовок", defaultValue: "Что вам нужно?", multiline: false },
+  ],
 }));
 
 vi.mock("next/navigation", () => ({ redirect: mocks.redirect }));
 vi.mock("@/lib/session", () => ({ getCurrentParticipant: mocks.getCurrentParticipant }));
 vi.mock("@/lib/config", () => ({ hasPrototypeAdminAccess: mocks.hasPrototypeAdminAccess }));
 vi.mock("@/lib/interface-texts", () => ({
-  interfaceTextFields: [
-    { key: "home.eyebrow", label: "Надпись над заголовком", defaultValue: "Ядро", multiline: false },
-    { key: "home.title", label: "Заголовок", defaultValue: "ДАО Русь", multiline: false },
-    { key: "home.lead", label: "Основной текст", defaultValue: "Текст", multiline: true },
-    { key: "home.login_button", label: "Кнопка входа", defaultValue: "Войти", multiline: false },
-    { key: "home.profile_button", label: "Кнопка профиля", defaultValue: "Профиль", multiline: false },
-    { key: "participants.title", label: "Заголовок раздела «Ядро»", defaultValue: "Сеть", multiline: false },
-    { key: "profile.eyebrow", label: "Надпись над именем в профиле", defaultValue: "Профиль", multiline: false },
-  ],
+  interfaceTextFields: mocks.fields,
   readInterfaceTexts: mocks.readInterfaceTexts,
 }));
 
@@ -31,6 +29,13 @@ function textContent(node: ReactNode): string {
   if (Array.isArray(node)) return node.map(textContent).join(" ");
   if (!isValidElement(node)) return "";
   return textContent((node.props as { children?: ReactNode }).children);
+}
+
+function collectProps(node: ReactNode, matches: (props: Record<string, unknown>) => boolean): Record<string, unknown>[] {
+  if (Array.isArray(node)) return node.flatMap((child) => collectProps(child, matches));
+  if (!isValidElement(node)) return [];
+  const props = node.props as Record<string, unknown>;
+  return [...(matches(props) ? [props] : []), ...collectProps(props.children as ReactNode, matches)];
 }
 
 describe("/admin/interface", () => {
@@ -50,39 +55,24 @@ describe("/admin/interface", () => {
     expect(mocks.readInterfaceTexts).not.toHaveBeenCalled();
   });
 
-  it("shows the fixed text fields to an admin", async () => {
+  it("groups all fields from registry metadata without a separate admin field list", async () => {
     mocks.getCurrentParticipant.mockResolvedValue({ id: "admin" });
     mocks.hasPrototypeAdminAccess.mockReturnValue(true);
     mocks.readInterfaceTexts.mockResolvedValue({
-      values: {
-        "home.eyebrow": "Ядро",
-        "home.title": "ДАО Русь",
-        "home.lead": "Текст",
-        "home.login_button": "Войти",
-        "home.profile_button": "Профиль",
-        "participants.title": "Сеть",
-        "profile.eyebrow": "Профиль",
-      },
-      overrides: {
-        "home.eyebrow": null,
-        "home.title": null,
-        "home.lead": null,
-        "home.login_button": null,
-        "home.profile_button": null,
-        "participants.title": null,
-        "profile.eyebrow": null,
-      },
+      values: Object.fromEntries(mocks.fields.map((field) => [field.key, field.defaultValue])),
+      overrides: Object.fromEntries(mocks.fields.map((field) => [field.key, null])),
     });
 
     const page = await InterfacePage({ searchParams: Promise.resolve({}) });
     const text = textContent(page);
-    expect(text).toContain("Тексты интерфейса");
-    expect(text).toContain("Надпись над заголовком");
-    expect(text).toContain("Основной текст");
-    expect(text).toContain("Кнопка входа");
-    expect(text).toContain("Кнопка профиля");
-    expect(text).toContain("Заголовок раздела «Ядро»");
-    expect(text).toContain("Надпись над именем в профиле");
+    expect(text).toContain("Пользовательские тексты разделов DAO Core");
+    expect(text).not.toContain("Тексты главной страницы");
+    for (const section of new Set(mocks.fields.map((field) => field.section))) {
+      expect(text).toContain(section);
+    }
+    const names = collectProps(page, (props) => mocks.fields.some((field) => field.key === props.name))
+      .map((props) => props.name);
+    expect(names).toEqual(mocks.fields.map((field) => field.key));
     expect(text).toContain("Сохранить тексты");
   });
 });

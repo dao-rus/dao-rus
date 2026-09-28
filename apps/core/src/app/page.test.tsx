@@ -31,6 +31,8 @@ describe("home interface texts", () => {
       "home.lead": "Свой основной текст",
       "home.login_button": "Свой вход",
       "home.profile_button": "Свой профиль",
+      "participants.title": "Моя сеть",
+      "exchange.title": "Обмен",
     } });
   });
 
@@ -48,7 +50,8 @@ describe("home interface texts", () => {
     mocks.getCurrentParticipant.mockResolvedValue({ id: "participant" });
     const page = await Home({ searchParams: Promise.resolve({}) });
     expect(textContent(page)).toContain("Свой профиль");
-    expect(textContent(page)).toContain("Сеть");
+    expect(textContent(page)).toContain("Моя сеть");
+    expect(textContent(page)).toContain("Обмен");
     expect(textContent(page)).toContain("Вече");
   });
 });

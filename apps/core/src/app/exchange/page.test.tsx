@@ -5,8 +5,10 @@ const mocks = vi.hoisted(() => ({
   participant: vi.fn(),
   signals: vi.fn(),
   encounters: vi.fn(),
+  texts: vi.fn(),
 }));
 vi.mock("@/lib/session", () => ({ getCurrentParticipant: mocks.participant }));
+vi.mock("@/lib/interface-texts", () => ({ readInterfaceTexts: mocks.texts }));
 vi.mock("@/lib/relay", () => ({
   listBlindSignals: mocks.signals,
   listRelayEncounters: mocks.encounters,
@@ -33,6 +35,12 @@ describe("anonymous Need/Have catalog", () => {
     vi.clearAllMocks();
     mocks.participant.mockResolvedValue({ id: "viewer" });
     mocks.encounters.mockResolvedValue([]);
+    mocks.texts.mockResolvedValue({ values: {
+      "exchange.title": "Нужно / есть",
+      "exchange.lead": "Сначала — дело, потом — знакомство. Контакты открываются только по взаимному согласию.",
+      "exchange.empty": "Сигналов пока нет.",
+      "relay.list_title": "Диалоги",
+    } });
   });
 
   it("shows only safe text and own marker, and never offers self-response", async () => {
@@ -53,7 +61,19 @@ describe("anonymous Need/Have catalog", () => {
 
   it("requests only have signals for the second tab", async () => {
     mocks.signals.mockResolvedValue([]);
-    await ExchangePage({ searchParams: Promise.resolve({ tab: "have" }) });
+    mocks.texts.mockResolvedValue({ values: {
+      "exchange.title": "Свои дела",
+      "exchange.lead": "Новый вводный текст",
+      "exchange.empty": "Список пуст",
+      "relay.list_title": "Переписки",
+    } });
+    const page = await ExchangePage({ searchParams: Promise.resolve({ tab: "have" }) });
     expect(mocks.signals).toHaveBeenCalledWith("viewer", "have");
+    const text = textContent(page);
+    expect(text).toContain("Свои дела");
+    expect(text).toContain("Новый вводный текст");
+    expect(text).toContain("Список пуст");
+    expect(text).toContain("Переписки");
+    expect(text).not.toContain("Анонимных сигналов пока нет.");
   });
 });

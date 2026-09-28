@@ -64,8 +64,8 @@ export default async function ParticipantsPage({ searchParams }: ParticipantsPag
           <div className="profileActions">
             <Link className="button secondary" href="/">Главная</Link>
             <Link className="button secondary" href="/veche">Вече</Link>
-            <Link className="button secondary" href="/exchange">Нужно / есть</Link>
-            <Link className="button secondary" href="/profile">Ваш профиль</Link>
+            <Link className="button secondary" href="/exchange">{texts["exchange.title"]}</Link>
+            <Link className="button secondary" href="/profile">{texts["home.profile_button"]}</Link>
           </div>
         </div>
 

@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { redirect } from "next/navigation";
 import { getCurrentParticipant } from "@/lib/session";
+import { readInterfaceTexts } from "@/lib/interface-texts";
 import { listBlindSignals, listRelayEncounters } from "@/lib/relay";
 
 export const dynamic = "force-dynamic";
@@ -14,21 +15,23 @@ export default async function ExchangePage({
   if (!participant) redirect("/");
   const params = await searchParams;
   const kind = params.tab === "have" ? "have" : "need";
-  const [signals, dialogs] = await Promise.all([
+  const [signals, dialogs, { values: texts }] = await Promise.all([
     listBlindSignals(participant.id, kind),
     listRelayEncounters(participant.id, false),
+    readInterfaceTexts(),
   ]);
 
   return (
     <main className="shell">
       <section className="card exchangePage">
         <div className="eyebrow">DAO Rus · Сеть</div>
-        <h1>Нужно / есть</h1>
+        <h1>{texts["exchange.title"]}</h1>
+        <p className="lead">{texts["exchange.lead"]}</p>
         <p className="muted">Сигналы опубликованы без имени автора. Не указывайте в тексте данные, по которым вас можно легко узнать.</p>
         <nav className="actions" aria-label="Разделы">
           <Link className={kind === "need" ? "button primary" : "button secondary"} href="/exchange?tab=need">Мне нужно</Link>
           <Link className={kind === "have" ? "button primary" : "button secondary"} href="/exchange?tab=have">У меня есть</Link>
-          <Link className="button secondary" href="/relay">Диалоги{dialogs.length ? " (" + dialogs.length + ")" : ""}</Link>
+          <Link className="button secondary" href="/relay">{texts["relay.list_title"]}{dialogs.length ? " (" + dialogs.length + ")" : ""}</Link>
         </nav>
         <div className="exchangeCards">
           {signals.length ? signals.map((signal) => (
@@ -44,7 +47,7 @@ export default async function ExchangePage({
                 </form>
               )}
             </article>
-          )) : <p className="muted">Анонимных сигналов пока нет.</p>}
+          )) : <p className="muted">{texts["exchange.empty"]}</p>}
         </div>
         <div className="actions">
           <Link className="button secondary" href={kind === "need" ? "/need" : "/profile"}>

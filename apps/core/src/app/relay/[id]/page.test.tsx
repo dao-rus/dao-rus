@@ -5,8 +5,10 @@ const mocks = vi.hoisted(() => ({
   participant: vi.fn(),
   encounter: vi.fn(),
   messages: vi.fn(),
+  texts: vi.fn(),
 }));
 vi.mock("@/lib/session", () => ({ getCurrentParticipant: mocks.participant }));
+vi.mock("@/lib/interface-texts", () => ({ readInterfaceTexts: mocks.texts }));
 vi.mock("@/lib/relay", () => ({
   getRelayEncounter: mocks.encounter,
   listRelayMessages: mocks.messages,
@@ -35,6 +37,12 @@ describe("anonymous relay dialog", () => {
     vi.clearAllMocks();
     mocks.participant.mockResolvedValue({ id: "viewer" });
     mocks.messages.mockResolvedValue([{ id: "message", body: "Здравствуйте", mine: false }]);
+    mocks.texts.mockResolvedValue({ values: {
+      "relay.dialog_title": "Диалог",
+      "relay.messages_empty": "Сообщений пока нет.",
+      "relay.list_title": "Диалоги",
+      "exchange.title": "Нужно / есть",
+    } });
   });
 
   it("keeps names and profile links hidden with one consent", async () => {
@@ -42,7 +50,15 @@ describe("anonymous relay dialog", () => {
       id: encounterId, kind: "need", body: "Нужна помощь", status: "active",
       role: "author", myConsent: true, other: null,
     });
+    mocks.texts.mockResolvedValue({ values: {
+      "relay.dialog_title": "Переписка",
+      "relay.messages_empty": "Сообщений пока нет.",
+      "relay.list_title": "Диалоги",
+      "exchange.title": "Обмен",
+    } });
     const page = await RelayDetailPage({ params: Promise.resolve({ id: encounterId }) });
+    expect(textContent(page)).toContain("Переписка");
+    expect(textContent(page)).toContain("Обмен");
     expect(textContent(page)).toContain("Ожидаем вторую сторону");
     expect(textContent(page)).toContain("Откликнувшийся");
     expect(findProps(page, (props) => String(props.href ?? "").startsWith("/profile/"))).toHaveLength(0);

@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { isTelegramConfigured } from "@/lib/config";
 import { getCurrentParticipant } from "@/lib/session";
+import { readInterfaceTexts } from "@/lib/interface-texts";
 import { NeedAuthGate } from "./need-auth-gate";
 
 export const dynamic = "force-dynamic";
@@ -10,20 +11,21 @@ export default async function NeedPage({
 }: {
   searchParams: Promise<{ saved?: string; error?: string }>;
 }) {
-  const [participant, params] = await Promise.all([
+  const [participant, params, { values: texts }] = await Promise.all([
     getCurrentParticipant(),
     searchParams,
+    readInterfaceTexts(),
   ]);
 
   return (
     <main className="shell">
       <section className="card needCard">
         <div className="eyebrow">DAO Rus · Мне нужно</div>
-        <h1>Что вам нужно?</h1>
+        <h1>{texts["need.title"]}</h1>
         <NeedAuthGate>
           {participant ? (
             <>
-              <p className="muted">Опишите потребность своими словами. Запись появится в вашем профиле.</p>
+              <p className="muted">{texts["need.lead"]}</p>
               {params.saved === "1" ? (
                 <div id="need-saved" className="needSavedNotice" role="status">
                   <strong>✓ Запись сохранена</strong>
@@ -57,7 +59,7 @@ export default async function NeedPage({
                 <button className="button primary" type="submit">Сохранить</button>
               </form>
               <Link className="needProfileLink" href="/profile">Мой профиль</Link>
-              {" · "}<Link href="/exchange">Нужно / есть</Link>
+              {" · "}<Link href="/exchange">{texts["exchange.title"]}</Link>
             </>
           ) : (
             <>

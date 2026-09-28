@@ -53,7 +53,7 @@ function findProps(node: ReactNode, matches: (props: Record<string, unknown>) =>
 }
 
 describe("/profile copy", () => {
-  it("shows the editable eyebrow, about section and a fixed Сеть link label", async () => {
+  it("shows the editable eyebrow, about section and navigation labels", async () => {
     mocks.getCurrentParticipant.mockResolvedValue({
       id: "10000000-0000-4000-8000-000000000001",
       displayName: "Анна",
@@ -74,7 +74,9 @@ describe("/profile copy", () => {
       interests: [],
       signals: [],
     });
-    mocks.readInterfaceTexts.mockResolvedValue({ values: { "profile.eyebrow": "О себе" } });
+    mocks.readInterfaceTexts.mockResolvedValue({ values: {
+      "profile.eyebrow": "О себе", "participants.title": "Моя сеть", "exchange.title": "Обмен",
+    } });
     mocks.getDarusBalance.mockResolvedValue("0.100000");
     mocks.getReputationSummary.mockResolvedValue({ positiveCount: 2, viewerSignal: null });
 
@@ -89,7 +91,8 @@ describe("/profile copy", () => {
     expect(text).toContain("У меня есть");
     expect(text).toContain("Кому видно");
     expect(text).not.toContain("Кто видит");
-    expect(text).toContain("Сеть");
+    expect(text).toContain("Моя сеть");
+    expect(text).toContain("Обмен");
     expect(text).not.toContain("Ядро");
     expect(text).toContain("О себе в Telegram");
     expect(text).toContain("+79990000000");
