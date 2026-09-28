@@ -497,6 +497,21 @@ dd { margin: 6px 0 0; }
 .signalEntryCard .profileItems { margin-bottom: 10px; }
 
 .needCard h1 { font-size: clamp(32px, 7vw, 52px); }
+.needSavedNotice {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-top: 20px;
+  padding: 18px;
+  border: 1px solid var(--accent);
+  border-radius: 12px;
+  background: #eaf4e9;
+  color: var(--accent);
+}
+.needSavedNotice strong { font-size: 19px; }
+.needSavedNotice .button { border-color: var(--accent); }
 .needForm { margin-top: 24px; }
 .needForm textarea { min-height: 150px; }
 .needForm select { font: inherit; }

@@ -70,6 +70,12 @@ export function NeedAuthGate({
     return () => { active = false; };
   }, [router]);
 
+  useEffect(() => {
+    if (mode === "browser") {
+      document.getElementById("need-saved")?.scrollIntoView({ block: "center" });
+    }
+  }, [mode]);
+
   if (mode === "checking") {
     return <p className="muted" role="status">Проверяем вход через Telegram…</p>;
   }

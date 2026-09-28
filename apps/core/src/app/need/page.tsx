@@ -25,14 +25,15 @@ export default async function NeedPage({
             <>
               <p className="muted">Опишите потребность своими словами. Запись появится в вашем профиле.</p>
               {params.saved === "1" ? (
-                <p className="formNotice" role="status">
-                  Потребность сохранена. <Link href="/profile">Посмотреть в профиле</Link>
-                </p>
+                <div id="need-saved" className="needSavedNotice" role="status">
+                  <strong>✓ Запись сохранена</strong>
+                  <Link className="button secondary" href="/profile">Посмотреть в профиле</Link>
+                </div>
               ) : null}
               {params.error === "invalid" ? (
                 <p className="formError" role="alert">Введите текст до 500 символов и выберите видимость.</p>
               ) : null}
-              <form className="aboutForm needForm" action="/api/need" method="post">
+              <form key={params.saved === "1" ? "after-save" : "draft"} className="aboutForm needForm" action="/api/need" method="post">
                 <label htmlFor="need-body">Ваша потребность</label>
                 <textarea
                   id="need-body"
