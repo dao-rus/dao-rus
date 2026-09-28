@@ -35,6 +35,7 @@ export default async function Home({
               {texts["home.profile_button"]}
             </Link>
             <Link className="button secondary" href="/participants">Сеть</Link>
+            <Link className="button secondary" href="/exchange">Нужно / есть</Link>
             <Link className="button secondary" href="/veche">Вече</Link>
           </div>
         ) : (

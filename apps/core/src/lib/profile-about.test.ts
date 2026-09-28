@@ -4,6 +4,7 @@ import {
   getVisibleProfileAboutWithDatabase,
   normalizeInterest,
   normalizeProfileBio,
+  normalizeSignalVisibility,
   normalizeResidence,
   normalizeProfileVisibility,
   normalizeSignalBody,
@@ -176,5 +177,37 @@ describe("profile residence reads", () => {
     expect((await getVisibleProfileAboutWithDatabase(database, "owner", "viewer"))?.residence)
       .toEqual({ name: "Казань", type: "город", country: "Россия" });
     expect(queries.some((text) => text.includes("residence_name, residence_type, residence_country"))).toBe(true);
+  });
+});
+
+describe("anonymous signal publication boundary", () => {
+  it("keeps network-blind and match-only signals out of another participant's profile", async () => {
+    const signals = [
+      { id: "blind", kind: "need", body: "Анонимно", visibility: "network_blind" },
+      { id: "hidden", kind: "need", body: "Скрыто", visibility: "match_only" },
+      { id: "member", kind: "need", body: "Участникам", visibility: "members" },
+    ];
+    const queries: string[] = [];
+    const database = { async query(text: string) {
+      queries.push(text);
+      if (text.includes("FROM participants")) return { rowCount: 1, rows: [{
+        profile_bio: "", profile_bio_visibility: "members",
+      }] };
+      if (text.includes("FROM profile_signals")) return {
+        rowCount: text.includes("visibility IN ('public', 'members')") ? 1 : 3,
+        rows: text.includes("visibility IN ('public', 'members')")
+          ? [signals[2]] : signals,
+      };
+      return { rowCount: 0, rows: [] };
+    } };
+    const own = await getProfileAboutWithDatabase(database, "author");
+    const foreign = await getVisibleProfileAboutWithDatabase(database, "author", "viewer");
+    expect(own?.signals.map((signal) => signal.id)).toEqual(["blind", "hidden", "member"]);
+    expect(foreign?.signals.map((signal) => signal.id)).toEqual(["member"]);
+    expect(queries.some((query) => query.includes("visibility IN ('public', 'members')"))).toBe(true);
+    expect(normalizeSignalVisibility("network_blind", "need")).toBe("network_blind");
+    expect(normalizeSignalVisibility("network_blind", "have")).toBe("network_blind");
+    expect(() => normalizeSignalVisibility("network_blind", "want")).toThrow();
+    expect(() => normalizeSignalVisibility("network_blind", "can")).toThrow();
   });
 });

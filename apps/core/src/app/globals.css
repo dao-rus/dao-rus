@@ -516,3 +516,16 @@ dd { margin: 6px 0 0; }
 .needForm textarea { min-height: 150px; }
 .needForm select { font: inherit; }
 .needProfileLink { display: inline-block; margin-top: 24px; }
+
+.exchangePage h1 { font-size: clamp(32px, 7vw, 52px); }
+.exchangeCards { display: grid; gap: 14px; margin: 26px 0; }
+.exchangeCard { border: 1px solid var(--line); border-radius: 12px; padding: 18px; }
+.exchangeCard p:first-child { margin-top: 0; white-space: pre-wrap; overflow-wrap: anywhere; }
+.exchangeCard form { margin-top: 16px; }
+.relaySignal { padding: 16px; border: 1px solid var(--line); border-radius: 12px; white-space: pre-wrap; overflow-wrap: anywhere; }
+.relayMessages { display: grid; gap: 12px; margin: 28px 0; }
+.relayMessage { border: 1px solid var(--line); border-radius: 12px; padding: 14px; }
+.relayMessage.mine { border-color: var(--accent); background: #eaf4e9; }
+.relayMessage p { margin-bottom: 0; white-space: pre-wrap; overflow-wrap: anywhere; }
+.relayForm textarea { min-height: 100px; }
+.relayReveal { border: 1px solid var(--accent); border-radius: 12px; padding: 16px; background: #eaf4e9; }

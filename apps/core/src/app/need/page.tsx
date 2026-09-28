@@ -47,15 +47,17 @@ export default async function NeedPage({
                   <option value="members">Участникам ДАО</option>
                   <option value="public">Всем</option>
                   <option value="match_only">Только при совпадении</option>
+                  <option value="network_blind">Анонимно в «Нужно / есть»</option>
                   <option value="private">Только мне</option>
                 </select>
                 <p className="muted privacyHint">
                   Это запись в профиле, а не публичное объявление или обязательство.
-                  Поиск совпадений пока не подключён.
+                  Поиск совпадений пока не подключён. Для анонимной публикации не указывайте в тексте данные, по которым вас можно легко узнать.
                 </p>
                 <button className="button primary" type="submit">Сохранить</button>
               </form>
               <Link className="needProfileLink" href="/profile">Мой профиль</Link>
+              {" · "}<Link href="/exchange">Нужно / есть</Link>
             </>
           ) : (
             <>

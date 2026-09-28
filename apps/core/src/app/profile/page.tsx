@@ -45,6 +45,7 @@ const visibilityLabels: Record<string, string> = {
   members: "Участникам ДАО",
   circle: "Моему кругу",
   match_only: "Только при совпадении",
+  network_blind: "Анонимно в «Нужно / есть»",
   private: "Только мне",
 };
 
@@ -107,6 +108,7 @@ export default async function ProfilePage({ searchParams }: ProfilePageProps) {
           </div>
           <div className="profileActions">
             <Link className="button secondary" href="/participants">Сеть</Link>
+            <Link className="button secondary" href="/exchange">Нужно / есть</Link>
             {hasAdminAccess ? <Link className="button secondary" href="/admin">Управление</Link> : null}
             <Link className="button secondary" href="/veche">Вече</Link>
             <form action="/api/auth/logout" method="post">
@@ -236,11 +238,16 @@ export default async function ProfilePage({ searchParams }: ProfilePageProps) {
                       <label>
                         Кому видно
                         <select name="visibility" defaultValue="members">
-                          {matchableVisibilityOptions.map((value) => (
+                          {(kind === "need" || kind === "have"
+                            ? [...matchableVisibilityOptions, "network_blind"] : matchableVisibilityOptions
+                          ).map((value) => (
                             <option key={value} value={value}>{visibilityLabels[value]}</option>
                           ))}
                         </select>
                       </label>
+                      {(kind === "need" || kind === "have") ? (
+                        <p className="muted privacyHint">При анонимной публикации не указывайте в тексте данные, по которым вас можно легко узнать.</p>
+                      ) : null}
                       <button className="button secondary" type="submit">Добавить</button>
                     </form>
                   </section>

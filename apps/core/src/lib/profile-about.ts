@@ -9,6 +9,7 @@ export const PROFILE_VISIBILITIES = [
 ] as const;
 
 export type ProfileVisibility = (typeof PROFILE_VISIBILITIES)[number];
+export type ProfileSignalVisibility = ProfileVisibility | "network_blind";
 
 export const PROFILE_SIGNAL_KINDS = ["want", "need", "can", "have"] as const;
 export type ProfileSignalKind = (typeof PROFILE_SIGNAL_KINDS)[number];
@@ -23,7 +24,7 @@ export type ProfileSignal = {
   id: string;
   kind: ProfileSignalKind;
   body: string;
-  visibility: ProfileVisibility;
+  visibility: ProfileSignalVisibility;
 };
 
 export type Residence = {
@@ -131,6 +132,13 @@ export function normalizeProfileVisibility(value: unknown): ProfileVisibility {
   return value as ProfileVisibility;
 }
 
+export function normalizeSignalVisibility(value: unknown, kind: ProfileSignalKind): ProfileSignalVisibility {
+  if (value === "network_blind" && (kind === "need" || kind === "have")) {
+    return value;
+  }
+  return normalizeProfileVisibility(value);
+}
+
 export function normalizeSignalKind(value: unknown): ProfileSignalKind {
   if (
     typeof value !== "string" ||
@@ -165,7 +173,7 @@ function aboutFromRows(
       id: String(row.id),
       kind: String(row.kind) as ProfileSignalKind,
       body: String(row.body),
-      visibility: String(row.visibility) as ProfileVisibility,
+      visibility: String(row.visibility) as ProfileSignalVisibility,
     })),
   };
 }
@@ -438,7 +446,7 @@ export async function addProfileSignalWithDatabase(
 ): Promise<void> {
   const kind = normalizeSignalKind(kindValue);
   const body = normalizeSignalBody(bodyValue);
-  const visibility = normalizeProfileVisibility(visibilityValue);
+  const visibility = normalizeSignalVisibility(visibilityValue, kind);
 
   await withProfileTransaction(database, async (client) => {
     const result = await client.query(
