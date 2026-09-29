@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { devAuthEnabled, isTelegramConfigured } from "@/lib/config";
-import { DAO_CODE_CLAUSES, DAO_CODE_TITLE } from "@/lib/dao-code";
+import { DAO_CODE_CLAUSES, DAO_CODE_TITLE } from "../lib/dao-code";
 import { readInterfaceTexts } from "@/lib/interface-texts";
 import { getCurrentParticipant } from "@/lib/session";
 
