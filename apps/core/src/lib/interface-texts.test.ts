@@ -77,6 +77,27 @@ describe("interface texts", () => {
     expect(database.released).toBe(true);
   });
 
+  it("uses the registry for new keys and ignores unregistered form and stored keys", async () => {
+    const database = new FakeDatabase();
+    database.overrides.set("unlisted.key", "Старая посторонняя запись");
+    const field = interfaceTextFields.find((item) => item.key === "relay.messages_empty");
+    expect(field).toBeDefined();
+    const form = formWithDefaults();
+    form.set(field!.key, "Пока нет переписки");
+    form.set("unlisted.key", "Попытка изменить");
+
+    const desired = parseInterfaceTextForm(form);
+    expect(Object.keys(desired)).toEqual(interfaceTextFields.map((item) => item.key));
+    expect(await saveInterfaceTextsWithDatabase(database, "admin-id", desired))
+      .toEqual([field!.key]);
+    expect(database.overrides.get(field!.key)).toBe("Пока нет переписки");
+    expect(database.overrides.get("unlisted.key")).toBe("Старая посторонняя запись");
+
+    const state = await readInterfaceTextsWithDatabase(database);
+    expect(state.values[field!.key]).toBe("Пока нет переписки");
+    expect("unlisted.key" in state.values).toBe(false);
+    expect("unlisted.key" in state.overrides).toBe(false);
+  });
   it("removes one override to restore its default without changing other fields", async () => {
     const database = new FakeDatabase();
     database.overrides.set("home.title", "Старый заголовок");
