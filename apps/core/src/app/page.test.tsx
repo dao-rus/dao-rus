@@ -31,6 +31,7 @@ describe("home interface texts", () => {
       "home.lead": "Свой основной текст",
       "home.login_button": "Свой вход",
       "home.profile_button": "Свой профиль",
+      "home.code_link": "Открыть наш Кодекс",
       "participants.title": "Моя сеть",
       "exchange.title": "Обмен",
     } });
@@ -44,6 +45,9 @@ describe("home interface texts", () => {
     expect(text).toContain("Свой заголовок");
     expect(text).toContain("Свой основной текст");
     expect(text).toContain("Свой вход");
+    expect(text).toContain("Не нападай первым.");
+    expect(text).toContain("Власть принадлежит народу.");
+    expect(text).toContain("Открыть наш Кодекс");
   });
 
   it("shows the overridden profile button after login", async () => {

@@ -10,6 +10,7 @@ export const interfaceTextFields = [
   },
   { section: "Главная", key: "home.login_button", label: "Кнопка входа", defaultValue: "Войти через Telegram", multiline: false },
   { section: "Главная", key: "home.profile_button", label: "Кнопка профиля", defaultValue: "Ваш профиль", multiline: false },
+  { section: "Главная", key: "home.code_link", label: "Ссылка на Кодекс", defaultValue: "Открыть Кодекс →", multiline: false },
   { section: "Сеть", key: "participants.title", label: "Заголовок", defaultValue: "Сеть", multiline: false },
   { section: "Нужно / есть", key: "exchange.title", label: "Заголовок", defaultValue: "Нужно / есть", multiline: false },
   { section: "Нужно / есть", key: "exchange.lead", label: "Вводный текст", defaultValue: "Сначала — дело, потом — знакомство. Контакты открываются только по взаимному согласию.", multiline: true },

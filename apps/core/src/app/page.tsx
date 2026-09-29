@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { devAuthEnabled, isTelegramConfigured } from "@/lib/config";
+import { DAO_CODE_CLAUSES, DAO_CODE_TITLE } from "@/lib/dao-code";
 import { readInterfaceTexts } from "@/lib/interface-texts";
 import { getCurrentParticipant } from "@/lib/session";
 
@@ -58,6 +59,15 @@ export default async function Home({
           </div>
         )}
 
+        <section className="homeCode" aria-labelledby="home-code-title">
+          <h2 id="home-code-title">{DAO_CODE_TITLE}</h2>
+          <ol className="homeCodeList">
+            {DAO_CODE_CLAUSES.map((clause) => (
+              <li key={clause.id}>{clause.text}</li>
+            ))}
+          </ol>
+          <Link className="metricLink" href="/code">{texts["home.code_link"]}</Link>
+        </section>
       </section>
     </main>
   );
