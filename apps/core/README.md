@@ -26,7 +26,7 @@
 - страница `/profile/activity` со статистикой за 7 и 30 дней и последними событиями;
 - создание простых предложений и список `/veche`;
 - приём сообщений одного разрешённого Telegram-чата через защищённый webhook;
-- одноразовый импорт Telegram roster snapshot без создания Participant;
+- одноразовый импорт Telegram roster snapshot; текущий v0.1 ещё не создаёт Participant, но архитектура предусматривает автосоздание по подтверждённому вступлению в основной форум;
 - защищённый прототипный Participant Registry для ручной классификации roster;
 - заглушки для трёх будущих профилей репутации: активность, отзывы, коммуникабельность;
 - локальный demo-login, чтобы проверить прототип до настройки BotFather;
@@ -374,6 +374,8 @@ default галочкой в форме. Только фактическое из
 без содержимого текстов в событии.
 
 ## 6. Одноразовый Telegram Roster v0.1
+
+**Важно:** описанный ниже importer отражает текущее поведение v0.1 и пока не реализует новое правило Telegram-first архитектуры: подтверждённое вступление в основной Telegram-форум должно создавать минимального `Participant` и связывать Telegram identity. До реализации этого vertical slice неизвестные Telegram ID в legacy importer остаются roster-записями без Participant.
 
 Bot API не предоставляет надёжный полный список участников закрытого supergroup/forum. Для лабораторного snapshot используется отдельный локальный MTProto-клиент под пользовательским Telegram-аккаунтом. Официальные точки отсчёта: [получение `api_id`/`api_hash`](https://core.telegram.org/api/obtaining_api_id), [авторизация пользователя](https://core.telegram.org/api/auth) и [`channels.getParticipants`](https://core.telegram.org/method/channels.getParticipants).
 
