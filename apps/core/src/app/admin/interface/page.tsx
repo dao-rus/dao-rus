@@ -1,10 +1,12 @@
 import Link from "next/link";
+import type { Metadata } from "next";
 import { redirect } from "next/navigation";
 import { hasPrototypeAdminAccess } from "@/lib/config";
 import { interfaceTextFields, readInterfaceTexts } from "@/lib/interface-texts";
 import { getCurrentParticipant } from "@/lib/session";
 
 export const dynamic = "force-dynamic";
+export const metadata: Metadata = { title: "Тексты интерфейса" };
 
 type InterfacePageProps = {
   searchParams: Promise<{ interface_update?: string }>;

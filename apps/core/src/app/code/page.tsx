@@ -1,4 +1,5 @@
 import Link from "next/link";
+import type { Metadata } from "next";
 import { CodeDiscussion } from "../../components/code-discussion";
 import { hasPrototypeAdminAccess } from "@/lib/config";
 import { DAO_CODE_CLAUSES, DAO_CODE_TITLE, DAO_CODE_VERSION } from "../../lib/dao-code";
@@ -6,6 +7,7 @@ import { listCodeComments, parseCodeSort, parseCodeSection } from "../../lib/cod
 import { getCurrentParticipant } from "@/lib/session";
 
 export const dynamic = "force-dynamic";
+export const metadata: Metadata = { title: "Кодекс руси" };
 
 type CodePageProps = { searchParams: Promise<{ sort?: string; section?: string }> };
 

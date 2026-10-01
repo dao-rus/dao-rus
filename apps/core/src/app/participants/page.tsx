@@ -1,4 +1,5 @@
 import Link from "next/link";
+import type { Metadata } from "next";
 import { redirect } from "next/navigation";
 import { TelegramAvatar } from "@/components/telegram-avatar";
 import { ParticipantName } from "../../components/participant-name";
@@ -8,6 +9,7 @@ import { normalizeResidence, residenceLabel, type Residence } from "@/lib/profil
 import { getCurrentParticipant } from "@/lib/session";
 
 export const dynamic = "force-dynamic";
+export const metadata: Metadata = { title: "Сеть" };
 
 type ParticipantsPageProps = {
   searchParams: Promise<{ q?: string; interest?: string; residence_name?: string; residence_type?: string; residence_country?: string }>;

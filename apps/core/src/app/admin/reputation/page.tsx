@@ -1,4 +1,5 @@
 import Link from "next/link";
+import type { Metadata } from "next";
 import { redirect } from "next/navigation";
 import { LocalDateTime } from "@/components/local-date-time";
 import { hasPrototypeAdminAccess } from "@/lib/config";
@@ -6,6 +7,7 @@ import { getReputationHistory } from "@/lib/reputation";
 import { getCurrentParticipant } from "@/lib/session";
 
 export const dynamic = "force-dynamic";
+export const metadata: Metadata = { title: "История репутационных сигналов" };
 
 export default async function AdminReputationPage() {
   const participant = await getCurrentParticipant();

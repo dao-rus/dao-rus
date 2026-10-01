@@ -1,9 +1,11 @@
 import Link from "next/link";
+import type { Metadata } from "next";
 import { redirect } from "next/navigation";
 import { getCurrentParticipant } from "@/lib/session";
 import { getReputationSummary } from "@/lib/reputation";
 
 export const dynamic = "force-dynamic";
+export const metadata: Metadata = { title: "Карма" };
 
 export default async function ReputationPage() {
   const participant = await getCurrentParticipant();

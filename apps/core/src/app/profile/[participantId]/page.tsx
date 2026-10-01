@@ -1,4 +1,5 @@
 import Link from "next/link";
+import type { Metadata } from "next";
 import { notFound, redirect } from "next/navigation";
 import { hasPrototypeAdminAccess } from "@/lib/config";
 import { DarusRewardCelebration } from "@/components/darus-reward-celebration";
@@ -12,6 +13,7 @@ import { formatDarusAmount, getVerificationRewardForFeedback } from "@/lib/token
 import { getVerificationProfile } from "@/lib/verification";
 
 export const dynamic = "force-dynamic";
+export const metadata: Metadata = { title: "Профиль участника" };
 
 const signalLabels: Record<string, string> = {
   want: "Я хочу",

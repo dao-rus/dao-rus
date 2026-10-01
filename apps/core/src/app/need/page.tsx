@@ -1,10 +1,12 @@
 import Link from "next/link";
+import type { Metadata } from "next";
 import { isTelegramConfigured } from "@/lib/config";
 import { getCurrentParticipant } from "@/lib/session";
 import { readInterfaceTexts } from "@/lib/interface-texts";
 import { NeedAuthGate } from "./need-auth-gate";
 
 export const dynamic = "force-dynamic";
+export const metadata: Metadata = { title: "Что вам нужно?" };
 
 export default async function NeedPage({
   searchParams,

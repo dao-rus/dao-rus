@@ -1,10 +1,12 @@
 import Link from "next/link";
+import type { Metadata } from "next";
 import { notFound, redirect } from "next/navigation";
 import { getCurrentParticipant } from "@/lib/session";
 import { readInterfaceTexts } from "@/lib/interface-texts";
 import { getRelayEncounter, listRelayMessages, RelayValidationError } from "@/lib/relay";
 
 export const dynamic = "force-dynamic";
+export const metadata: Metadata = { title: "Диалог" };
 
 export default async function RelayDetailPage({
   params,

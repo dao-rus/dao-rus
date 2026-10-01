@@ -1,10 +1,12 @@
 import Link from "next/link";
+import type { Metadata } from "next";
 import { redirect } from "next/navigation";
 import { getCurrentParticipant } from "@/lib/session";
 import { readInterfaceTexts } from "@/lib/interface-texts";
 import { listBlindSignals, listRelayEncounters } from "@/lib/relay";
 
 export const dynamic = "force-dynamic";
+export const metadata: Metadata = { title: "Нужно / есть" };
 
 export default async function ExchangePage({
   searchParams,

@@ -1,10 +1,12 @@
 import Link from "next/link";
+import type { Metadata } from "next";
 import { redirect } from "next/navigation";
 import { LocalDateTime } from "@/components/local-date-time";
 import { getCurrentParticipant } from "@/lib/session";
 import { getDarusBalance, getDarusHistory } from "@/lib/tokenization";
 
 export const dynamic = "force-dynamic";
+export const metadata: Metadata = { title: "DARUS" };
 
 export default async function TokensPage() {
   const participant = await getCurrentParticipant();

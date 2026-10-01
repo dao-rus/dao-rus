@@ -1,10 +1,12 @@
 import Link from "next/link";
+import type { Metadata } from "next";
 import { redirect } from "next/navigation";
 import { hasPrototypeAdminAccess } from "@/lib/config";
 import { getCurrentParticipant } from "@/lib/session";
 import { getCurrentRewardRule } from "@/lib/tokenization";
 
 export const dynamic = "force-dynamic";
+export const metadata: Metadata = { title: "Тарифы DARUS" };
 
 type RewardsPageProps = { searchParams: Promise<{ reward_update?: string }> };
 

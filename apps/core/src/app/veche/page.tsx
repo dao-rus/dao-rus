@@ -1,4 +1,5 @@
 import Link from "next/link";
+import type { Metadata } from "next";
 import { redirect } from "next/navigation";
 import { LocalDateTime } from "@/components/local-date-time";
 import { ParticipantName } from "../../components/participant-name";
@@ -8,6 +9,7 @@ import { getParticipantIndicators } from "../../lib/participant-indicators";
 import { getCurrentParticipant } from "@/lib/session";
 
 export const dynamic = "force-dynamic";
+export const metadata: Metadata = { title: "Вече" };
 
 type ProposalsPageProps = {
   searchParams: Promise<{ proposal_create?: string }>;

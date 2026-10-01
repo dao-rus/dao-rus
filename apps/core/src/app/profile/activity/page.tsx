@@ -1,10 +1,12 @@
 import Link from "next/link";
+import type { Metadata } from "next";
 import { redirect } from "next/navigation";
 import { LocalDateTime } from "@/components/local-date-time";
 import { activityEventLabel, getActivitySummary } from "@/lib/activity";
 import { getCurrentParticipant } from "@/lib/session";
 
 export const dynamic = "force-dynamic";
+export const metadata: Metadata = { title: "Активность" };
 
 export default async function ActivityPage() {
   const participant = await getCurrentParticipant();

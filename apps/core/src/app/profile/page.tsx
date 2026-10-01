@@ -1,4 +1,5 @@
 import Link from "next/link";
+import type { Metadata } from "next";
 import { redirect } from "next/navigation";
 import { LocalDateTime } from "@/components/local-date-time";
 import { TelegramAvatar } from "@/components/telegram-avatar";
@@ -16,6 +17,7 @@ import { getDarusBalance } from "@/lib/tokenization";
 import { getVerificationProfile } from "@/lib/verification";
 
 export const dynamic = "force-dynamic";
+export const metadata: Metadata = { title: "Мой профиль" };
 
 const statusLabels: Record<string, string> = {
   none: "членство не установлено",
