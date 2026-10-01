@@ -80,7 +80,9 @@ export default async function ParticipantsPage({ searchParams }: ParticipantsPag
           <div>
             <div className="eyebrow">ДАО Русь</div>
             <h1>{community
-              ? `${community.type === "residence" ? texts["community.residence_title"] : texts["community.interest_title"]}: ${community.type === "residence" ? residenceLabel(community.residence) : community.interest}`
+              ? community.type === "residence"
+                ? `${texts["community.residence_title"]} ${residenceLabel(community.residence)}`
+                : `${texts["community.interest_title"]}: ${community.interest}`
               : texts["participants.title"]}</h1>
             <p className="muted">{community ? "Участников" : "Найдено"}: {community ? members.length : participants.length}.</p>
             {interestFilter ? (

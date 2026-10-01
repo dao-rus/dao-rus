@@ -70,6 +70,7 @@ describe("/participants", () => {
     });
     mocks.readInterfaceTexts.mockResolvedValue({ values: {
       "participants.title": "Сеть", "community.members_title": "Участники",
+      "community.residence_title": "Сообщество", "community.interest_title": "Сообщество",
       "community.feed_title": "Объявления", "community.feed_empty": "Пусто",
       "participants.sort_label": "Сортировка:", "participants.sort_name": "Имя",
       "participants.sort_verification": "Топ-верификация",
@@ -169,6 +170,8 @@ describe("/participants", () => {
       interest: "История", residence: null, viewerParticipantId: "viewer",
     });
     expect(textContent(page)).toMatch(/Интерес:\s+История/);
+    expect(textContent(page)).toContain("Сообщество: История");
+    expect(textContent(page)).not.toContain("Сообщество интереса");
     expect(hrefs(page)).toContain("/participants?interest=%D0%98%D1%81%D1%82%D0%BE%D1%80%D0%B8%D1%8F");
     expect(hrefs(page)).toContain("/participants");
     expect(mocks.listCommunityPosts).toHaveBeenCalledWith({ type: "interest", interest: "История" });
@@ -207,6 +210,8 @@ describe("/participants", () => {
       interest: "", residence: { name: "Казань", type: "город", country: "Россия" }, viewerParticipantId: "viewer",
     });
     expect(textContent(page)).toMatch(/Место жительства:\s+Казань, Россия/);
+    expect(textContent(page)).toContain("Сообщество Казань, Россия");
+    expect(textContent(page)).not.toContain("Сообщество места");
     expect(hrefs(page)).toContain("/participants?residence_name=%D0%9A%D0%B0%D0%B7%D0%B0%D0%BD%D1%8C&residence_type=%D0%B3%D0%BE%D1%80%D0%BE%D0%B4&residence_country=%D0%A0%D0%BE%D1%81%D1%81%D0%B8%D1%8F");
     expect(mocks.listCommunitySignals).toHaveBeenCalledWith(["owner"], "viewer");
     expect(textContent(page)).toContain("Я хочу");
