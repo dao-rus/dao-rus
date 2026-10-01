@@ -64,6 +64,7 @@ describe("Reception webhook", () => {
     const response = await POST(request(update));
     expect(await response.json()).toEqual({ ok: true, status: "sent" });
     expect(mocks.relayReceptionUpdate).toHaveBeenCalledWith(update);
+    expect(mocks.observeForumMemberUpdate).not.toHaveBeenCalled();
   });
 
   it("acknowledges an unsupported message without a webhook error", async () => {

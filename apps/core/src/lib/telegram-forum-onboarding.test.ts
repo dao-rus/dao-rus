@@ -21,7 +21,7 @@ vi.mock("./config", () => ({
 
 const participantId = "10000000-0000-4000-8000-000000000001";
 
-function fakeDatabase() {
+function fakeDatabase(hasIdentity = true) {
   const state: {
     status?: string;
     observedAt?: Date;
@@ -31,9 +31,24 @@ function fakeDatabase() {
   } = {};
   const events: string[] = [];
   const eventPayloads: unknown[] = [];
+  let identityParticipantId: string | null = hasIdentity ? participantId : null;
+  let createdParticipants = 0;
+  let createdIdentities = 0;
   const client = {
     async query(sql: string, values?: unknown[]) {
-      if (sql.includes("FROM external_identities")) return { rowCount: 1, rows: [{ participant_id: participantId }] };
+      if (sql.includes("FROM telegram_roster_entries")) return { rowCount: 0, rows: [] };
+      if (sql.includes("FROM external_identities")) return identityParticipantId
+        ? { rowCount: 1, rows: [{ id: "identity-id", participant_id: identityParticipantId,
+          external_user_id: "42" }] }
+        : { rowCount: 0, rows: [] };
+      if (sql.includes("INSERT INTO participants(")) {
+        createdParticipants++;
+        return { rowCount: 1, rows: [{ id: participantId }] };
+      }
+      if (sql.includes("INSERT INTO external_identities(")) {
+        createdIdentities++;
+        identityParticipantId = String(values?.[0]);
+      }
       if (sql.includes("INSERT INTO participant_forum_onboarding")) {
         if (state.status) return { rowCount: 0, rows: [] };
         state.status = String(values?.[1]);
@@ -56,7 +71,7 @@ function fakeDatabase() {
       if (sql.includes("SET invitation_sent_at")) state.sentAt = new Date();
       if (sql.includes("SET invitation_blocked_at")) state.blockedAt = new Date();
       if (sql.includes("INSERT INTO events")) {
-        events.push(String(values?.[0]));
+        events.push(sql.includes("'participant.created'") ? "participant.created" : String(values?.[0]));
         if (values?.[2]) eventPayloads.push(JSON.parse(String(values[2])));
       }
       return { rowCount: 1, rows: [] };
@@ -67,7 +82,8 @@ function fakeDatabase() {
     connect: async () => client,
     query: client.query,
   };
-  return { database, state, events, eventPayloads };
+  return { database, state, events, eventPayloads,
+    counts: () => ({ participants: createdParticipants, identities: createdIdentities }) };
 }
 
 describe("forum onboarding", () => {
@@ -150,7 +166,7 @@ describe("forum onboarding", () => {
   });
 
   it("recognizes a join update without storing unknown Telegram fields", async () => {
-    const { database, state, eventPayloads } = fakeDatabase();
+    const { database, state, eventPayloads, counts } = fakeDatabase();
     const result = await observeForumMemberUpdate({ update_id: 901, chat_member: {
       chat: { id: -1001234567890 }, date: 1790858400,
       old_chat_member: { status: "left" },
@@ -159,6 +175,45 @@ describe("forum onboarding", () => {
     expect(result).toBe("observed");
     expect(state.status).toBe("joined");
     expect(eventPayloads[0]).toMatchObject({ source: "chat_member", telegram_update_id: 901 });
+    expect(counts()).toEqual({ participants: 0, identities: 0 });
+  });
+
+  it("creates a minimal Participant only for a confirmed forum join and reuses it on repeat", async () => {
+    const { database, state, events, counts } = fakeDatabase(false);
+    const update = { update_id: 901, chat_member: {
+      chat: { id: -1001234567890 }, date: 1790858400,
+      old_chat_member: { status: "left" },
+      new_chat_member: { status: "member", user: { id: 42, first_name: "Private" } },
+    } };
+    expect(await observeForumMemberUpdate(update, database)).toBe("observed");
+    expect(await observeForumMemberUpdate(update, database)).toBe("observed");
+    expect(counts()).toEqual({ participants: 1, identities: 1 });
+    expect(state.status).toBe("joined");
+    expect(events).toEqual(["participant.created", "onboarding.forum_joined"]);
+  });
+
+  it("does not create a Participant for a left event", async () => {
+    const { database, counts } = fakeDatabase(false);
+    const result = await observeForumMemberUpdate({ update_id: 902, chat_member: {
+      chat: { id: -1001234567890 }, date: 1790858400,
+      old_chat_member: { status: "member" },
+      new_chat_member: { status: "left", user: { id: 42 } },
+    } }, database);
+    expect(result).toBe("ignored");
+    expect(counts()).toEqual({ participants: 0, identities: 0 });
+  });
+
+  it("sets an existing Participant to absent on a left event", async () => {
+    const { database, state, events, counts } = fakeDatabase();
+    const result = await observeForumMemberUpdate({ update_id: 903, chat_member: {
+      chat: { id: -1001234567890 }, date: 1790858400,
+      old_chat_member: { status: "member" },
+      new_chat_member: { status: "left", user: { id: 42 } },
+    } }, database);
+    expect(result).toBe("observed");
+    expect(state.status).toBe("absent");
+    expect(events).toEqual(["onboarding.forum_incomplete"]);
+    expect(counts()).toEqual({ participants: 0, identities: 0 });
   });
 });
 

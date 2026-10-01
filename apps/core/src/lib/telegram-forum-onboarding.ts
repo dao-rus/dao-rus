@@ -1,5 +1,6 @@
 import { pool } from "./db";
 import { telegramReceptionConfig } from "./config";
+import { findOrCreateParticipantByTelegramId } from "./telegram-participant";
 
 type QueryResult = { rowCount: number | null; rows: Array<Record<string, unknown>> };
 export type ForumDatabase = {
@@ -81,20 +82,26 @@ export async function observeForumMembership(
   inviteSource: "login" | "start" | null,
   source: "getChatMember" | "chat_member" = "getChatMember",
   updateId?: number,
+  createMissingParticipant = false,
 ): Promise<ForumObservation> {
   const client = await database.connect();
   try {
     await client.query("BEGIN");
-    const identity = await client.query(
-      `SELECT participant_id FROM external_identities
-        WHERE provider = 'telegram' AND external_user_id = $1 LIMIT 1`,
-      [userId],
-    );
-    if (!identity.rowCount) {
-      await client.query("COMMIT");
-      return null;
+    let participantId: string;
+    if (createMissingParticipant) {
+      participantId = await findOrCreateParticipantByTelegramId(client, userId);
+    } else {
+      const identity = await client.query(
+        `SELECT participant_id FROM external_identities
+          WHERE provider = 'telegram' AND external_user_id = $1 LIMIT 1`,
+        [userId],
+      );
+      if (!identity.rowCount) {
+        await client.query("COMMIT");
+        return null;
+      }
+      participantId = String(identity.rows[0].participant_id);
     }
-    const participantId = String(identity.rows[0].participant_id);
     const inserted = await client.query(
       `INSERT INTO participant_forum_onboarding(participant_id, forum_status, observed_at)
        VALUES ($1, $2, $3) ON CONFLICT (participant_id) DO NOTHING`,
@@ -221,10 +228,14 @@ export async function observeForumMemberUpdate(
   const status = newMember.status;
   const joined = status === "creator" || status === "administrator" || status === "member" ||
     (status === "restricted" && newMember.is_member === true);
+  const oldStatus = oldMember.status;
+  const wasAbsent = oldStatus === "left" || oldStatus === "kicked" ||
+    (oldStatus === "restricted" && oldMember.is_member === false);
   if (!joined && status !== "left" && status !== "kicked" && status !== "restricted") return "ignored";
   const updateId = record(update)?.update_id;
   const result = await observeForumMembership(database, String(userId), joined,
     new Date(Number(timestamp) * 1000), null, "chat_member",
-    Number.isSafeInteger(updateId) ? Number(updateId) : undefined);
+    Number.isSafeInteger(updateId) ? Number(updateId) : undefined,
+    joined && wasAbsent && user?.is_bot !== true);
   return result ? "observed" : "ignored";
 }
