@@ -55,13 +55,23 @@ function hrefs(node: ReactNode): string[] {
   return [...(props.href ? [props.href] : []), ...hrefs(props.children)];
 }
 
+function classNames(node: ReactNode): string[] {
+  if (Array.isArray(node)) return node.flatMap(classNames);
+  if (!isValidElement(node)) return [];
+  const props = node.props as { children?: ReactNode; className?: string };
+  return [...(props.className ? [props.className] : []), ...classNames(props.children)];
+}
+
 describe("/participants", () => {
   beforeEach(() => {
     vi.clearAllMocks();
     mocks.redirect.mockImplementation((destination: string) => {
       throw new Error(`redirect:${destination}`);
     });
-    mocks.readInterfaceTexts.mockResolvedValue({ values: { "participants.title": "Сеть" } });
+    mocks.readInterfaceTexts.mockResolvedValue({ values: {
+      "participants.title": "Сеть", "community.members_title": "Участники",
+      "community.feed_title": "Объявления", "community.feed_empty": "Пусто",
+    } });
     mocks.listCommunityPosts.mockResolvedValue([]);
     mocks.listCommunitySignals.mockResolvedValue([]);
   });
@@ -142,6 +152,25 @@ describe("/participants", () => {
     expect(hrefs(page)).toContain("/participants?interest=%D0%98%D1%81%D1%82%D0%BE%D1%80%D0%B8%D1%8F");
     expect(hrefs(page)).toContain("/participants");
     expect(mocks.listCommunityPosts).toHaveBeenCalledWith({ type: "interest", interest: "История" });
+  });
+
+  it("puts community members and announcements in columns with compact member identities", async () => {
+    mocks.getCurrentParticipant.mockResolvedValue({ id: "viewer" });
+    mocks.listParticipantsDirectory.mockResolvedValue([{
+      participantId: "member", displayName: "Анна", telegramUsername: "anna",
+      telegramBio: "Биография", residence: { name: "Казань", type: "город", country: "Россия" },
+      verificationPoints: 2, positiveCount: 3,
+    }]);
+    const page = await ParticipantsPage({ searchParams: Promise.resolve({ interest: "история" }) });
+    const text = textContent(page);
+    expect(classNames(page)).toContain("communityColumns");
+    expect(classNames(page)).toContain("communityMembers");
+    expect(classNames(page)).toContain("communityFeed");
+    expect(text).toContain("Анна");
+    expect(text).not.toContain("@anna");
+    expect(text).not.toContain("Биография");
+    expect(text).not.toContain("Открыть профиль");
+    expect(text).toContain("Объявления");
   });
 
   it("filters the directory by residence and keeps that filter in name search", async () => {

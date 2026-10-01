@@ -63,8 +63,8 @@ export default async function ParticipantsPage({ searchParams }: ParticipantsPag
   const signalLabels = { want: "Я хочу", need: "Мне нужно", can: "Я могу", have: "У меня есть" };
 
   return (
-    <main className="shell">
-      <section className="card participantsPage">
+    <main className={`shell${community ? " communityShell" : ""}`}>
+      <section className={`card participantsPage${community ? " communityPage" : ""}`}>
         <div className="profileHeader">
           <div>
             <div className="eyebrow">ДАО Русь</div>
@@ -107,9 +107,11 @@ export default async function ParticipantsPage({ searchParams }: ParticipantsPag
           </div>
         </form>
 
-        {community ? <h2>{texts["community.members_title"]}</h2> : null}
+        <div className={community ? "communityColumns" : undefined}>
+          <section className={community ? "communityMembers" : undefined}>
+            {community ? <h2>{texts["community.members_title"]}</h2> : null}
 
-        {participants.length ? (
+            {participants.length ? (
           <ul className="participantsDirectory">
             {participants.map((participant) => (
               <li key={participant.participantId}>
@@ -119,13 +121,13 @@ export default async function ParticipantsPage({ searchParams }: ParticipantsPag
                   <div>
                     <strong><ParticipantName participantId={participant.participantId}
                       verificationPoints={participant.verificationPoints} positiveCount={participant.positiveCount}>{participant.displayName}</ParticipantName></strong>
-                    <span className="muted">
+                    {!community ? <><span className="muted">
                       {participant.telegramUsername
                         ? `@${participant.telegramUsername}`
                         : "Имя в Telegram не указано"}
                     </span>
                     {participant.telegramBio ? <small className="muted">{participant.telegramBio}</small> : null}
-                    {participant.residence ? <small className="muted">{residenceLabel(participant.residence)}</small> : null}
+                    {participant.residence ? <small className="muted">{residenceLabel(participant.residence)}</small> : null}</> : null}
                   </div>
                 </div>
                 {community?.type === "residence" ? (
@@ -138,11 +140,11 @@ export default async function ParticipantsPage({ searchParams }: ParticipantsPag
                     })}
                   </div>
                 ) : null}
-                <div className="participantDirectoryActions">
+                {!community ? <div className="participantDirectoryActions">
                   <Link className="button secondary" href={`/profile/${participant.participantId}`}>
                     Открыть профиль
                   </Link>
-                </div>
+                </div> : null}
               </li>
             ))}
           </ul>
@@ -151,9 +153,9 @@ export default async function ParticipantsPage({ searchParams }: ParticipantsPag
             ? (q ? "Люди из этого места по запросу не найдены." : "Люди из этого места пока не найдены.")
             : interestFilter ? (q ? "Участники с этим интересом по запросу не найдены." : "Участники с этим интересом не найдены.")
               : "Профили по этому запросу не найдены."}</p>
-        )}
-      </section>
-      {community && communityUrl ? <section className="card communityFeed">
+            )}
+          </section>
+      {community && communityUrl ? <section className="communityFeed">
         <h2>{texts["community.feed_title"]}</h2>
         {params.post === "saved" ? <p role="status">Объявление сохранено.</p> : null}
         {params.post === "invalid" ? <p role="alert">Не удалось сохранить объявление. Проверьте текст и участие в сообществе.</p> : null}
@@ -173,6 +175,8 @@ export default async function ParticipantsPage({ searchParams }: ParticipantsPag
           </form> : null}
         </li>)}</ol> : <p className="muted">{texts["community.feed_empty"]}</p>}
       </section> : null}
+        </div>
+      </section>
     </main>
   );
 }

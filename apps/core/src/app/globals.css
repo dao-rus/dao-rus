@@ -349,11 +349,16 @@ dd { margin: 6px 0 0; }
 }
 .participantsDirectory > li > div:first-child { display: grid; gap: 5px; }
 .participantDirectoryActions { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; }
+.communityShell { display: block; }
+.communityPage { width: min(1280px, 100%); margin: 0 auto; }
+.communityColumns { display: grid; grid-template-columns: minmax(0, 1.3fr) minmax(0, 1fr); gap: 36px; align-items: start; }
+.communityMembers, .communityFeed { min-width: 0; }
+.communityMembers .participantsDirectory > li { border: 0; padding: 12px 0; align-items: flex-start; flex-direction: column; }
 .communitySignals { display: grid; grid-template-columns: repeat(2, minmax(140px, 1fr)); gap: 12px; flex: 1; }
 .communitySignals > div { display: grid; gap: 4px; }
 .communitySignals ul { margin: 0; padding-left: 18px; }
 .communitySignals li { padding: 0; border: 0; white-space: pre-wrap; }
-.communityFeed { margin-top: 24px; }
+.communityFeed { margin-top: 0; }
 .communityFeed form { display: grid; gap: 10px; margin: 18px 0; }
 .communityFeed textarea { width: 100%; min-height: 110px; padding: 12px; border: 1px solid var(--line); border-radius: 10px; }
 .communityFeed form .button { justify-self: start; }
@@ -394,6 +399,10 @@ dd { margin: 6px 0 0; }
 .proposalList h3 { margin: 10px 0 8px; font-size: 22px; }
 .proposalList li > p { margin: 0; line-height: 1.55; white-space: pre-wrap; }
 .proposalMeta { display: flex; flex-wrap: wrap; gap: 8px 16px; color: var(--muted); font-size: 12px; }
+
+@media (max-width: 900px) {
+  .communityColumns { grid-template-columns: 1fr; }
+}
 
 @media (max-width: 620px) {
   .activitySummary { grid-template-columns: 1fr; }
