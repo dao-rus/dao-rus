@@ -9,6 +9,7 @@ describe("activityEventLabel", () => {
     );
     expect(activityEventLabel("interface.texts_updated")).toBe("Изменение текстов интерфейса");
     expect(activityEventLabel("proposal.created")).toBe("Создание предложения");
+    expect(activityEventLabel("code.comment_hide")).toBe("Скрытие комментария к Кодексу");
     expect(activityEventLabel("participant_registry.membership_status_changed")).toBe(
       "Изменение статуса членства в реестре",
     );

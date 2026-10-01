@@ -4,6 +4,7 @@ import { hasPrototypeAdminAccess } from "@/lib/config";
 import { DarusRewardCelebration } from "@/components/darus-reward-celebration";
 import { PositiveExperienceFeedback } from "@/components/positive-experience-feedback";
 import { TelegramAvatar } from "@/components/telegram-avatar";
+import { ParticipantName } from "../../../components/participant-name";
 import { getVisibleProfileAbout, residenceDirectoryHref, residenceLabel } from "@/lib/profile-about";
 import { getReputationSummary } from "@/lib/reputation";
 import { getCurrentParticipant } from "@/lib/session";
@@ -89,7 +90,10 @@ export default async function SubjectProfilePage({ params, searchParams }: Subje
             ) : null}
             <div>
               <div className="eyebrow">Профиль</div>
-              <h1>{profile.hasLoggedIn ? profile.displayName : "Человек ещё не вошёл в Ядро"}</h1>
+              <h1>{profile.hasLoggedIn ? (
+                <ParticipantName participantId={profile.subjectId}
+                  verificationPoints={profile.verificationPoints} positiveCount={reputation.positiveCount}>{profile.displayName}</ParticipantName>
+              ) : "Человек ещё не вошёл в Ядро"}</h1>
               {profile.hasLoggedIn && profile.telegramUsername ? <p className="muted">{`@${profile.telegramUsername}`}</p> : null}
               {profile.hasLoggedIn && profile.telegramName && profile.telegramName !== profile.displayName ? <p className="muted">В Telegram: {profile.telegramName}</p> : null}
               {profile.hasLoggedIn && profile.telegramBio ? <p className="profileBio muted">Telegram: {profile.telegramBio}</p> : null}

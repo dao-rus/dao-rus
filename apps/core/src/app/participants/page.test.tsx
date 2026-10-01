@@ -67,13 +67,13 @@ describe("/participants", () => {
         telegramUsername: "alice",
         telegramBio: "Биография Алисы",
         telegramPhoneNumber: "+79990000000",
-        verificationPoints: 2,
+        verificationPoints: 2, positiveCount: 3,
       },
       {
         participantId: "20000000-0000-4000-8000-000000000002",
         displayName: "Борис",
         telegramUsername: null,
-        verificationPoints: 0,
+        verificationPoints: 0, positiveCount: 0,
       },
     ]);
 
@@ -88,8 +88,7 @@ describe("/participants", () => {
     expect(text).toContain("@alice");
     expect(text).toContain("Биография Алисы");
     expect(text).not.toContain("+79990000000");
-    expect(text).toMatch(/Подтвердили:\s+2/);
-    expect(text).toMatch(/Подтвердили:\s+0/);
+    expect(text).not.toContain('Подтвердили:');
     expect(hrefs(page)).toContain("/");
     expect(hrefs(page)).toContain("/veche");
     expect(text).not.toContain(participantId);

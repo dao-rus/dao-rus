@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { redirect } from "next/navigation";
 import { TelegramAvatar } from "@/components/telegram-avatar";
+import { ParticipantName } from "../../components/participant-name";
 import { readInterfaceTexts } from "@/lib/interface-texts";
 import { listParticipantsDirectory } from "@/lib/participants-directory";
 import { normalizeResidence, residenceLabel, type Residence } from "@/lib/profile-about";
@@ -97,7 +98,8 @@ export default async function ParticipantsPage({ searchParams }: ParticipantsPag
                   <TelegramAvatar participantId={participant.participantId} displayName={participant.displayName}
                     avatarUrl={participant.avatarUrl} hasTelegramPhoto={participant.hasTelegramPhoto} />
                   <div>
-                    <strong>{participant.displayName}</strong>
+                    <strong><ParticipantName participantId={participant.participantId}
+                      verificationPoints={participant.verificationPoints} positiveCount={participant.positiveCount}>{participant.displayName}</ParticipantName></strong>
                     <span className="muted">
                       {participant.telegramUsername
                         ? `@${participant.telegramUsername}`
@@ -108,9 +110,6 @@ export default async function ParticipantsPage({ searchParams }: ParticipantsPag
                   </div>
                 </div>
                 <div className="participantDirectoryActions">
-                  <span className={participant.verificationPoints > 0 ? "verificationBadge verified" : "verificationBadge"}>
-                    Подтвердили: {participant.verificationPoints}
-                  </span>
                   <Link className="button secondary" href={`/profile/${participant.participantId}`}>
                     Открыть профиль
                   </Link>

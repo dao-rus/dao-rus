@@ -1,36 +1,50 @@
 import Link from "next/link";
-import {
-  DAO_CODE_CLAUSES,
-  DAO_CODE_TITLE,
-  DAO_CODE_VERSION,
-} from "@/lib/dao-code";
+import { CodeDiscussion } from "../../components/code-discussion";
+import { hasPrototypeAdminAccess } from "@/lib/config";
+import { DAO_CODE_CLAUSES, DAO_CODE_TITLE, DAO_CODE_VERSION } from "../../lib/dao-code";
+import { listCodeComments, parseCodeSort, parseCodeSection } from "../../lib/code-comments";
+import { getCurrentParticipant } from "@/lib/session";
 
-export default function CodePage() {
+export const dynamic = "force-dynamic";
+
+type CodePageProps = { searchParams: Promise<{ sort?: string; section?: string }> };
+
+export default async function CodePage({ searchParams }: CodePageProps) {
+  const [viewer, params] = await Promise.all([getCurrentParticipant(), searchParams]);
+  const sort = parseCodeSort(params.sort);
+  let openSection: string | null = null;
+  try { openSection = parseCodeSection(params.section); } catch { /* All discussions start collapsed. */ }
+  const comments = await listCodeComments(viewer?.id ?? null);
+  const isAdmin = viewer ? hasPrototypeAdminAccess(viewer.id) : false;
+
   return (
     <main className="shell">
       <section className="card codePage">
         <div className="eyebrow">ДАО Русь · Основной документ</div>
         <h1>{DAO_CODE_TITLE}</h1>
-        <p className="lead">
-          Три базовых принципа, на которых строятся отношения участников и механизмы ДАО Русь.
-        </p>
+        <p className="lead">Три базовых принципа, на которых строятся отношения участников и механизмы ДАО Русь.</p>
         <p className="muted">Версия {DAO_CODE_VERSION}</p>
 
         <ol className="codeClauses">
           {DAO_CODE_CLAUSES.map((clause) => (
             <li id={clause.id} key={clause.id}>
-              <span aria-hidden="true">{clause.number}</span>
-              <p>{clause.text}</p>
+              <span className="codeClauseNumber" aria-hidden="true">{clause.number}</span>
+              <div className="codeClauseContent">
+                <p>{clause.text}</p>
+                <CodeDiscussion section={clause.id} comments={comments} sort={sort}
+                  viewerId={viewer?.id ?? null} isAdmin={isAdmin}
+                  initiallyOpen={openSection === clause.id} />
+              </div>
             </li>
           ))}
         </ol>
 
-        <section className="codeCommentaryIntro">
-          <h2>Комментарий к Кодексу</h2>
-          <p>
-            Толкования и практика применения будут развиваться отдельным живым слоем.
-            Популярность комментария сама по себе не изменяет Кодекс.
-          </p>
+        <section className="codeCommentaryIntro" id="dao-code-all">
+          <h2>Кодекс в целом</h2>
+          <p>Толкования и практика применения образуют отдельный живой слой. Популярность комментария сама по себе не изменяет Кодекс.</p>
+          <CodeDiscussion section="dao-code-all" comments={comments} sort={sort}
+            viewerId={viewer?.id ?? null} isAdmin={isAdmin}
+            initiallyOpen={openSection === "dao-code-all"} />
         </section>
 
         <div className="actions">

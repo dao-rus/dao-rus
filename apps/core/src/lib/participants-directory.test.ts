@@ -13,13 +13,13 @@ describe("participants directory", () => {
               participant_id: "10000000-0000-4000-8000-000000000001",
               display_name: "Алиса",
               telegram_username: "alice",
-              verification_points: 2,
+              verification_points: 2, positive_count: 3,
             },
             {
               participant_id: "20000000-0000-4000-8000-000000000002",
               display_name: "Борис",
               telegram_username: null,
-              verification_points: 0,
+              verification_points: 0, positive_count: 0,
             },
           ],
         };
@@ -31,6 +31,7 @@ describe("participants directory", () => {
     expect(queries[0].text).toContain("WITH RECURSIVE verified");
     expect(queries[0].text).toContain("JOIN verified verifier");
     expect(queries[0].text).toContain("incoming.revoked_at IS NULL");
+    expect(queries[0].text).toContain("reputation.signal_type = 'positive'");
     expect(queries[0].text).toContain("FROM participants participant");
     expect(queries[0].text).toContain("LEFT JOIN external_identities telegram");
     expect(queries[0].text).toContain("login.event_type = 'participant.logged_in'");
@@ -44,7 +45,7 @@ describe("participants directory", () => {
         telegramBio: null,
         avatarUrl: null,
         hasTelegramPhoto: false,
-        verificationPoints: 2,
+        verificationPoints: 2, positiveCount: 3,
         residence: null,
       },
       {
@@ -54,7 +55,7 @@ describe("participants directory", () => {
         telegramBio: null,
         avatarUrl: null,
         hasTelegramPhoto: false,
-        verificationPoints: 0,
+        verificationPoints: 0, positiveCount: 0,
         residence: null,
       },
     ]);
@@ -91,7 +92,7 @@ describe("participants directory", () => {
           avatar_url: "https://cdn.example/avatar.jpg",
           telegram_photo_file_id: "old-photo",
           telegram_photo_count: "0",
-          verification_points: 0,
+          verification_points: 0, positive_count: 0,
         }] };
       },
     });
@@ -126,7 +127,7 @@ describe("participants directory", () => {
         queries.push({ text, values });
         return { rows: [{
           participant_id: "10000000-0000-4000-8000-000000000001",
-          display_name: "Анна", verification_points: 0,
+          display_name: "Анна", verification_points: 0, positive_count: 0,
           residence_name: "Казань", residence_type: "город", residence_country: "Россия",
         }] };
       },

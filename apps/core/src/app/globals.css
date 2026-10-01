@@ -554,7 +554,7 @@ dd { margin: 6px 0 0; }
   padding: 0;
   list-style: none;
 }
-.codeClauses li {
+.codeClauses > li {
   display: grid;
   grid-template-columns: 38px minmax(0, 1fr);
   gap: 12px;
@@ -563,7 +563,7 @@ dd { margin: 6px 0 0; }
   border: 1px solid var(--line);
   border-radius: 12px;
 }
-.codeClauses li > span {
+.codeClauses > li > .codeClauseNumber {
   display: grid;
   place-items: center;
   width: 34px;
@@ -573,11 +573,52 @@ dd { margin: 6px 0 0; }
   color: var(--accent-ink);
   font-weight: 700;
 }
-.codeClauses p { margin: 5px 0 0; font-size: 18px; line-height: 1.5; }
+.codeClauseContent > p { margin: 5px 0 0; font-size: 18px; line-height: 1.5; }
 .codeCommentaryIntro {
   margin-top: 30px;
   padding-top: 24px;
   border-top: 1px solid var(--line);
 }
 .codeCommentaryIntro h2 { margin: 0 0 10px; font-size: 22px; }
-.codeCommentaryIntro p { margin: 0; color: var(--muted); line-height: 1.55; }
+.codeCommentaryIntro > p { margin: 0; color: var(--muted); line-height: 1.55; }
+
+.participantName { position: relative; display: inline-flex; flex-wrap: wrap; align-items: baseline; gap: 3px; min-width: 0; }
+.participantName > a { overflow-wrap: anywhere; }
+.participantIndex { display: inline-block; position: static; }
+.participantIndex button { display: inline-block; border: 0; cursor: pointer; border-radius: 5px; padding: 2px 3px; font-weight: 700; line-height: 1; }
+
+.participantIndex button:focus-visible { outline: 2px solid currentColor; outline-offset: 2px; }
+.participantIndex sup { font-size: 11px; vertical-align: super; }
+.verificationIndex button { color: #205b91; background: #e4f1fc; }
+.reputationIndex button { color: #8a4710; background: #fff0df; }
+.participantIndexHelp[hidden] { display: none; }
+.participantIndexHelp { position: absolute; z-index: 5; top: 100%; left: 0; width: min(250px, 64vw); padding: 9px 11px; border: 1px solid var(--line); border-radius: 8px; background: var(--card); box-shadow: 0 8px 24px rgba(0,0,0,.15); font-size: 12px; line-height: 1.4; color: var(--ink); }
+.codeClauseContent { min-width: 0; }
+.codeDiscussion { margin-top: 16px; border-top: 1px solid var(--line); padding-top: 12px; }
+.codeDiscussion > summary, .codeCommentEditor > summary, .codeReplyForm > summary { cursor: pointer; color: var(--accent); font-weight: 700; }
+.codeDiscussionContent { margin-top: 16px; }
+.codeSort { display: flex; flex-wrap: wrap; gap: 12px; font-size: 14px; }
+.codeSort a[aria-current="page"] { font-weight: 700; text-decoration-thickness: 2px; }
+.codeComments, .codeReplies { list-style: none; padding: 0; margin: 14px 0; display: grid; gap: 12px; }
+.codeComment { min-width: 0; padding: 14px; border: 1px solid var(--line); border-radius: 10px; }
+.codeReplies { margin-left: 20px; }
+.codeReply { background: #faf8f2; }
+.codeCommentMeta, .codeCommentActions, .codeAdminActions { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 12px; font-size: 13px; }
+.codeCommentMeta time, .codePinned { color: var(--muted); }
+.codeCommentBody { white-space: pre-wrap; overflow-wrap: anywhere; line-height: 1.5; }
+.codeCommentActions form, .codeAdminActions form { display: inline; }
+.codeCommentActions button, .codeAdminActions button, .codeCommentEditor button, .codeReplyForm button { font: inherit; cursor: pointer; }
+.codeCommentEditor, .codeReplyForm, .codeAdminActions { margin-top: 12px; }
+.codeCommentEditor form, .codeReplyForm form, .codeNewComment, .codeAdminActions details form { display: grid; gap: 8px; margin-top: 10px; }
+.codeCommentEditor label, .codeReplyForm label, .codeNewComment label, .codeAdminActions label { display: grid; gap: 6px; }
+.codeCommentEditor textarea, .codeReplyForm textarea, .codeNewComment textarea, .codeAdminActions input { width: 100%; min-width: 0; padding: 10px; border: 1px solid var(--line); border-radius: 8px; background: #fff; }
+.codeCommentEditor textarea, .codeReplyForm textarea, .codeNewComment textarea { min-height: 90px; }
+.codeNewComment { margin-top: 18px; }
+.codeNewComment > button { justify-self: start; }
+@media (max-width: 620px) {
+  .codeClauses > li { grid-template-columns: 30px minmax(0, 1fr); gap: 8px; padding: 12px; }
+  .codeClauses > li > .codeClauseNumber { width: 28px; height: 28px; }
+  .codeReplies { margin-left: 10px; }
+  .codeComment { padding: 10px; }
+  .codeCommentMeta { align-items: flex-start; }
+}

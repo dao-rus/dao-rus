@@ -1,8 +1,10 @@
 import Link from "next/link";
 import { redirect } from "next/navigation";
 import { LocalDateTime } from "@/components/local-date-time";
+import { ParticipantName } from "../../components/participant-name";
 import { canCreateProposal } from "@/lib/eligibility";
 import { listProposals } from "@/lib/proposals";
+import { getParticipantIndicators } from "../../lib/participant-indicators";
 import { getCurrentParticipant } from "@/lib/session";
 
 export const dynamic = "force-dynamic";
@@ -23,6 +25,7 @@ export default async function ProposalsPage({ searchParams }: ProposalsPageProps
   if (!participant) redirect("/");
 
   const [params, proposals] = await Promise.all([searchParams, listProposals()]);
+  const indicators = await getParticipantIndicators([...new Set(proposals.map((proposal) => proposal.authorParticipantId))]);
   const createMessage = params.proposal_create
     ? createMessages[params.proposal_create]
     : null;

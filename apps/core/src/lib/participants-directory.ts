@@ -9,6 +9,7 @@ export type ParticipantDirectoryEntry = {
   avatarUrl: string | null;
   hasTelegramPhoto: boolean;
   verificationPoints: number;
+  positiveCount: number;
   residence: Residence | null;
 };
 
@@ -49,7 +50,11 @@ export async function listParticipantsDirectoryWithDatabase(
                   ON verifier.subject_id = incoming.verifier_subject_id
                WHERE incoming.subject_id = participant.id
                  AND incoming.revoked_at IS NULL
-            ) AS verification_points
+            ) AS verification_points,
+            (SELECT count(*)::integer FROM reputation_signals reputation
+              WHERE reputation.subject_participant_id = participant.id
+                AND reputation.dimension = 'interaction_quality'
+                AND reputation.signal_type = 'positive' AND reputation.revoked_at IS NULL) AS positive_count
        FROM participants participant
        LEFT JOIN external_identities telegram
          ON telegram.participant_id = participant.id
@@ -101,6 +106,7 @@ export async function listParticipantsDirectoryWithDatabase(
     avatarUrl: row.avatar_url ? String(row.avatar_url) : null,
     hasTelegramPhoto: Boolean(row.telegram_photo_file_id) && row.telegram_photo_count !== "0",
     verificationPoints: Number(row.verification_points),
+    positiveCount: Number(row.positive_count ?? 0),
     residence: row.residence_name && row.residence_type && row.residence_country
       ? {
           name: String(row.residence_name),
