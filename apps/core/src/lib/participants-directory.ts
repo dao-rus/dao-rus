@@ -13,7 +13,8 @@ export type ParticipantDirectoryEntry = {
   residence: Residence | null;
 };
 
-type DirectoryFilters = { interest?: string; residence?: Residence | null; viewerParticipantId?: string };
+export type DirectorySort = "name" | "verification" | "reputation";
+type DirectoryFilters = { interest?: string; residence?: Residence | null; viewerParticipantId?: string; sort?: DirectorySort };
 
 type QueryResult = {
   rows: Array<Record<string, unknown>>;
@@ -31,6 +32,8 @@ export async function listParticipantsDirectoryWithDatabase(
   const normalizedSearch = search.trim().replace(/^@+/, "");
   const normalizedInterest = filters.interest?.trim().toLocaleLowerCase("ru-RU") ?? "";
   const residence = filters.residence;
+  const orderBy = filters.sort === "verification" ? "verification_points DESC, "
+    : filters.sort === "reputation" ? "positive_count DESC, " : "";
   const result = await database.query(
     `${VERIFIED_SUBJECTS_CTE}
      SELECT participant.id AS participant_id,
@@ -89,7 +92,7 @@ export async function listParticipantsDirectoryWithDatabase(
             AND lower(participant.residence_country) = $6
           )
         )
-      ORDER BY lower(participant.display_name), participant.id`,
+      ORDER BY ${orderBy}lower(participant.display_name), participant.id`,
     [normalizedSearch, normalizedInterest, filters.viewerParticipantId ?? null,
       residence?.name.toLocaleLowerCase("ru-RU") ?? "",
       residence?.type.toLocaleLowerCase("ru-RU") ?? "",

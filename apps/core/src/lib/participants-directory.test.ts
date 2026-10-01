@@ -139,4 +139,15 @@ describe("participants directory", () => {
     expect(queries[0].text).toContain("login.event_type = 'participant.logged_in'");
     expect(entries[0].residence).toEqual(residence);
   });
+
+  it("orders verification and reputation leaders with a stable name tie-break", async () => {
+    const orders: string[] = [];
+    const database = { async query(text: string) { orders.push(text); return { rows: [] }; } };
+    await listParticipantsDirectoryWithDatabase(database, "", { sort: "verification" });
+    await listParticipantsDirectoryWithDatabase(database, "", { sort: "reputation" });
+    await listParticipantsDirectoryWithDatabase(database);
+    expect(orders[0]).toContain("ORDER BY verification_points DESC, lower(participant.display_name), participant.id");
+    expect(orders[1]).toContain("ORDER BY positive_count DESC, lower(participant.display_name), participant.id");
+    expect(orders[2]).toContain("ORDER BY lower(participant.display_name), participant.id");
+  });
 });

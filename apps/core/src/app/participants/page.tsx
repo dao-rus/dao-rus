@@ -4,7 +4,7 @@ import { redirect } from "next/navigation";
 import { TelegramAvatar } from "@/components/telegram-avatar";
 import { ParticipantName } from "../../components/participant-name";
 import { readInterfaceTexts } from "@/lib/interface-texts";
-import { listParticipantsDirectory } from "@/lib/participants-directory";
+import { listParticipantsDirectory, type DirectorySort } from "@/lib/participants-directory";
 import { normalizeResidence, residenceLabel, type Residence } from "@/lib/profile-about";
 import { getCurrentParticipant } from "@/lib/session";
 import { communityFromParams, communityHref, listCommunityPosts, listCommunitySignals } from "@/lib/communities";
@@ -14,7 +14,7 @@ export const dynamic = "force-dynamic";
 export const metadata: Metadata = { title: "Сеть" };
 
 type ParticipantsPageProps = {
-  searchParams: Promise<{ q?: string; interest?: string; residence_name?: string; residence_type?: string; residence_country?: string; post?: string }>;
+  searchParams: Promise<{ q?: string; interest?: string; residence_name?: string; residence_type?: string; residence_country?: string; post?: string; sort?: string }>;
 };
 
 function residenceFromQuery(params: Awaited<ParticipantsPageProps["searchParams"]>): Residence | null {
@@ -39,6 +39,7 @@ export default async function ParticipantsPage({ searchParams }: ParticipantsPag
   const interestFilter = typeof interest === "string" ? interest.trim() : "";
   const residenceFilter = residenceFromQuery(params);
   const community = communityFromParams(params);
+  const sort: DirectorySort = params.sort === "verification" || params.sort === "reputation" ? params.sort : "name";
   const filterParams = new URLSearchParams();
   if (interestFilter) filterParams.set("interest", interestFilter);
   if (residenceFilter) {
@@ -46,14 +47,24 @@ export default async function ParticipantsPage({ searchParams }: ParticipantsPag
     filterParams.set("residence_type", residenceFilter.type);
     filterParams.set("residence_country", residenceFilter.country);
   }
-  const filterHref = filterParams.size ? `/participants?${filterParams.toString()}` : "/participants";
+  const filterAndSortParams = new URLSearchParams(filterParams);
+  if (sort !== "name") filterAndSortParams.set("sort", sort);
+  const filterHref = filterAndSortParams.size ? `/participants?${filterAndSortParams.toString()}` : "/participants";
+  const sortHref = (choice: DirectorySort) => {
+    const query = new URLSearchParams(filterParams);
+    if (q) query.set("q", q);
+    if (choice !== "name") query.set("sort", choice);
+    return query.size ? `/participants?${query.toString()}` : "/participants";
+  };
+  const directoryFilters = { interest: interestFilter, residence: residenceFilter, viewerParticipantId: viewer.id,
+    ...(sort !== "name" ? { sort } : {}) };
   const [participants, { values: texts }, posts] = await Promise.all([
-    listParticipantsDirectory(q, { interest: interestFilter, residence: residenceFilter, viewerParticipantId: viewer.id }),
+    listParticipantsDirectory(q, directoryFilters),
     readInterfaceTexts(),
     community ? listCommunityPosts(community) : Promise.resolve([]),
   ]);
   const members = community && q
-    ? await listParticipantsDirectory("", { interest: interestFilter, residence: residenceFilter, viewerParticipantId: viewer.id })
+    ? await listParticipantsDirectory("", directoryFilters)
     : participants;
   const signals = community?.type === "residence"
     ? await listCommunitySignals(participants.map((participant) => participant.participantId), viewer.id)
@@ -95,6 +106,7 @@ export default async function ParticipantsPage({ searchParams }: ParticipantsPag
             <input type="hidden" name="residence_type" value={residenceFilter.type} />
             <input type="hidden" name="residence_country" value={residenceFilter.country} />
           </> : null}
+          {sort !== "name" ? <input type="hidden" name="sort" value={sort} /> : null}
           <div>
             <input
               id="participants-search"
@@ -106,6 +118,15 @@ export default async function ParticipantsPage({ searchParams }: ParticipantsPag
             {q ? <Link className="button secondary" href={filterHref}>Сбросить</Link> : null}
           </div>
         </form>
+
+        <nav className="participantsSort" aria-label="Сортировка участников">
+          <span>{texts["participants.sort_label"]}</span>
+          {(["name", "verification", "reputation"] as const).map((choice) => (
+            <Link key={choice} href={sortHref(choice)} aria-current={sort === choice ? "page" : undefined}>
+              {texts[`participants.sort_${choice}`]}
+            </Link>
+          ))}
+        </nav>
 
         <div className={community ? "communityColumns" : undefined}>
           <section className={community ? "communityMembers" : undefined}>

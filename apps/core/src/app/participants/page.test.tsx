@@ -71,6 +71,9 @@ describe("/participants", () => {
     mocks.readInterfaceTexts.mockResolvedValue({ values: {
       "participants.title": "Сеть", "community.members_title": "Участники",
       "community.feed_title": "Объявления", "community.feed_empty": "Пусто",
+      "participants.sort_label": "Сортировка:", "participants.sort_name": "Имя",
+      "participants.sort_verification": "Топ-верификация",
+      "participants.sort_reputation": "Топ-репутация",
     } });
     mocks.listCommunityPosts.mockResolvedValue([]);
     mocks.listCommunitySignals.mockResolvedValue([]);
@@ -135,6 +138,23 @@ describe("/participants", () => {
     const page = await ParticipantsPage({ searchParams: Promise.resolve({}) });
 
     expect(textContent(page)).toContain("Моя сеть");
+  });
+
+  it("shows sort links below search and preserves search and community filters", async () => {
+    mocks.getCurrentParticipant.mockResolvedValue({ id: "viewer" });
+    mocks.listParticipantsDirectory.mockResolvedValue([]);
+    const page = await ParticipantsPage({ searchParams: Promise.resolve({
+      q: "Анна", interest: "история", sort: "verification",
+    }) });
+    expect(mocks.listParticipantsDirectory).toHaveBeenCalledWith("Анна", {
+      interest: "история", residence: null, viewerParticipantId: "viewer", sort: "verification",
+    });
+    expect(textContent(page)).toContain("Имя");
+    expect(textContent(page)).toContain("Топ-верификация");
+    expect(textContent(page)).toContain("Топ-репутация");
+    expect(hrefs(page)).toContain("/participants?interest=%D0%B8%D1%81%D1%82%D0%BE%D1%80%D0%B8%D1%8F&q=%D0%90%D0%BD%D0%BD%D0%B0");
+    expect(hrefs(page)).toContain("/participants?interest=%D0%B8%D1%81%D1%82%D0%BE%D1%80%D0%B8%D1%8F&q=%D0%90%D0%BD%D0%BD%D0%B0&sort=reputation");
+    expect(hrefs(page)).toContain("/participants?interest=%D0%B8%D1%81%D1%82%D0%BE%D1%80%D0%B8%D1%8F&sort=verification");
   });
 
   it("shows an interest filter and preserves it while searching by name", async () => {
