@@ -339,7 +339,7 @@ dd { margin: 6px 0 0; }
   color: var(--ink);
 }
 .participantsDirectory { list-style: none; margin: 0; padding: 0; }
-.participantsDirectory li {
+.participantsDirectory > li {
   display: flex;
   justify-content: space-between;
   gap: 18px;
@@ -347,8 +347,19 @@ dd { margin: 6px 0 0; }
   padding: 16px 0;
   border-top: 1px solid var(--line);
 }
-.participantsDirectory li > div:first-child { display: grid; gap: 5px; }
+.participantsDirectory > li > div:first-child { display: grid; gap: 5px; }
 .participantDirectoryActions { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; }
+.communitySignals { display: grid; grid-template-columns: repeat(2, minmax(140px, 1fr)); gap: 12px; flex: 1; }
+.communitySignals > div { display: grid; gap: 4px; }
+.communitySignals ul { margin: 0; padding-left: 18px; }
+.communitySignals li { padding: 0; border: 0; white-space: pre-wrap; }
+.communityFeed { margin-top: 24px; }
+.communityFeed form { display: grid; gap: 10px; margin: 18px 0; }
+.communityFeed textarea { width: 100%; min-height: 110px; padding: 12px; border: 1px solid var(--line); border-radius: 10px; }
+.communityFeed form .button { justify-self: start; }
+.communityPosts { list-style: none; padding: 0; }
+.communityPosts > li { padding: 16px 0; border-top: 1px solid var(--line); }
+.communityPosts p { white-space: pre-wrap; }
 
 .proposalForm {
   display: grid;
@@ -387,7 +398,8 @@ dd { margin: 6px 0 0; }
 @media (max-width: 620px) {
   .activitySummary { grid-template-columns: 1fr; }
   .activityHistory li { flex-direction: column; gap: 7px; }
-  .participantsDirectory li { align-items: flex-start; flex-direction: column; }
+  .participantsDirectory > li { align-items: flex-start; flex-direction: column; }
+  .communitySignals { grid-template-columns: 1fr; }
 }
 
 

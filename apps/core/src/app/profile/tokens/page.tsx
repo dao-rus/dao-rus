@@ -31,7 +31,9 @@ export default async function TokensPage() {
           {history.length ? <ol>{history.map((entry) => (
             <li key={entry.id}>
               <div>
-                <strong>+{entry.amount} DARUS · Подтверждение личности: {entry.subjectName}</strong>
+                <strong>+{entry.amount} DARUS · {entry.sourceType === "residence_first_filled"
+                  ? "Первое заполнение места жительства"
+                  : `Подтверждение личности: ${entry.subjectName}`}</strong>
                 <span className="muted"><LocalDateTime value={entry.createdAt.toISOString()} /></span>
                 <small className="muted">Тариф: {entry.tariff} DARUS · версия {entry.rewardRuleVersion}</small>
               </div>

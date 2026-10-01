@@ -23,8 +23,8 @@ export type DarusEntry = {
   id: string;
   amount: string;
   currency: "DARUS";
-  sourceType: "verification_created";
-  subjectName: string;
+  sourceType: "verification_created" | "residence_first_filled";
+  subjectName: string | null;
   createdAt: Date;
   rewardRuleVersion: number;
   tariff: string;
@@ -191,7 +191,7 @@ export async function getDarusHistoryWithDatabase(
             ledger.created_at, ledger.reward_rule_version,
             subject.display_name AS subject_name, rules.amount AS tariff
        FROM darus_ledger ledger
-       JOIN participants subject ON subject.id = ledger.source_subject_id
+       LEFT JOIN participants subject ON subject.id = ledger.source_subject_id
        JOIN reward_rules rules ON rules.id = ledger.reward_rule_id
       WHERE ledger.participant_id = $1::uuid
       ORDER BY ledger.created_at DESC, ledger.id DESC`,
@@ -199,7 +199,8 @@ export async function getDarusHistoryWithDatabase(
   );
   return result.rows.map((row) => ({
     id: String(row.id), amount: String(row.amount), currency: "DARUS",
-    sourceType: "verification_created", subjectName: String(row.subject_name),
+    sourceType: String(row.source_type) as DarusEntry["sourceType"],
+    subjectName: row.subject_name ? String(row.subject_name) : null,
     createdAt: new Date(String(row.created_at)),
     rewardRuleVersion: Number(row.reward_rule_version), tariff: String(row.tariff),
   }));

@@ -382,6 +382,27 @@ export async function saveProfileWithDatabase(
       });
     }
     if (residenceChanged) {
+      if (!previousResidence && nextResidence) {
+        // A pre-reward residence edit may have been cleared before this release.
+        await client.query(
+          `INSERT INTO darus_ledger(participant_id, amount, reward_rule_id, reward_rule_version, source_type)
+           SELECT $1::uuid, rule.amount, rule.id, rule.version, 'residence_first_filled'
+             FROM reward_rules rule
+            WHERE rule.action_type = 'residence_first_filled' AND rule.active
+              AND rule.effective_from <= clock_timestamp()
+              AND (rule.effective_to IS NULL OR rule.effective_to > clock_timestamp())
+              AND NOT EXISTS (
+                SELECT 1 FROM events previous_edit
+                 WHERE previous_edit.participant_id = $1::uuid
+                   AND previous_edit.event_type = 'participant.about_updated'
+                   AND previous_edit.payload->>'field' = 'residence'
+              )
+            ORDER BY rule.version DESC LIMIT 1
+           ON CONFLICT (participant_id) WHERE source_type = 'residence_first_filled'
+           DO NOTHING`,
+          [participantId],
+        );
+      }
       await recordEvent(client, participantId, "participant.about_updated", { field: "residence" });
     }
     return { changed };

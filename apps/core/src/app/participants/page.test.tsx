@@ -5,6 +5,8 @@ const mocks = vi.hoisted(() => ({
   getCurrentParticipant: vi.fn(),
   listParticipantsDirectory: vi.fn(),
   readInterfaceTexts: vi.fn(),
+  listCommunityPosts: vi.fn(),
+  listCommunitySignals: vi.fn(),
   redirect: vi.fn(),
 }));
 
@@ -16,12 +18,26 @@ vi.mock("@/lib/participants-directory", () => ({
   listParticipantsDirectory: mocks.listParticipantsDirectory,
 }));
 vi.mock("@/lib/interface-texts", () => ({ readInterfaceTexts: mocks.readInterfaceTexts }));
+vi.mock("@/lib/communities", () => ({
+  communityFromParams: (params: { interest?: string; residence_name?: string; residence_type?: string; residence_country?: string }) =>
+    params.interest?.trim() ? { type: "interest", interest: params.interest.trim() }
+      : params.residence_name && params.residence_type && params.residence_country
+        ? { type: "residence", residence: { name: params.residence_name, type: params.residence_type, country: params.residence_country } }
+        : null,
+  communityHref: (community: { type: string; interest?: string; residence?: { name: string; type: string; country: string } }) =>
+    community.type === "interest" ? `/participants?interest=${encodeURIComponent(community.interest ?? "")}`
+      : `/participants?${new URLSearchParams({ residence_name: community.residence!.name,
+        residence_type: community.residence!.type, residence_country: community.residence!.country })}`,
+  listCommunityPosts: mocks.listCommunityPosts,
+  listCommunitySignals: mocks.listCommunitySignals,
+}));
 vi.mock("@/lib/profile-about", () => ({
   normalizeResidence: ({ name, type, country }: { name: string; type: string; country: string }) =>
     name && type && country ? { name: name.trim(), type: type.trim(), country: country.trim() } : null,
   residenceLabel: ({ name, country }: { name: string; country: string }) => `${name}, ${country}`,
 }));
 vi.mock("@/components/telegram-avatar", () => ({ TelegramAvatar: () => null }));
+vi.mock("@/components/local-date-time", () => ({ LocalDateTime: () => null }));
 
 import ParticipantsPage from "./page";
 
@@ -46,6 +62,8 @@ describe("/participants", () => {
       throw new Error(`redirect:${destination}`);
     });
     mocks.readInterfaceTexts.mockResolvedValue({ values: { "participants.title": "Сеть" } });
+    mocks.listCommunityPosts.mockResolvedValue([]);
+    mocks.listCommunitySignals.mockResolvedValue([]);
   });
 
   it("requires an authenticated Participant", async () => {
@@ -123,6 +141,7 @@ describe("/participants", () => {
     expect(textContent(page)).toMatch(/Интерес:\s+История/);
     expect(hrefs(page)).toContain("/participants?interest=%D0%98%D1%81%D1%82%D0%BE%D1%80%D0%B8%D1%8F");
     expect(hrefs(page)).toContain("/participants");
+    expect(mocks.listCommunityPosts).toHaveBeenCalledWith({ type: "interest", interest: "История" });
   });
 
   it("filters the directory by residence and keeps that filter in name search", async () => {
@@ -140,5 +159,8 @@ describe("/participants", () => {
     });
     expect(textContent(page)).toMatch(/Место жительства:\s+Казань, Россия/);
     expect(hrefs(page)).toContain("/participants?residence_name=%D0%9A%D0%B0%D0%B7%D0%B0%D0%BD%D1%8C&residence_type=%D0%B3%D0%BE%D1%80%D0%BE%D0%B4&residence_country=%D0%A0%D0%BE%D1%81%D1%81%D0%B8%D1%8F");
+    expect(mocks.listCommunitySignals).toHaveBeenCalledWith(["owner"], "viewer");
+    expect(textContent(page)).toContain("Я хочу");
+    expect(textContent(page)).toContain("У меня есть");
   });
 });

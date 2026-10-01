@@ -7,12 +7,14 @@ import { readInterfaceTexts } from "@/lib/interface-texts";
 import { listParticipantsDirectory } from "@/lib/participants-directory";
 import { normalizeResidence, residenceLabel, type Residence } from "@/lib/profile-about";
 import { getCurrentParticipant } from "@/lib/session";
+import { communityFromParams, communityHref, listCommunityPosts, listCommunitySignals } from "@/lib/communities";
+import { LocalDateTime } from "@/components/local-date-time";
 
 export const dynamic = "force-dynamic";
 export const metadata: Metadata = { title: "Сеть" };
 
 type ParticipantsPageProps = {
-  searchParams: Promise<{ q?: string; interest?: string; residence_name?: string; residence_type?: string; residence_country?: string }>;
+  searchParams: Promise<{ q?: string; interest?: string; residence_name?: string; residence_type?: string; residence_country?: string; post?: string }>;
 };
 
 function residenceFromQuery(params: Awaited<ParticipantsPageProps["searchParams"]>): Residence | null {
@@ -36,6 +38,7 @@ export default async function ParticipantsPage({ searchParams }: ParticipantsPag
   const { q = "", interest = "" } = params;
   const interestFilter = typeof interest === "string" ? interest.trim() : "";
   const residenceFilter = residenceFromQuery(params);
+  const community = communityFromParams(params);
   const filterParams = new URLSearchParams();
   if (interestFilter) filterParams.set("interest", interestFilter);
   if (residenceFilter) {
@@ -44,10 +47,20 @@ export default async function ParticipantsPage({ searchParams }: ParticipantsPag
     filterParams.set("residence_country", residenceFilter.country);
   }
   const filterHref = filterParams.size ? `/participants?${filterParams.toString()}` : "/participants";
-  const [participants, { values: texts }] = await Promise.all([
+  const [participants, { values: texts }, posts] = await Promise.all([
     listParticipantsDirectory(q, { interest: interestFilter, residence: residenceFilter, viewerParticipantId: viewer.id }),
     readInterfaceTexts(),
+    community ? listCommunityPosts(community) : Promise.resolve([]),
   ]);
+  const members = community && q
+    ? await listParticipantsDirectory("", { interest: interestFilter, residence: residenceFilter, viewerParticipantId: viewer.id })
+    : participants;
+  const signals = community?.type === "residence"
+    ? await listCommunitySignals(participants.map((participant) => participant.participantId), viewer.id)
+    : [];
+  const communityUrl = community ? communityHref(community) : null;
+  const isMember = community ? members.some((participant) => participant.participantId === viewer.id) : false;
+  const signalLabels = { want: "Я хочу", need: "Мне нужно", can: "Я могу", have: "У меня есть" };
 
   return (
     <main className="shell">
@@ -55,8 +68,10 @@ export default async function ParticipantsPage({ searchParams }: ParticipantsPag
         <div className="profileHeader">
           <div>
             <div className="eyebrow">ДАО Русь</div>
-            <h1>{texts["participants.title"]}</h1>
-            <p className="muted">Найдено: {participants.length}.</p>
+            <h1>{community
+              ? `${community.type === "residence" ? texts["community.residence_title"] : texts["community.interest_title"]}: ${community.type === "residence" ? residenceLabel(community.residence) : community.interest}`
+              : texts["participants.title"]}</h1>
+            <p className="muted">{community ? "Участников" : "Найдено"}: {community ? members.length : participants.length}.</p>
             {interestFilter ? (
               <p className="muted">Интерес: {interestFilter} · <Link href="/participants">Показать всех</Link></p>
             ) : null}
@@ -92,6 +107,8 @@ export default async function ParticipantsPage({ searchParams }: ParticipantsPag
           </div>
         </form>
 
+        {community ? <h2>{texts["community.members_title"]}</h2> : null}
+
         {participants.length ? (
           <ul className="participantsDirectory">
             {participants.map((participant) => (
@@ -111,6 +128,16 @@ export default async function ParticipantsPage({ searchParams }: ParticipantsPag
                     {participant.residence ? <small className="muted">{residenceLabel(participant.residence)}</small> : null}
                   </div>
                 </div>
+                {community?.type === "residence" ? (
+                  <div className="communitySignals">
+                    {(["want", "need", "can", "have"] as const).map((kind) => {
+                      const entries = signals.filter((signal) => signal.participantId === participant.participantId && signal.kind === kind);
+                      return <div key={kind}><strong>{signalLabels[kind]}</strong>
+                        {entries.length ? <ul>{entries.map((entry, index) => <li key={index}>{entry.body}</li>)}</ul>
+                          : <span className="muted">Пока не указано.</span>}</div>;
+                    })}
+                  </div>
+                ) : null}
                 <div className="participantDirectoryActions">
                   <Link className="button secondary" href={`/profile/${participant.participantId}`}>
                     Открыть профиль
@@ -126,6 +153,26 @@ export default async function ParticipantsPage({ searchParams }: ParticipantsPag
               : "Профили по этому запросу не найдены."}</p>
         )}
       </section>
+      {community && communityUrl ? <section className="card communityFeed">
+        <h2>{texts["community.feed_title"]}</h2>
+        {params.post === "saved" ? <p role="status">Объявление сохранено.</p> : null}
+        {params.post === "invalid" ? <p role="alert">Не удалось сохранить объявление. Проверьте текст и участие в сообществе.</p> : null}
+        {isMember ? <form action="/api/community/posts" method="post">
+          <input type="hidden" name="community" value={communityUrl} />
+          <textarea name="body" maxLength={2000} required aria-label="Текст объявления" placeholder="Ваше объявление" />
+          <button className="button primary" type="submit">Опубликовать</button>
+        </form> : <p className="muted">Публиковать объявления могут участники сообщества.</p>}
+        {posts.length ? <ol className="communityPosts">{posts.map((post) => <li key={post.id}>
+          <p>{post.body}</p>
+          <div className="muted"><Link href={`/profile/${post.authorId}`}>{post.authorName}</Link> · <LocalDateTime value={post.createdAt.toISOString()} /></div>
+          {post.authorId === viewer.id ? <form action="/api/community/posts" method="post">
+            <input type="hidden" name="community" value={communityUrl} />
+            <input type="hidden" name="action" value="delete" />
+            <input type="hidden" name="post_id" value={post.id} />
+            <button className="button secondary compact" type="submit">Удалить</button>
+          </form> : null}
+        </li>)}</ol> : <p className="muted">{texts["community.feed_empty"]}</p>}
+      </section> : null}
     </main>
   );
 }
