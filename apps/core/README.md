@@ -184,13 +184,8 @@ TELEGRAM_FORUM_CHAT_ID=
 TELEGRAM_RECEPTION_TOPIC_ID=
 TELEGRAM_FORUM_INVITE_URL=
 TELEGRAM_GUARDIAN_INVITES_ENABLED=false
-TELEGRAM_RECEPTION_DIAGNOSTICS=false
 ```
 
-Для краткой диагностики webhook можно установить
-`TELEGRAM_RECEPTION_DIAGNOSTICS=true`. Core логирует только ID и тип update,
-метаданные чата/сообщения, выбранную ветку и результат relay; текст и секреты
-не логируются. После проверки верните `false` и пересоздайте web-контейнер.
 Access log Caddy не содержит request headers.
 
 Токен должен принадлежать именно «Приёмной», а `TELEGRAM_FORUM_CHAT_ID` —

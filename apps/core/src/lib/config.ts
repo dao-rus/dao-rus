@@ -51,7 +51,6 @@ export function telegramReceptionConfig() {
     topicId: env("TELEGRAM_RECEPTION_TOPIC_ID"),
     forumInviteUrl: env("TELEGRAM_FORUM_INVITE_URL"),
     guardianInvitesEnabled: env("TELEGRAM_GUARDIAN_INVITES_ENABLED") === "true",
-    diagnosticsEnabled: env("TELEGRAM_RECEPTION_DIAGNOSTICS") === "true",
     botUsername: botUsername && /^[A-Za-z0-9_]{5,32}$/.test(botUsername.replace(/^@/, ""))
       ? botUsername.replace(/^@/, "") : undefined,
   };
