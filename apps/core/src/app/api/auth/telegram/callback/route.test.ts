@@ -6,6 +6,7 @@ const mocks = vi.hoisted(() => ({
   createSession: vi.fn(),
   resolveTelegramParticipant: vi.fn(),
   enrichTelegramProfile: vi.fn(),
+  checkForumAndInvite: vi.fn(),
 }));
 
 vi.mock("@/lib/config", () => ({
@@ -27,6 +28,9 @@ vi.mock("@/lib/telegram-oidc", () => ({
 }));
 vi.mock("@/lib/telegram-bot-profile", () => ({
   enrichTelegramProfile: mocks.enrichTelegramProfile,
+}));
+vi.mock("@/lib/telegram-forum-onboarding", () => ({
+  checkForumAndInvite: (...args: unknown[]) => { mocks.checkForumAndInvite(...args); return Promise.resolve(); },
 }));
 
 vi.mock("@/lib/session", () => ({

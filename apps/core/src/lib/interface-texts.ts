@@ -33,6 +33,7 @@ export const interfaceTextFields = [
   { section: "Диалоги", key: "relay.archive_empty", label: "Пустой архив", defaultValue: "Архив пуст.", multiline: false },
   { section: "Диалоги", key: "relay.messages_empty", label: "Пустая переписка", defaultValue: "Сообщений пока нет.", multiline: false },
   { section: "Профиль", key: "profile.eyebrow", label: "Надпись над именем в профиле", defaultValue: "Профиль", multiline: false },
+  { section: "Профиль", key: "profile.reception_link", label: "Ссылка на Приёмную", defaultValue: "Открыть Приёмную ДАО Русь", multiline: false },
 ] as const;
 
 export type InterfaceTextKey = (typeof interfaceTextFields)[number]["key"];

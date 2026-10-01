@@ -1,0 +1,157 @@
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import {
+  receptionRelayBot,
+  relayReceptionUpdate,
+  type ReceptionRelayBot,
+  type ReceptionRelayDatabase,
+} from "./telegram-reception-relay";
+
+vi.mock("./config", () => ({
+  telegramReceptionConfig: () => ({
+    token: "123456:test-token", forumChatId: "-1001234567890", topicId: "77",
+  }),
+}));
+
+type RelayRow = {
+  updateId: number;
+  direction: string;
+  forumChatId: string;
+  privateChatId: string;
+  privateMessageId: number | null;
+  forumMessageId: number | null;
+  status: string;
+  errorCode?: string;
+};
+
+function fakeDatabase() {
+  const rows = new Map<number, RelayRow>();
+  const query = vi.fn(async (sql: string, values?: unknown[]) => {
+    if (sql.includes("SELECT private_chat_id")) {
+      const row = [...rows.values()].find((candidate) =>
+        candidate.forumChatId === values?.[0] && candidate.forumMessageId === values?.[1] &&
+        candidate.status === "sent");
+      return { rowCount: row ? 1 : 0, rows: row ? [{ private_chat_id: row.privateChatId }] : [] };
+    }
+    if (sql.includes("INSERT INTO reception_relay_updates")) {
+      const updateId = Number(values?.[0]);
+      if (rows.has(updateId)) return { rowCount: 0, rows: [] };
+      rows.set(updateId, {
+        updateId, direction: String(values?.[1]), forumChatId: String(values?.[2]),
+        privateChatId: String(values?.[3]), privateMessageId: values?.[4] as number | null,
+        forumMessageId: values?.[5] as number | null, status: String(values?.[6]),
+      });
+      return { rowCount: 1, rows: [{ update_id: updateId }] };
+    }
+    if (sql.includes("SET status = 'sent'")) {
+      const row = rows.get(Number(values?.[0]))!;
+      row.status = "sent";
+      row.privateMessageId ??= values?.[1] as number | null;
+      row.forumMessageId ??= values?.[2] as number | null;
+    }
+    if (sql.includes("SET status = 'failed'")) {
+      const row = rows.get(Number(values?.[0]))!;
+      row.status = "failed";
+      row.errorCode = String(values?.[1]);
+    }
+    return { rowCount: 1, rows: [] };
+  });
+  return { database: { query } as ReceptionRelayDatabase, rows, query };
+}
+
+function privateMessage(updateId = 1, extra: Record<string, unknown> = {}) {
+  return { update_id: updateId, message: {
+    message_id: 11, chat: { id: 42, type: "private" },
+    from: { id: 42, is_bot: false }, text: "Привет", ...extra,
+  } };
+}
+
+function forumReply(updateId = 2, extra: Record<string, unknown> = {}) {
+  return { update_id: updateId, message: {
+    message_id: 90, chat: { id: -1001234567890, type: "supergroup" },
+    message_thread_id: 77, from: { id: 88, is_bot: false },
+    reply_to_message: { message_id: 501 }, text: "Здравствуйте", ...extra,
+  } };
+}
+
+function fakeBot(): ReceptionRelayBot {
+  let nextId = 501;
+  return { copyMessage: vi.fn(async () => ({ status: "sent" as const, messageId: nextId++ })) };
+}
+
+describe("Reception relay", () => {
+  it("copies a private message into the configured topic and keeps only routing IDs", async () => {
+    const { database, rows } = fakeDatabase();
+    const bot = fakeBot();
+    expect(await relayReceptionUpdate(privateMessage(), database, bot)).toBe("sent");
+    expect(bot.copyMessage).toHaveBeenCalledWith({
+      chatId: "-1001234567890", fromChatId: "42", messageId: 11, topicId: 77,
+    });
+    expect(rows.get(1)).toMatchObject({
+      status: "sent", privateChatId: "42", privateMessageId: 11,
+      forumMessageId: 501,
+    });
+    expect(JSON.stringify(rows.get(1))).not.toContain("Привет");
+  });
+
+  it("copies a reply in the configured topic back to the mapped private chat", async () => {
+    const { database, rows } = fakeDatabase();
+    const bot = fakeBot();
+    await relayReceptionUpdate(privateMessage(), database, bot);
+    expect(await relayReceptionUpdate(forumReply(), database, bot)).toBe("sent");
+    expect(bot.copyMessage).toHaveBeenLastCalledWith({
+      chatId: "42", fromChatId: "-1001234567890", messageId: 90,
+    });
+    expect(rows.get(2)).toMatchObject({
+      direction: "forum_to_private", forumMessageId: 90, privateMessageId: 502,
+    });
+  });
+
+  it("ignores wrong forums, wrong topics, unmapped replies and bot messages", async () => {
+    const { database, query } = fakeDatabase();
+    const bot = fakeBot();
+    expect(await relayReceptionUpdate(forumReply(2, { chat: { id: -1009999999999 } }), database, bot)).toBe("ignored");
+    expect(await relayReceptionUpdate(forumReply(3, { message_thread_id: 78 }), database, bot)).toBe("ignored");
+    expect(await relayReceptionUpdate(forumReply(4), database, bot)).toBe("ignored");
+    expect(await relayReceptionUpdate(privateMessage(5, { from: { id: 777, is_bot: true } }), database, bot)).toBe("ignored");
+    expect(bot.copyMessage).not.toHaveBeenCalled();
+    expect(query.mock.calls.some(([sql]) => sql.includes("INSERT INTO reception_relay_updates"))).toBe(false);
+  });
+
+  it("claims an update once and never copies a duplicate", async () => {
+    const { database } = fakeDatabase();
+    const bot = fakeBot();
+    expect(await relayReceptionUpdate(privateMessage(), database, bot)).toBe("sent");
+    expect(await relayReceptionUpdate(privateMessage(), database, bot)).toBe("duplicate");
+    expect(bot.copyMessage).toHaveBeenCalledTimes(1);
+  });
+
+  it("records unsupported messages and delivery failures without throwing", async () => {
+    const { database, rows } = fakeDatabase();
+    const bot: ReceptionRelayBot = { copyMessage: vi.fn(async () => ({
+      status: "failed" as const, errorCode: "telegram_400",
+    })) };
+    expect(await relayReceptionUpdate(privateMessage(1, { text: undefined, dice: { emoji: "🎲" } }), database, bot)).toBe("unsupported");
+    expect(rows.get(1)?.status).toBe("unsupported");
+    expect(await relayReceptionUpdate(privateMessage(2, { text: undefined, photo: [{ file_id: "photo" }] }), database, bot)).toBe("failed");
+    expect(rows.get(2)).toMatchObject({ status: "failed", errorCode: "telegram_400" });
+    expect(bot.copyMessage).toHaveBeenCalledTimes(1);
+  });
+});
+
+describe("copyMessage Bot API adapter", () => {
+  beforeEach(() => vi.stubGlobal("fetch", vi.fn()));
+  afterEach(() => vi.unstubAllGlobals());
+
+  it("passes the target topic and reads the created message ID", async () => {
+    vi.mocked(fetch).mockResolvedValue({ json: async () => ({ ok: true, result: { message_id: 501 } }) } as Response);
+    const result = await receptionRelayBot("token").copyMessage({
+      chatId: "-1001234567890", fromChatId: "42", messageId: 11, topicId: 77,
+    });
+    expect(result).toEqual({ status: "sent", messageId: 501 });
+    const [, options] = vi.mocked(fetch).mock.calls[0];
+    expect(JSON.parse(String(options?.body))).toEqual({
+      chat_id: "-1001234567890", from_chat_id: "42", message_id: 11,
+      message_thread_id: 77,
+    });
+  });
+});

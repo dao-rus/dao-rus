@@ -5,6 +5,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 const mocks = vi.hoisted(() => ({
   resolve: vi.fn(),
   createSession: vi.fn(),
+  checkForumAndInvite: vi.fn(),
 }));
 
 vi.mock("@/lib/config", () => ({
@@ -21,6 +22,9 @@ vi.mock("@/lib/postgres-identity-store", () => ({
 vi.mock("@/lib/session", () => ({
   createSession: mocks.createSession,
   SESSION_COOKIE: "dao_session",
+}));
+vi.mock("@/lib/telegram-forum-onboarding", () => ({
+  checkForumAndInvite: (...args: unknown[]) => { mocks.checkForumAndInvite(...args); return Promise.resolve(); },
 }));
 
 import { POST } from "./route";

@@ -27,6 +27,7 @@ vi.mock("@/lib/session", () => ({
 
 vi.mock("@/lib/config", () => ({
   hasPrototypeAdminAccess: mocks.hasPrototypeAdminAccess,
+  telegramReceptionConfig: () => ({}),
 }));
 
 vi.mock("@/lib/activity", () => ({

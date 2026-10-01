@@ -4,7 +4,7 @@ import { redirect } from "next/navigation";
 import { LocalDateTime } from "@/components/local-date-time";
 import { TelegramAvatar } from "@/components/telegram-avatar";
 import { getActivitySummary } from "@/lib/activity";
-import { hasPrototypeAdminAccess } from "@/lib/config";
+import { hasPrototypeAdminAccess, telegramReceptionConfig } from "@/lib/config";
 import { readInterfaceTexts } from "@/lib/interface-texts";
 import {
   getMembershipHistory,
@@ -86,6 +86,10 @@ export default async function ProfilePage({ searchParams }: ProfilePageProps) {
     getReputationSummary(participant.id, participant.id),
   ]);
   const hasAdminAccess = hasPrototypeAdminAccess(participant.id);
+  const receptionConfig = telegramReceptionConfig();
+  const receptionUsername = receptionConfig.token && receptionConfig.webhookSecret &&
+    receptionConfig.forumChatId && receptionConfig.forumInviteUrl
+    ? receptionConfig.botUsername : undefined;
   const updateMessage = params.profile_update ? updateMessages[params.profile_update] : null;
   const aboutMessage = params.about_update ? aboutMessages[params.about_update] : null;
 
@@ -109,6 +113,9 @@ export default async function ProfilePage({ searchParams }: ProfilePageProps) {
             </div>
           </div>
           <div className="profileActions">
+            {receptionUsername ? <a className="button secondary" href={`https://t.me/${receptionUsername}?start=core`}>
+              {texts["profile.reception_link"]}
+            </a> : null}
             <Link className="button secondary" href="/participants">{texts["participants.title"]}</Link>
             <Link className="button secondary" href="/exchange">{texts["exchange.title"]}</Link>
             {hasAdminAccess ? <Link className="button secondary" href="/admin">Управление</Link> : null}

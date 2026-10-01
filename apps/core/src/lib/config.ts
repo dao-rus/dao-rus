@@ -42,6 +42,20 @@ export function telegramBotToken(): string | undefined {
   return token && clientId && token.split(":", 1)[0] === clientId ? token : undefined;
 }
 
+export function telegramReceptionConfig() {
+  const botUsername = env("TELEGRAM_RECEPTION_BOT_USERNAME");
+  return {
+    token: env("TELEGRAM_RECEPTION_BOT_TOKEN"),
+    webhookSecret: env("TELEGRAM_RECEPTION_WEBHOOK_SECRET"),
+    forumChatId: env("TELEGRAM_FORUM_CHAT_ID"),
+    topicId: env("TELEGRAM_RECEPTION_TOPIC_ID"),
+    forumInviteUrl: env("TELEGRAM_FORUM_INVITE_URL"),
+    guardianInvitesEnabled: env("TELEGRAM_GUARDIAN_INVITES_ENABLED") === "true",
+    botUsername: botUsername && /^[A-Za-z0-9_]{5,32}$/.test(botUsername.replace(/^@/, ""))
+      ? botUsername.replace(/^@/, "") : undefined,
+  };
+}
+
 export function prototypeAdminParticipantIds(): Set<string> {
   return new Set(
     (env("ADMIN_PARTICIPANT_IDS") ?? "")

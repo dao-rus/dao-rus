@@ -3,6 +3,7 @@ import { telegramBotToken, secureCookies, sessionTtlDays } from "@/lib/config";
 import { resolveTelegramParticipant } from "@/lib/identity";
 import { PostgresIdentityStore } from "@/lib/postgres-identity-store";
 import { createSession, SESSION_COOKIE } from "@/lib/session";
+import { checkForumAndInvite } from "@/lib/telegram-forum-onboarding";
 import { TelegramMiniAppAuthError, verifyTelegramMiniAppInitData } from "../../../../../lib/telegram-mini-app";
 
 export const runtime = "nodejs";
@@ -44,6 +45,7 @@ export async function POST(request: NextRequest) {
     profile,
   );
   const sessionToken = await createSession(participant.id);
+  await checkForumAndInvite(profile.telegramUserId, "login").catch(() => undefined);
   const response = NextResponse.json({ ok: true, returnTo: "/need" });
   response.cookies.set(SESSION_COOKIE, sessionToken, {
     httpOnly: true,

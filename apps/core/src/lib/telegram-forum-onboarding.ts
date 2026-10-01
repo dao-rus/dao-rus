@@ -1,0 +1,230 @@
+import { pool } from "./db";
+import { telegramReceptionConfig } from "./config";
+
+type QueryResult = { rowCount: number | null; rows: Array<Record<string, unknown>> };
+export type ForumDatabase = {
+  connect(): Promise<{
+    query(text: string, values?: unknown[]): Promise<QueryResult>;
+    release(): void;
+  }>;
+  query(text: string, values?: unknown[]): Promise<QueryResult>;
+};
+
+type BotResponse = { ok?: boolean; result?: unknown; error_code?: number };
+export type ForumBot = {
+  getMember(chatId: string, userId: string): Promise<boolean>;
+  sendInvite(userId: string, url: string): Promise<"sent" | "blocked" | "unknown">;
+};
+
+function validTelegramId(value: string): boolean {
+  return /^-?[1-9]\d*$/.test(value) && Number.isSafeInteger(Number(value));
+}
+
+function validUserId(value: string): boolean {
+  return /^[1-9]\d*$/.test(value) && Number.isSafeInteger(Number(value));
+}
+
+function record(value: unknown): Record<string, unknown> | null {
+  return value && typeof value === "object" && !Array.isArray(value)
+    ? value as Record<string, unknown> : null;
+}
+
+async function botRequest(token: string, method: string, params: object): Promise<BotResponse> {
+  const response = await fetch(`https://api.telegram.org/bot${token}/${method}`, {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify(params),
+    cache: "no-store",
+    signal: AbortSignal.timeout(5000),
+  });
+  return await response.json() as BotResponse;
+}
+
+export function receptionBot(token: string): ForumBot {
+  return {
+    async getMember(chatId, userId) {
+      const response = await botRequest(token, "getChatMember", {
+        chat_id: chatId, user_id: Number(userId),
+      });
+      if (!response.ok) throw new Error("Forum membership could not be checked");
+      const member = record(response.result);
+      if (!member || typeof member.status !== "string") {
+        throw new Error("Invalid forum membership response");
+      }
+      if (["creator", "administrator", "member"].includes(member.status)) return true;
+      if (member.status === "restricted") return member.is_member === true;
+      if (member.status === "left" || member.status === "kicked") return false;
+      throw new Error("Unknown forum membership status");
+    },
+    async sendInvite(userId, url) {
+      try {
+        const response = await botRequest(token, "sendMessage", {
+          chat_id: Number(userId),
+          text: `Рады видеть вас в DAO Core. В основном форуме ДАО Русь можно познакомиться с участниками и присоединиться к обсуждениям. Если вам это интересно, вход здесь: ${url}\n\nУчастие в форуме добровольно и не влияет на доступ к Core.`,
+        });
+        if (response.ok) return "sent";
+        return response.error_code === 403 || response.error_code === 400 ? "blocked" : "unknown";
+      } catch {
+        return "unknown";
+      }
+    },
+  };
+}
+
+type ForumObservation = { participantId: string; changed: boolean; shouldInvite: boolean } | null;
+
+export async function observeForumMembership(
+  database: ForumDatabase,
+  userId: string,
+  joined: boolean,
+  observedAt: Date,
+  inviteSource: "login" | "start" | null,
+  source: "getChatMember" | "chat_member" = "getChatMember",
+  updateId?: number,
+): Promise<ForumObservation> {
+  const client = await database.connect();
+  try {
+    await client.query("BEGIN");
+    const identity = await client.query(
+      `SELECT participant_id FROM external_identities
+        WHERE provider = 'telegram' AND external_user_id = $1 LIMIT 1`,
+      [userId],
+    );
+    if (!identity.rowCount) {
+      await client.query("COMMIT");
+      return null;
+    }
+    const participantId = String(identity.rows[0].participant_id);
+    const inserted = await client.query(
+      `INSERT INTO participant_forum_onboarding(participant_id, forum_status, observed_at)
+       VALUES ($1, $2, $3) ON CONFLICT (participant_id) DO NOTHING`,
+      [participantId, joined ? "joined" : "absent", observedAt],
+    );
+    const current = await client.query(
+      `SELECT forum_status, observed_at, invitation_attempted_at, invitation_blocked_at
+         FROM participant_forum_onboarding WHERE participant_id = $1 FOR UPDATE`,
+      [participantId],
+    );
+    const row = current.rows[0];
+    const previousStatus = String(row.forum_status);
+    const fresh = new Date(String(row.observed_at)).getTime() <= observedAt.getTime();
+    const status = fresh ? (joined ? "joined" : "absent") : previousStatus;
+    const changed = fresh && previousStatus !== status;
+    if (fresh) {
+      await client.query(
+        `UPDATE participant_forum_onboarding SET forum_status = $2, observed_at = $3
+          WHERE participant_id = $1`,
+        [participantId, status, observedAt],
+      );
+    }
+    if (changed || Boolean(inserted.rowCount)) {
+      await client.query(
+        `INSERT INTO events(event_type, participant_id, payload)
+         VALUES ($1, $2, $3::jsonb)`,
+        [status === "joined" ? "onboarding.forum_joined" : "onboarding.forum_incomplete",
+          participantId, JSON.stringify({ source, observed_at: observedAt.toISOString(),
+            ...(updateId === undefined ? {} : { telegram_update_id: updateId }) })],
+      );
+    }
+    const shouldInvite = fresh && status === "absent" && inviteSource !== null &&
+      (!row.invitation_attempted_at || (inviteSource === "start" && Boolean(row.invitation_blocked_at)));
+    if (shouldInvite) {
+      await client.query(
+        `UPDATE participant_forum_onboarding
+            SET invitation_attempted_at = now(), invitation_blocked_at = NULL
+          WHERE participant_id = $1`,
+        [participantId],
+      );
+    }
+    await client.query("COMMIT");
+    return { participantId, changed, shouldInvite };
+  } catch (error) {
+    await client.query("ROLLBACK");
+    throw error;
+  } finally {
+    client.release();
+  }
+}
+
+export async function checkForumAndInvite(
+  userId: string,
+  source: "login" | "start",
+  database: ForumDatabase = pool,
+  bot?: ForumBot,
+): Promise<void> {
+  const { token, forumChatId, forumInviteUrl, guardianInvitesEnabled } = telegramReceptionConfig();
+  if (!token || !forumChatId || !validUserId(userId) || !validTelegramId(forumChatId)) return;
+  const identity = await database.query(
+    `SELECT participant_id FROM external_identities
+      WHERE provider = 'telegram' AND external_user_id = $1 LIMIT 1`,
+    [userId],
+  );
+  if (!identity.rowCount) return;
+  const reception = bot ?? receptionBot(token);
+  const observedAt = new Date();
+  const joined = await reception.getMember(forumChatId, userId);
+  const observation = await observeForumMembership(database, userId, joined, observedAt,
+    forumInviteUrl && guardianInvitesEnabled ? source : null);
+  if (!observation?.shouldInvite || !forumInviteUrl) return;
+  // A join may have arrived after the first check but before the invitation claim.
+  const stillAbsent = !(await reception.getMember(forumChatId, userId));
+  if (!stillAbsent) {
+    await observeForumMembership(database, userId, true, new Date(), null);
+    return;
+  }
+  const delivery = await reception.sendInvite(userId, forumInviteUrl);
+  if (delivery === "sent") {
+    const client = await database.connect();
+    try {
+      await client.query("BEGIN");
+      await client.query(
+        `UPDATE participant_forum_onboarding SET invitation_sent_at = now()
+          WHERE participant_id = $1 AND invitation_sent_at IS NULL`,
+        [observation.participantId],
+      );
+      await client.query(
+        `INSERT INTO events(event_type, participant_id, payload)
+         VALUES ('onboarding.forum_invitation_sent', $1, '{}'::jsonb)`,
+        [observation.participantId],
+      );
+      await client.query("COMMIT");
+    } catch (error) {
+      await client.query("ROLLBACK");
+      throw error;
+    } finally {
+      client.release();
+    }
+  } else if (delivery === "blocked") {
+    await database.query(
+      `UPDATE participant_forum_onboarding SET invitation_blocked_at = now()
+        WHERE participant_id = $1 AND invitation_sent_at IS NULL`,
+      [observation.participantId],
+    );
+  }
+}
+
+export async function observeForumMemberUpdate(
+  update: unknown,
+  database: ForumDatabase = pool,
+): Promise<"ignored" | "observed"> {
+  const { forumChatId } = telegramReceptionConfig();
+  const memberUpdate = record(record(update)?.chat_member);
+  const chat = record(memberUpdate?.chat);
+  const oldMember = record(memberUpdate?.old_chat_member);
+  const newMember = record(memberUpdate?.new_chat_member);
+  const user = record(newMember?.user);
+  const userId = user?.id;
+  const timestamp = memberUpdate?.date;
+  if (!forumChatId || !memberUpdate || !chat || String(chat.id) !== forumChatId ||
+      !oldMember || !newMember || !Number.isSafeInteger(userId) ||
+      !Number.isSafeInteger(timestamp)) return "ignored";
+  const status = newMember.status;
+  const joined = status === "creator" || status === "administrator" || status === "member" ||
+    (status === "restricted" && newMember.is_member === true);
+  if (!joined && status !== "left" && status !== "kicked" && status !== "restricted") return "ignored";
+  const updateId = record(update)?.update_id;
+  const result = await observeForumMembership(database, String(userId), joined,
+    new Date(Number(timestamp) * 1000), null, "chat_member",
+    Number.isSafeInteger(updateId) ? Number(updateId) : undefined);
+  return result ? "observed" : "ignored";
+}

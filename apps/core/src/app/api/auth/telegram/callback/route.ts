@@ -3,6 +3,7 @@ import { PostgresIdentityStore } from "@/lib/postgres-identity-store";
 import { resolveTelegramParticipant } from "@/lib/identity";
 import { authenticateTelegramCode } from "@/lib/telegram-oidc";
 import { enrichTelegramProfile } from "@/lib/telegram-bot-profile";
+import { checkForumAndInvite } from "@/lib/telegram-forum-onboarding";
 import { createSession, SESSION_COOKIE } from "@/lib/session";
 import {
   appBaseUrl,
@@ -60,6 +61,8 @@ export async function GET(request: NextRequest) {
     const { participant } = await resolveTelegramParticipant(store, profile);
 
     const sessionToken = await createSession(participant.id);
+    // Forum onboarding is optional and must not affect a verified Core login.
+    await checkForumAndInvite(profile.telegramUserId, "login").catch(() => undefined);
 
     const returnTo = request.cookies.get("dao_tg_return_to")?.value === "/need"
       ? "/need" : "/profile";
