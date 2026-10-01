@@ -6,9 +6,11 @@ import {
   type ReceptionRelayDatabase,
 } from "./telegram-reception-relay";
 
+const receptionConfig = vi.hoisted(() => ({ topicId: "77" }));
+
 vi.mock("./config", () => ({
   telegramReceptionConfig: () => ({
-    token: "123456:test-token", forumChatId: "-1001234567890", topicId: "77",
+    token: "123456:test-token", forumChatId: "-1001234567890", topicId: receptionConfig.topicId,
   }),
 }));
 
@@ -79,6 +81,8 @@ function fakeBot(): ReceptionRelayBot {
 }
 
 describe("Reception relay", () => {
+  beforeEach(() => { receptionConfig.topicId = "77"; });
+
   it("copies a private message into the configured topic and keeps only routing IDs", async () => {
     const { database, rows } = fakeDatabase();
     const bot = fakeBot();
@@ -104,6 +108,26 @@ describe("Reception relay", () => {
     expect(rows.get(2)).toMatchObject({
       direction: "forum_to_private", forumMessageId: 90, privateMessageId: 502,
     });
+  });
+
+  it("routes General topic replies and omits its unsupported thread ID on copy", async () => {
+    receptionConfig.topicId = "1";
+    const { database } = fakeDatabase();
+    const bot = fakeBot();
+    expect(await relayReceptionUpdate(privateMessage(), database, bot)).toBe("sent");
+    expect(bot.copyMessage).toHaveBeenCalledWith({
+      chatId: "-1001234567890", fromChatId: "42", messageId: 11,
+    });
+    expect(await relayReceptionUpdate(forumReply(2, {
+      message_thread_id: undefined, is_topic_message: undefined,
+    }), database, bot)).toBe("sent");
+    expect(bot.copyMessage).toHaveBeenLastCalledWith({
+      chatId: "42", fromChatId: "-1001234567890", messageId: 90,
+    });
+    expect(await relayReceptionUpdate(forumReply(3, {
+      is_topic_message: true, message_thread_id: 99,
+    }), database, bot)).toBe("ignored");
+    expect(bot.copyMessage).toHaveBeenCalledTimes(2);
   });
 
   it("ignores wrong forums, wrong topics, unmapped replies and bot messages", async () => {

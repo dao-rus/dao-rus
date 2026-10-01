@@ -89,7 +89,11 @@ export async function relayReceptionUpdate(
   const isPrivate = chat.type === "private" && safeInteger(from?.id) &&
     from.id === chat.id && from.is_bot !== true;
   const senderChat = record(message.sender_chat);
-  const isForumReply = chat.id === forumId && message.message_thread_id === threadId &&
+  // Telegram's General topic has ID 1, but its messages are not marked as topic messages.
+  const inReceptionTopic = threadId === 1
+    ? message.is_topic_message !== true
+    : message.message_thread_id === threadId;
+  const isForumReply = chat.id === forumId && inReceptionTopic &&
     (from?.is_bot !== true || senderChat?.id === forumId) &&
     (safeInteger(from?.id) || senderChat?.id === forumId);
   let direction: "private_to_forum" | "forum_to_private";
@@ -140,7 +144,8 @@ export async function relayReceptionUpdate(
     chatId: direction === "private_to_forum" ? forumChatId : String(privateChatId),
     fromChatId: direction === "private_to_forum" ? String(privateChatId) : forumChatId,
     messageId: sourceMessageId,
-    ...(direction === "private_to_forum" ? { topicId: threadId } : {}),
+    // Bot API rejects message_thread_id=1 for General; omitting it targets General.
+    ...(direction === "private_to_forum" && threadId !== 1 ? { topicId: threadId } : {}),
   });
   if (copied.status === "failed") {
     await database.query(
