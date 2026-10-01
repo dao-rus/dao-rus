@@ -11,6 +11,9 @@
 
 	log {
 		output stdout
-		format console
+		format filter {
+			request>headers delete
+			wrap console
+		}
 	}
 }
