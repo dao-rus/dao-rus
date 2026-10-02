@@ -62,10 +62,17 @@ export async function listParticipantsDirectoryWithDatabase(
        LEFT JOIN external_identities telegram
          ON telegram.participant_id = participant.id
         AND telegram.provider = 'telegram'
-      WHERE EXISTS (
-        SELECT 1 FROM events login
-         WHERE login.participant_id = participant.id
-           AND login.event_type = 'participant.logged_in'
+      WHERE (
+        EXISTS (
+          SELECT 1 FROM participant_forum_onboarding forum
+           WHERE forum.participant_id = participant.id
+             AND forum.forum_status = 'joined'
+        )
+        OR EXISTS (
+          SELECT 1 FROM events login
+           WHERE login.participant_id = participant.id
+             AND login.event_type = 'participant.logged_in'
+        )
       )
         AND (
           $1::text = ''

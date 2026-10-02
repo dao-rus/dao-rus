@@ -61,26 +61,16 @@ describe("participants directory", () => {
     ]);
   });
 
-  it("hides a roster-backed profile until its own successful Core login", async () => {
-    const participantId = "30000000-0000-4000-8000-000000000003";
-    let hasLoggedIn = false;
-    const database = {
-      async query(text: string) {
-        expect(text).toContain("login.participant_id = participant.id");
-        expect(text).toContain("login.event_type = 'participant.logged_in'");
-        return {
-          rows: hasLoggedIn
-            ? [{ participant_id: participantId, display_name: "Имя из Telegram", telegram_username: null, is_verified: false }]
-            : [],
-        };
+  it("admits forum members or Core visitors without requiring both", async () => {
+    let sql = "";
+    await listParticipantsDirectoryWithDatabase({
+      async query(text) {
+        sql = text;
+        return { rows: [] };
       },
-    };
+    });
 
-    expect(await listParticipantsDirectoryWithDatabase(database)).toEqual([]);
-    hasLoggedIn = true;
-    expect(await listParticipantsDirectoryWithDatabase(database)).toMatchObject([
-      { participantId, displayName: "Имя из Telegram" },
-    ]);
+    expect(sql).toMatch(/WHERE \(\s*EXISTS \(\s*SELECT 1 FROM participant_forum_onboarding forum\s+WHERE forum.participant_id = participant.id\s+AND forum.forum_status = 'joined'\s*\)\s*OR EXISTS \(\s*SELECT 1 FROM events login\s+WHERE login.participant_id = participant.id\s+AND login.event_type = 'participant.logged_in'\s*\)\s*\)/);
   });
 
   it("keeps the OIDC avatar visible when Bot API reports no photo", async () => {
@@ -119,7 +109,7 @@ describe("participants directory", () => {
     expect(queries[0].text).toContain("login.event_type = 'participant.logged_in'");
   });
 
-  it("aggregates a complete residence without admitting never-logged-in profiles", async () => {
+  it("aggregates a complete residence for visible profiles", async () => {
     const queries: Array<{ text: string; values?: unknown[] }> = [];
     const residence = { name: "Казань", type: "город", country: "Россия" };
     const entries = await listParticipantsDirectoryWithDatabase({
