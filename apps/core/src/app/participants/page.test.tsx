@@ -75,6 +75,7 @@ describe("/participants", () => {
       "participants.sort_label": "Сортировка:", "participants.sort_name": "Имя",
       "participants.sort_verification": "Топ-верификация",
       "participants.sort_reputation": "Топ-репутация",
+      "participants.sort_core": "Ядро",
     } });
     mocks.listCommunityPosts.mockResolvedValue([]);
     mocks.listCommunitySignals.mockResolvedValue([]);
@@ -153,9 +154,27 @@ describe("/participants", () => {
     expect(textContent(page)).toContain("Имя");
     expect(textContent(page)).toContain("Топ-верификация");
     expect(textContent(page)).toContain("Топ-репутация");
+    expect(textContent(page)).toContain("Ядро");
     expect(hrefs(page)).toContain("/participants?interest=%D0%B8%D1%81%D1%82%D0%BE%D1%80%D0%B8%D1%8F&q=%D0%90%D0%BD%D0%BD%D0%B0");
     expect(hrefs(page)).toContain("/participants?interest=%D0%B8%D1%81%D1%82%D0%BE%D1%80%D0%B8%D1%8F&q=%D0%90%D0%BD%D0%BD%D0%B0&sort=reputation");
+    expect(hrefs(page)).toContain("/participants?interest=%D0%B8%D1%81%D1%82%D0%BE%D1%80%D0%B8%D1%8F&q=%D0%90%D0%BD%D0%BD%D0%B0&sort=core");
     expect(hrefs(page)).toContain("/participants?interest=%D0%B8%D1%81%D1%82%D0%BE%D1%80%D0%B8%D1%8F&sort=verification");
+  });
+
+  it("shows the count of found Core visitors", async () => {
+    mocks.getCurrentParticipant.mockResolvedValue({ id: "viewer" });
+    mocks.listParticipantsDirectory.mockResolvedValue([{
+      participantId: "core-member", displayName: "Анна", telegramUsername: null,
+      verificationPoints: 0, positiveCount: 0,
+    }]);
+
+    const page = await ParticipantsPage({ searchParams: Promise.resolve({ sort: "core" }) });
+
+    expect(mocks.listParticipantsDirectory).toHaveBeenCalledWith("", {
+      interest: "", residence: null, viewerParticipantId: "viewer", sort: "core",
+    });
+    expect(textContent(page)).toMatch(/Найдено\s*:\s*1\s*\./);
+    expect(hrefs(page)).toContain("/participants?sort=core");
   });
 
   it("shows an interest filter and preserves it while searching by name", async () => {

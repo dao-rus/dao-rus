@@ -13,7 +13,7 @@ export type ParticipantDirectoryEntry = {
   residence: Residence | null;
 };
 
-export type DirectorySort = "name" | "verification" | "reputation";
+export type DirectorySort = "name" | "verification" | "reputation" | "core";
 type DirectoryFilters = { interest?: string; residence?: Residence | null; viewerParticipantId?: string; sort?: DirectorySort };
 
 type QueryResult = {
@@ -34,6 +34,11 @@ export async function listParticipantsDirectoryWithDatabase(
   const residence = filters.residence;
   const orderBy = filters.sort === "verification" ? "verification_points DESC, "
     : filters.sort === "reputation" ? "positive_count DESC, " : "";
+  const coreOnly = filters.sort === "core" ? `AND EXISTS (
+          SELECT 1 FROM events core_login
+           WHERE core_login.participant_id = participant.id
+             AND core_login.event_type = 'participant.logged_in'
+        )` : "";
   const result = await database.query(
     `${VERIFIED_SUBJECTS_CTE}
      SELECT participant.id AS participant_id,
@@ -74,6 +79,7 @@ export async function listParticipantsDirectoryWithDatabase(
              AND login.event_type = 'participant.logged_in'
         )
       )
+        ${coreOnly}
         AND (
           $1::text = ''
           OR participant.display_name ILIKE '%' || $1 || '%'

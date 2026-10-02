@@ -16,6 +16,7 @@ export const interfaceTextFields = [
   { section: "Сеть", key: "participants.sort_name", label: "Сортировка по имени", defaultValue: "Имя", multiline: false },
   { section: "Сеть", key: "participants.sort_verification", label: "Сортировка по верификации", defaultValue: "Топ-верификация", multiline: false },
   { section: "Сеть", key: "participants.sort_reputation", label: "Сортировка по репутации", defaultValue: "Топ-репутация", multiline: false },
+  { section: "Сеть", key: "participants.sort_core", label: "Показать вошедших в Ядро", defaultValue: "Ядро", multiline: false },
   { section: "Сообщества", key: "community.residence_title", label: "Префикс заголовка места", defaultValue: "Сообщество", multiline: false },
   { section: "Сообщества", key: "community.interest_title", label: "Префикс заголовка интереса", defaultValue: "Сообщество", multiline: false },
   { section: "Сообщества", key: "community.members_title", label: "Заголовок списка участников", defaultValue: "Участники", multiline: false },

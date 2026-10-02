@@ -139,5 +139,21 @@ describe("participants directory", () => {
     expect(orders[0]).toContain("ORDER BY verification_points DESC, lower(participant.display_name), participant.id");
     expect(orders[1]).toContain("ORDER BY positive_count DESC, lower(participant.display_name), participant.id");
     expect(orders[2]).toContain("ORDER BY lower(participant.display_name), participant.id");
+    expect(orders[2]).not.toContain("FROM events core_login");
+  });
+
+  it("limits the Core view to Participants who logged in, ordered by name", async () => {
+    let sql = "";
+    await listParticipantsDirectoryWithDatabase({
+      async query(text) {
+        sql = text;
+        return { rows: [] };
+      },
+    }, "", { sort: "core" });
+
+    expect(sql).toContain("FROM participant_forum_onboarding forum");
+    expect(sql).toContain("AND EXISTS (\n          SELECT 1 FROM events core_login");
+    expect(sql).toContain("core_login.event_type = 'participant.logged_in'");
+    expect(sql).toContain("ORDER BY lower(participant.display_name), participant.id");
   });
 });
