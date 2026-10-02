@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { devAuthEnabled, isTelegramConfigured } from "@/lib/config";
-import { DAO_CODE_CLAUSES, DAO_CODE_TITLE } from "../lib/dao-code";
+import { DAO_CODE_CLAUSES } from "../lib/dao-code";
+import { ActionPill } from "../components/action-pill";
 import { readInterfaceTexts } from "@/lib/interface-texts";
 import { getCurrentParticipant } from "@/lib/session";
 
@@ -21,10 +22,21 @@ export default async function Home({
 
   return (
     <main className="shell">
-      <section className="hero card">
-        <div className="eyebrow">{texts["home.eyebrow"]}</div>
-        <h1>{texts["home.title"]}</h1>
-        <p className="lead">{texts["home.lead"]}</p>
+      <section className="hero card homePage">
+        <section className="homeCode" aria-labelledby="home-code-title">
+          <h2 id="home-code-title">{texts["home.code_title"]}</h2>
+          <ol className="homeCodeList">
+            {DAO_CODE_CLAUSES.map((clause) => (
+              <li key={clause.id}>{clause.text}</li>
+            ))}
+          </ol>
+          <Link className="metricLink" href="/code">{texts["home.code_link"]}</Link>
+        </section>
+
+        <div className="homeIdentity">
+          <h1>{texts["home.title"]}</h1>
+          <p className="lead">{texts["home.lead"]}</p>
+        </div>
 
         {params.auth_error ? (
           <p className="alert">Не удалось войти через Telegram. Попробуйте ещё раз.</p>
@@ -59,15 +71,9 @@ export default async function Home({
           </div>
         )}
 
-        <section className="homeCode" aria-labelledby="home-code-title">
-          <h2 id="home-code-title">{DAO_CODE_TITLE}</h2>
-          <ol className="homeCodeList">
-            {DAO_CODE_CLAUSES.map((clause) => (
-              <li key={clause.id}>{clause.text}</li>
-            ))}
-          </ol>
-          <Link className="metricLink" href="/code">{texts["home.code_link"]}</Link>
-        </section>
+        <div className="homeActions">
+          <ActionPill href="/profile">{texts["home.action_pill"]}</ActionPill>
+        </div>
       </section>
     </main>
   );

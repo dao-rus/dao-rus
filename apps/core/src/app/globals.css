@@ -560,11 +560,27 @@ dd { margin: 6px 0 0; }
 .relayReveal { border: 1px solid var(--accent); border-radius: 12px; padding: 16px; background: #eaf4e9; }
 
 
-.homeCode {
-  margin-top: 34px;
-  padding-top: 26px;
-  border-top: 1px solid var(--line);
+.homePage { padding-top: clamp(40px, 7vw, 76px); }
+.homeIdentity { margin-top: clamp(32px, 5vw, 48px); }
+.homeIdentity .lead { margin-bottom: 0; }
+.homeActions { margin-top: 22px; }
+.actionPill {
+  display: inline-flex;
+  align-items: center;
+  min-height: 44px;
+  max-width: 100%;
+  padding: 12px 18px;
+  border: 1px solid #D9C79B;
+  border-radius: 24px;
+  background: #F3E8C8;
+  color: #514326;
+  font-size: 14px;
+  line-height: 1.5;
+  overflow-wrap: anywhere;
+  text-decoration: none;
 }
+.actionPill:hover { background: #EEDDB0; }
+.actionPill:focus-visible { outline: 2px solid #514326; outline-offset: 3px; }
 .homeCode h2 { margin: 0 0 14px; font-size: 22px; }
 .homeCodeList {
   display: grid;

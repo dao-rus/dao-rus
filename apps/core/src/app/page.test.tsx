@@ -32,6 +32,8 @@ describe("home interface texts", () => {
       "home.login_button": "Свой вход",
       "home.profile_button": "Свой профиль",
       "home.code_link": "Открыть наш Кодекс",
+      "home.code_title": "Кодекс руси",
+      "home.action_pill": "Заполните профиль и получите +0,1 DARUS",
       "participants.title": "Моя сеть",
       "exchange.title": "Обмен",
       "nav.veche": "Наше вече",
@@ -42,7 +44,8 @@ describe("home interface texts", () => {
     mocks.getCurrentParticipant.mockResolvedValue(null);
     const page = await Home({ searchParams: Promise.resolve({}) });
     const text = textContent(page);
-    expect(text).toContain("Своя надпись");
+    expect(text).not.toContain("Своя надпись");
+    expect(text.indexOf("Кодекс руси")).toBeLessThan(text.indexOf("Свой заголовок"));
     expect(text).toContain("Свой заголовок");
     expect(text).toContain("Свой основной текст");
     expect(text).toContain("Свой вход");
@@ -58,5 +61,8 @@ describe("home interface texts", () => {
     expect(textContent(page)).toContain("Моя сеть");
     expect(textContent(page)).toContain("Обмен");
     expect(textContent(page)).toContain("Наше вече");
+    expect(textContent(page).indexOf("Наше вече")).toBeLessThan(
+      textContent(page).indexOf("Заполните профиль и получите +0,1 DARUS"),
+    );
   });
 });
