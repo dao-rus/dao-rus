@@ -470,9 +470,8 @@ async function bindParticipantForMembership(
   if (!participantId) {
     const participantResult = await client.query(
       `INSERT INTO participants(display_name, membership_status)
-       VALUES ($1, 'participant')
+       VALUES ('Участник форума', 'participant')
        RETURNING id`,
-      [String(roster.display_name)],
     );
     participantId = String(participantResult.rows[0].id);
     participantCreated = true;

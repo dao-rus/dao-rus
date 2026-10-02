@@ -277,7 +277,8 @@ describe("updateParticipantRegistryWithDatabase", () => {
     const participantInsert = client.queries.find(({ text }) =>
       text.includes("INSERT INTO participants"),
     );
-    expect(participantInsert?.values).toEqual(["Участник из roster"]);
+    expect(participantInsert?.text).toContain("VALUES ('Участник форума', 'participant')");
+    expect(participantInsert?.values).toBeUndefined();
     expect(participantInsert?.text).toContain("'participant'");
 
     const identityInsert = client.queries.find(({ text }) =>

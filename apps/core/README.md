@@ -383,7 +383,12 @@ default галочкой в форме. Только фактическое из
 
 ## 6. Одноразовый Telegram Roster v0.1
 
-Обычный `telegram:roster:import` ниже сохраняет технический roster без создания Participant. Для однократного переноса исторического состава основного форума используйте отдельный `telegram:forum:import` в конце этого раздела.
+Обычный `telegram:roster:import` ниже сохраняет технический roster без создания
+Participant. Для однократного переноса исторического состава основного форума
+используйте отдельный `telegram:forum:import` в конце этого раздела. Имя из
+MTProto roster не переносится в публичный `participants.display_name`:
+автоматически созданный профиль получает временное имя до получения актуального
+имени через Bot API или входа участника в Core.
 
 Bot API не предоставляет надёжный полный список участников закрытого supergroup/forum. Для лабораторного snapshot используется отдельный локальный MTProto-клиент под пользовательским Telegram-аккаунтом. Официальные точки отсчёта: [получение `api_id`/`api_hash`](https://core.telegram.org/api/obtaining_api_id), [авторизация пользователя](https://core.telegram.org/api/auth) и [`channels.getParticipants`](https://core.telegram.org/method/channels.getParticipants).
 
