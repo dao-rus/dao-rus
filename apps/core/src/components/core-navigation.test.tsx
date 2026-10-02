@@ -27,8 +27,17 @@ describe("CoreNavigation", () => {
       { href: "/veche", label: "Вече", current: undefined },
       { href: "/exchange", label: "Обмен", current: undefined },
       { href: "/participants", label: "Люди", current: undefined },
+      { href: "/nearby", label: "Рядом", current: undefined },
       { href: "/profile", label: "Ваш профиль", current: "page" },
       { href: "/code", label: "Кодекс", current: undefined },
     ]);
+  });
+
+  it("marks Nearby as the current section", async () => {
+    const texts = Object.fromEntries(interfaceTextFields.map((field) => [field.key, field.defaultValue])) as InterfaceTextValues;
+    const navigation = await CoreNavigation({ current: "nearby", texts });
+    expect(links(navigation).find((link) => link.href === "/nearby")).toEqual({
+      href: "/nearby", label: "Рядом", current: "page",
+    });
   });
 });

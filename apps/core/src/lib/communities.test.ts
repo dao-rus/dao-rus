@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { communityFromParams, communityKey, createCommunityPostWithDatabase,
-  deleteCommunityPostWithDatabase, listCommunitySignalsWithDatabase,
+  deleteCommunityPostWithDatabase, listCommunitySignalsWithDatabase, listResidenceCommunitiesWithDatabase,
   CommunityMembershipError, type CommunityClient, type CommunityDatabase } from "./communities";
 
 const interest = { type: "interest" as const, interest: "История" };
@@ -69,5 +69,25 @@ describe("community publication", () => {
       queries.push(text); return { rowCount: 0, rows: [] };
     } }, ["member"], "viewer");
     expect(queries[0]).toContain("visibility IN ('public', 'members') OR participant_id = $2::uuid");
+  });
+});
+
+describe("residence community index", () => {
+  it("groups complete residences in PostgreSQL and orders counts before names", async () => {
+    let sql = "";
+    const communities = await listResidenceCommunitiesWithDatabase({ async query(text) {
+      sql = text;
+      return { rowCount: 1, rows: [{ residence_name: "Москва", residence_type: "город",
+        residence_country: "Россия", participant_count: "12" }] };
+    } });
+    expect(communities).toEqual([{ residence: { name: "Москва", type: "город", country: "Россия" }, participantCount: 12 }]);
+    expect(sql).toContain("count(*)::integer AS participant_count");
+    expect(sql).toContain("GROUP BY participant.residence_name, participant.residence_type, participant.residence_country");
+    expect(sql).toContain("ORDER BY participant_count DESC, lower(participant.residence_name)");
+    expect(sql).toContain("participant.residence_name IS NOT NULL AND btrim(participant.residence_name) <> ''");
+    expect(sql).toContain("participant.residence_type IS NOT NULL AND btrim(participant.residence_type) <> ''");
+    expect(sql).toContain("participant.residence_country IS NOT NULL AND btrim(participant.residence_country) <> ''");
+    expect(sql).toContain("forum.forum_status = 'joined'");
+    expect(sql).toContain("login.event_type = 'participant.logged_in'");
   });
 });

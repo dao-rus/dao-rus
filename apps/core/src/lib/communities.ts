@@ -36,6 +36,44 @@ export function communityHref(community: Community): string {
 
 export type CommunityPost = { id: string; body: string; authorId: string; authorName: string; createdAt: Date };
 export type CommunitySignal = { participantId: string; kind: "want" | "need" | "can" | "have"; body: string };
+export type ResidenceCommunity = { residence: Residence; participantCount: number };
+
+export async function listResidenceCommunitiesWithDatabase(
+  database: Pick<CommunityDatabase, "query">,
+): Promise<ResidenceCommunity[]> {
+  const result = await database.query(
+    `SELECT participant.residence_name, participant.residence_type, participant.residence_country,
+            count(*)::integer AS participant_count
+       FROM participants participant
+      WHERE participant.residence_name IS NOT NULL AND btrim(participant.residence_name) <> ''
+        AND participant.residence_type IS NOT NULL AND btrim(participant.residence_type) <> ''
+        AND participant.residence_country IS NOT NULL AND btrim(participant.residence_country) <> ''
+        AND (
+          EXISTS (
+            SELECT 1 FROM participant_forum_onboarding forum
+             WHERE forum.participant_id = participant.id AND forum.forum_status = 'joined'
+          )
+          OR EXISTS (
+            SELECT 1 FROM events login
+             WHERE login.participant_id = participant.id AND login.event_type = 'participant.logged_in'
+          )
+        )
+      GROUP BY participant.residence_name, participant.residence_type, participant.residence_country
+      ORDER BY participant_count DESC, lower(participant.residence_name),
+               lower(participant.residence_country), lower(participant.residence_type),
+               participant.residence_name, participant.residence_country, participant.residence_type`,
+  );
+  return result.rows.map((row) => ({
+    residence: { name: String(row.residence_name), type: String(row.residence_type),
+      country: String(row.residence_country) },
+    participantCount: Number(row.participant_count),
+  }));
+}
+
+export async function listResidenceCommunities(): Promise<ResidenceCommunity[]> {
+  const { pool } = await import("./db");
+  return listResidenceCommunitiesWithDatabase(pool);
+}
 
 export async function listCommunityPostsWithDatabase(database: Pick<CommunityDatabase, "query">, community: Community): Promise<CommunityPost[]> {
   const result = await database.query(
