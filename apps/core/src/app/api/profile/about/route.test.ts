@@ -1,0 +1,24 @@
+import { NextRequest } from "next/server";
+import { beforeEach, expect, it, vi } from "vitest";
+const mocks = vi.hoisted(()=>({ participant:vi.fn(), interest:vi.fn(), signal:vi.fn(), bio:vi.fn(), remove:vi.fn(), archive:vi.fn() }));
+vi.mock("@/lib/session",()=>({getCurrentParticipant:mocks.participant}));
+vi.mock("@/lib/config",()=>({appBaseUrl:()=>"http://localhost:3000"}));
+vi.mock("@/lib/profile-about",()=>({addProfileInterest:mocks.interest,addProfileSignal:mocks.signal,updateProfileBio:mocks.bio,
+  removeProfileInterest:mocks.remove,archiveProfileSignal:mocks.archive,ProfileAboutValidationError:class extends Error{}}));
+import { POST } from "./route";
+function request(action:string) { return new NextRequest("http://localhost:3000/api/profile/about",{method:"POST",body:new URLSearchParams({action,label:"Interest",kind:"have",body:"Offer",visibility:"members"})}); }
+beforeEach(()=>{vi.resetAllMocks();mocks.participant.mockResolvedValue({id:"owner"});});
+it.each(["add_interest","add_signal"])("redirects %s with the newly awarded ledger ID",async action=>{
+  mocks.interest.mockResolvedValue({id:"interest-reward",amount:"0.1"});
+  mocks.signal.mockResolvedValue({id:"have-reward",amount:"0.2"});
+  const response = await POST(request(action));
+  expect(response.headers.get("location")).toBe(`http://localhost:3000/profile?about_update=updated&onboarding_reward=${action==="add_interest"?"interest-reward":"have-reward"}`);
+});
+it("returns no reward confirmation for a repeated action",async()=>{
+  expect((await POST(request("add_interest"))).headers.get("location")).toBe("http://localhost:3000/profile?about_update=updated");
+});
+it("does not write or expose quests to a guest",async()=>{
+  mocks.participant.mockResolvedValue(null);
+  expect((await POST(request("add_signal"))).headers.get("location")).toBe("http://localhost:3000/");
+  expect(mocks.signal).not.toHaveBeenCalled();
+});

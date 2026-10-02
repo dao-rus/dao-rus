@@ -1,4 +1,5 @@
 import { normalizeDisplayName } from "./profile";
+import { getOnboardingActionReward, type OnboardingReward } from "./onboarding-quests";
 
 export const PROFILE_VISIBILITIES = [
   "public",
@@ -320,7 +321,7 @@ export async function saveProfileWithDatabase(
   bioValue: unknown,
   visibilityValue: unknown,
   residenceValues?: { name: unknown; type: unknown; country: unknown },
-): Promise<{ changed: boolean }> {
+): Promise<{ changed: boolean; reward?: OnboardingReward }> {
   const displayName = normalizeDisplayName(displayNameValue);
   const bio = normalizeProfileBio(bioValue);
   const visibility = normalizeProfileVisibility(visibilityValue);
@@ -382,30 +383,11 @@ export async function saveProfileWithDatabase(
       });
     }
     if (residenceChanged) {
-      if (!previousResidence && nextResidence) {
-        // A pre-reward residence edit may have been cleared before this release.
-        await client.query(
-          `INSERT INTO darus_ledger(participant_id, amount, reward_rule_id, reward_rule_version, source_type)
-           SELECT $1::uuid, rule.amount, rule.id, rule.version, 'residence_first_filled'
-             FROM reward_rules rule
-            WHERE rule.action_type = 'residence_first_filled' AND rule.active
-              AND rule.effective_from <= clock_timestamp()
-              AND (rule.effective_to IS NULL OR rule.effective_to > clock_timestamp())
-              AND NOT EXISTS (
-                SELECT 1 FROM events previous_edit
-                 WHERE previous_edit.participant_id = $1::uuid
-                   AND previous_edit.event_type = 'participant.about_updated'
-                   AND previous_edit.payload->>'field' = 'residence'
-              )
-            ORDER BY rule.version DESC LIMIT 1
-           ON CONFLICT (participant_id) WHERE source_type = 'residence_first_filled'
-           DO NOTHING`,
-          [participantId],
-        );
-      }
       await recordEvent(client, participantId, "participant.about_updated", { field: "residence" });
     }
-    return { changed };
+    const reward = residenceChanged && nextResidence
+      ? await getOnboardingActionReward(client, participantId, "residence_first_filled") : undefined;
+    return reward ? { changed, reward } : { changed };
   });
 }
 
@@ -414,12 +396,12 @@ export async function addProfileInterestWithDatabase(
   participantId: string,
   labelValue: unknown,
   visibilityValue: unknown,
-): Promise<void> {
+): Promise<OnboardingReward | undefined> {
   const label = normalizeInterest(labelValue);
   const visibility = normalizeProfileVisibility(visibilityValue);
   const normalizedLabel = label.toLocaleLowerCase("ru-RU");
 
-  await withProfileTransaction(database, async (client) => {
+  return withProfileTransaction(database, async (client) => {
     const result = await client.query(
       `INSERT INTO participant_interests(participant_id, label, normalized_label, visibility)
        VALUES ($1::uuid, $2, $3, $4)
@@ -434,6 +416,7 @@ export async function addProfileInterestWithDatabase(
       interest_id: String(result.rows[0]?.id ?? ""),
       visibility,
     });
+    return getOnboardingActionReward(client, participantId, "interest_first_added");
   });
 }
 
@@ -464,12 +447,12 @@ export async function addProfileSignalWithDatabase(
   kindValue: unknown,
   bodyValue: unknown,
   visibilityValue: unknown,
-): Promise<void> {
+): Promise<OnboardingReward | undefined> {
   const kind = normalizeSignalKind(kindValue);
   const body = normalizeSignalBody(bodyValue);
   const visibility = normalizeSignalVisibility(visibilityValue, kind);
 
-  await withProfileTransaction(database, async (client) => {
+  return withProfileTransaction(database, async (client) => {
     const result = await client.query(
       `INSERT INTO profile_signals(participant_id, kind, body, visibility)
        VALUES ($1::uuid, $2, $3, $4)
@@ -481,6 +464,8 @@ export async function addProfileSignalWithDatabase(
       kind,
       visibility,
     });
+    return kind === "need" || kind === "have"
+      ? getOnboardingActionReward(client, participantId, `${kind}_first_created`) : undefined;
   });
 }
 

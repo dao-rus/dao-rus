@@ -142,10 +142,11 @@ describe("saveProfileWithDatabase", () => {
     const events = client.queries.filter(({ text }) => text.includes("INSERT INTO events"));
     expect(events.map(({ values }) => values?.[0])).toEqual(["participant.about_updated"]);
     expect(events[0].values?.[2]).toBe(JSON.stringify({ field: "residence" }));
-    const firstReward = client.queries.find(({ text }) => text.includes("INSERT INTO darus_ledger"));
-    expect(firstReward?.values).toEqual([participantId]);
-    expect(firstReward?.text).toContain("NOT EXISTS");
-    expect(firstReward?.text).toContain("ON CONFLICT (participant_id)");
+    // The database trigger owns the atomic award; the adapter reads its result
+    // only from this action's transaction for immediate feedback.
+    const firstReward = client.queries.find(({ text }) => text.includes("event.payload->>'transaction_id'"));
+    expect(firstReward?.values).toEqual([participantId, "residence_first_filled"]);
+    expect(client.queries.some(({ text }) => text.includes("INSERT INTO darus_ledger"))).toBe(false);
 
     const clearClient = new ProfileClient({ ...current,
       residence_name: "Казань", residence_type: "город", residence_country: "Россия",

@@ -23,7 +23,7 @@ export type DarusEntry = {
   id: string;
   amount: string;
   currency: "DARUS";
-  sourceType: "verification_created" | "residence_first_filled";
+  sourceType: "verification_created" | "residence_first_filled" | "interest_first_added" | "need_first_created" | "have_first_created" | "onboarding_promise_reconciled";
   subjectName: string | null;
   createdAt: Date;
   rewardRuleVersion: number;

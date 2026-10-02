@@ -8,6 +8,13 @@ import { getDarusBalance, getDarusHistory } from "@/lib/tokenization";
 
 export const dynamic = "force-dynamic";
 export const metadata: Metadata = { title: "DARUS" };
+const onboardingReasons = {
+  residence_first_filled: "Первое заполнение места жительства",
+  interest_first_added: "Первый интерес",
+  need_first_created: "Первое «Мне нужно»",
+  have_first_created: "Первое «У меня есть»",
+  onboarding_promise_reconciled: "Выполнение обещания onboarding: c926a20",
+};
 
 export default async function TokensPage() {
   const participant = await getCurrentParticipant();
@@ -33,9 +40,8 @@ export default async function TokensPage() {
           {history.length ? <ol>{history.map((entry) => (
             <li key={entry.id}>
               <div>
-                <strong>+{entry.amount} DARUS · {entry.sourceType === "residence_first_filled"
-                  ? "Первое заполнение места жительства"
-                  : `Подтверждение личности: ${entry.subjectName}`}</strong>
+                <strong>+{entry.amount} DARUS · {entry.sourceType === "verification_created"
+                  ? `Подтверждение личности: ${entry.subjectName}` : onboardingReasons[entry.sourceType]}</strong>
                 <span className="muted"><LocalDateTime value={entry.createdAt.toISOString()} /></span>
                 <small className="muted">Тариф: {entry.tariff} DARUS · версия {entry.rewardRuleVersion}</small>
               </div>

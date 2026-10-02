@@ -4,10 +4,12 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 const mocks = vi.hoisted(() => ({
   getCurrentParticipant: vi.fn(),
   readInterfaceTexts: vi.fn(),
+  getOnboardingQuests: vi.fn(),
 }));
 
 vi.mock("@/lib/session", () => ({ getCurrentParticipant: mocks.getCurrentParticipant }));
 vi.mock("@/lib/interface-texts", () => ({ readInterfaceTexts: mocks.readInterfaceTexts }));
+vi.mock("@/lib/onboarding-quests", () => ({ getOnboardingQuests: mocks.getOnboardingQuests }));
 vi.mock("@/lib/config", () => ({
   isTelegramConfigured: () => true,
   devAuthEnabled: () => false,
@@ -25,6 +27,7 @@ function textContent(node: ReactNode): string {
 describe("home interface texts", () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    mocks.getOnboardingQuests.mockResolvedValue([{ sourceType: "interest_first_added", textKey: "onboarding.interest", href: "/profile#profile-interests", amount: "0.100000" }]);
     mocks.readInterfaceTexts.mockResolvedValue({ values: {
       "home.eyebrow": "Своя надпись",
       "home.title": "Свой заголовок",
@@ -33,7 +36,7 @@ describe("home interface texts", () => {
       "home.profile_button": "Свой профиль",
       "home.code_link": "Открыть наш Кодекс",
       "home.code_title": "Кодекс руси",
-      "home.action_pill": "Заполните профиль и получите +0,1 DARUS",
+      "onboarding.interest": "Добавьте интерес, чтобы найти единомышленников",
       "participants.title": "Моя сеть",
       "exchange.title": "Обмен",
       "nav.veche": "Наше вече",
@@ -52,6 +55,8 @@ describe("home interface texts", () => {
     expect(text).toContain("Не нападай первым.");
     expect(text).toContain("Власть принадлежит народу.");
     expect(text).toContain("Открыть наш Кодекс");
+    expect(mocks.getOnboardingQuests).not.toHaveBeenCalled();
+    expect(text).not.toContain("DARUS");
   });
 
   it("shows the overridden profile button after login", async () => {
@@ -62,7 +67,8 @@ describe("home interface texts", () => {
     expect(textContent(page)).toContain("Обмен");
     expect(textContent(page)).toContain("Наше вече");
     expect(textContent(page).indexOf("Наше вече")).toBeLessThan(
-      textContent(page).indexOf("Заполните профиль и получите +0,1 DARUS"),
+      textContent(page).indexOf("Добавьте интерес, чтобы найти единомышленников"),
     );
+    expect(textContent(page)).toContain("0,1");
   });
 });

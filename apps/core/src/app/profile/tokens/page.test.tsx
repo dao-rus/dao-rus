@@ -30,7 +30,7 @@ describe("/profile/tokens", () => {
     mocks.getCurrentParticipant.mockResolvedValue({ id: "owner" });
     mocks.getDarusBalance.mockResolvedValue("0.100000");
     mocks.getDarusHistory.mockResolvedValue([{
-      id: "entry", amount: "0.100000", subjectName: "Анна",
+      id: "entry", amount: "0.100000", subjectName: "Анна", sourceType: "verification_created",
       createdAt: new Date("2026-09-21T00:00:00Z"),
       tariff: "0.100000", rewardRuleVersion: 1,
     }]);

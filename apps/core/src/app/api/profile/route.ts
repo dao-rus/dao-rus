@@ -6,9 +6,10 @@ import { getCurrentParticipant } from "@/lib/session";
 
 export const runtime = "nodejs";
 
-function profileRedirect(status: string) {
+function profileRedirect(status: string, rewardId?: string) {
   const url = new URL("/profile", appBaseUrl());
   url.searchParams.set("profile_update", status);
+  if (rewardId) url.searchParams.set("onboarding_reward", rewardId);
   return NextResponse.redirect(url, 303);
 }
 
@@ -29,10 +30,12 @@ export async function POST(request: NextRequest) {
   } : undefined;
 
   try {
-    const result = bio === null && visibility === null
-      ? await updateParticipantDisplayName(participant.id, formData.get("display_name"))
-      : await saveProfile(participant.id, formData.get("display_name"), bio, visibility, residence);
-    return profileRedirect(result.changed ? "updated" : "unchanged");
+    if (bio === null && visibility === null) {
+      const result = await updateParticipantDisplayName(participant.id, formData.get("display_name"));
+      return profileRedirect(result.changed ? "updated" : "unchanged");
+    }
+    const result = await saveProfile(participant.id, formData.get("display_name"), bio, visibility, residence);
+    return profileRedirect(result.changed ? "updated" : "unchanged", result.reward?.id);
   } catch (error) {
     if (error instanceof DisplayNameValidationError) {
       return profileRedirect("empty_name");

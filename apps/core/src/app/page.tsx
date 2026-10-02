@@ -4,6 +4,8 @@ import { DAO_CODE_CLAUSES } from "../lib/dao-code";
 import { ActionPill } from "../components/action-pill";
 import { readInterfaceTexts } from "@/lib/interface-texts";
 import { getCurrentParticipant } from "@/lib/session";
+import { getOnboardingQuests } from "@/lib/onboarding-quests";
+import { formatDarusAmount } from "../lib/tokenization";
 
 export const dynamic = "force-dynamic";
 
@@ -19,6 +21,7 @@ export default async function Home({
   ]);
   const telegramReady = isTelegramConfigured();
   const devReady = devAuthEnabled();
+  const quests = participant ? await getOnboardingQuests(participant.id) : [];
 
   return (
     <main className="shell">
@@ -71,9 +74,11 @@ export default async function Home({
           </div>
         )}
 
-        <div className="homeActions">
-          <ActionPill href="/profile">{texts["home.action_pill"]}</ActionPill>
-        </div>
+        {quests.length ? <div className="homeActions">
+          {quests.map(quest => <ActionPill key={quest.sourceType} href={quest.href}>
+            {texts[quest.textKey]} · +{formatDarusAmount(quest.amount)} DARUS
+          </ActionPill>)}
+        </div> : null}
       </section>
     </main>
   );

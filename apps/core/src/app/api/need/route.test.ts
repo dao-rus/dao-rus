@@ -49,6 +49,11 @@ describe("POST /api/need", () => {
     expect(mocks.addProfileSignal).not.toHaveBeenCalled();
     expect(response.headers.get("location")).toBe("https://core.daorus.org/need");
   });
+  it("returns the inserted reward ID for immediate feedback", async () => {
+    mocks.addProfileSignal.mockResolvedValueOnce({ id: "reward-id", amount: "0.200000" });
+    const response = await POST(request("Нужна помощь"));
+    expect(response.headers.get("location")).toBe("https://core.daorus.org/need?saved=1&onboarding_reward=reward-id");
+  });
 
   it("returns to the form when the existing signal validation fails", async () => {
     const { ProfileAboutValidationError } = await import("@/lib/profile-about");

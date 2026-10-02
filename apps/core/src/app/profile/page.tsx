@@ -16,6 +16,7 @@ import { getReputationSummary } from "@/lib/reputation";
 import { getCurrentParticipant } from "@/lib/session";
 import { getDarusBalance } from "@/lib/tokenization";
 import { getVerificationProfile } from "@/lib/verification";
+import { getOnboardingRewardFeedback } from "../../lib/onboarding-quests";
 
 export const dynamic = "force-dynamic";
 export const metadata: Metadata = { title: "Мой профиль" };
@@ -57,7 +58,7 @@ const matchableVisibilityOptions = ["public", "members", "match_only", "private"
 const residenceTypeOptions = ["город", "п.г.т.", "деревня", "село"] as const;
 
 type ProfilePageProps = {
-  searchParams: Promise<{ profile_update?: string; about_update?: string }>;
+  searchParams: Promise<{ profile_update?: string; about_update?: string; onboarding_reward?: string }>;
 };
 
 const updateMessages: Record<string, string> = {
@@ -77,6 +78,7 @@ export default async function ProfilePage({ searchParams }: ProfilePageProps) {
   if (!participant) redirect("/");
 
   const params = await searchParams;
+  const onboardingReward = await getOnboardingRewardFeedback(participant.id, params.onboarding_reward);
   const [activity, membershipHistory, verification, about, { values: texts }, darusBalance, reputation] = await Promise.all([
     getActivitySummary(participant.id),
     getMembershipHistory(participant.id),
@@ -98,6 +100,7 @@ export default async function ProfilePage({ searchParams }: ProfilePageProps) {
     <main className="shell">
       <section className="card profile">
         <CoreNavigation current="profile" texts={texts} />
+        {onboardingReward ? <p className="formNotice" role="status">{onboardingReward}</p> : null}
         <div className="profileHeader">
           <div className="profileIdentity">
             <TelegramAvatar participantId={participant.id} displayName={participant.displayName}
@@ -177,7 +180,7 @@ export default async function ProfilePage({ searchParams }: ProfilePageProps) {
           ) : null}
 
           <div className="aboutBlock">
-            <h3>Интересы</h3>
+            <h3 id="profile-interests">Интересы</h3>
             {about?.interests.length ? (
               <ul className="profileItems">
                 {about.interests.map((interest) => (
@@ -214,7 +217,7 @@ export default async function ProfilePage({ searchParams }: ProfilePageProps) {
               {signalKinds.map((kind) => {
                 const signals = about?.signals.filter((signal) => signal.kind === kind) ?? [];
                 return (
-                  <section className="signalEntryCard" key={kind}>
+                  <section className="signalEntryCard" key={kind} id={`signal-${kind}`}>
                     <h4>{signalLabels[kind]}</h4>
                     {signals.length ? (
                       <ul className="profileItems signalItems">

@@ -5,9 +5,10 @@ import { getCurrentParticipant } from "@/lib/session";
 
 export const runtime = "nodejs";
 
-function needRedirect(param?: "saved" | "error", value?: string) {
+function needRedirect(param?: "saved" | "error", value?: string, rewardId?: string) {
   const url = new URL("/need", appBaseUrl());
   if (param && value) url.searchParams.set(param, value);
+  if (rewardId) url.searchParams.set("onboarding_reward", rewardId);
   return NextResponse.redirect(url, 303);
 }
 
@@ -17,13 +18,13 @@ export async function POST(request: NextRequest) {
 
   const form = await request.formData();
   try {
-    await addProfileSignal(
+    const reward = await addProfileSignal(
       participant.id,
       "need",
       form.get("body"),
       form.get("visibility"),
     );
-    return needRedirect("saved", "1");
+    return needRedirect("saved", "1", reward?.id);
   } catch (error) {
     if (error instanceof ProfileAboutValidationError) {
       return needRedirect("error", "invalid");

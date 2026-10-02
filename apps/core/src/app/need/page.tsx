@@ -5,6 +5,7 @@ import { getCurrentParticipant } from "@/lib/session";
 import { readInterfaceTexts } from "@/lib/interface-texts";
 import { NeedAuthGate } from "./need-auth-gate";
 import { CoreNavigation } from "../../components/core-navigation";
+import { getOnboardingRewardFeedback } from "../../lib/onboarding-quests";
 
 export const dynamic = "force-dynamic";
 export const metadata: Metadata = { title: "Что вам нужно?" };
@@ -12,13 +13,15 @@ export const metadata: Metadata = { title: "Что вам нужно?" };
 export default async function NeedPage({
   searchParams,
 }: {
-  searchParams: Promise<{ saved?: string; error?: string }>;
+  searchParams: Promise<{ saved?: string; error?: string; onboarding_reward?: string }>;
 }) {
   const [participant, params, { values: texts }] = await Promise.all([
     getCurrentParticipant(),
     searchParams,
     readInterfaceTexts(),
   ]);
+  const onboardingReward = participant
+    ? await getOnboardingRewardFeedback(participant.id, params.onboarding_reward) : null;
 
   return (
     <main className="shell">
@@ -30,6 +33,7 @@ export default async function NeedPage({
           {participant ? (
             <>
               <p className="muted">{texts["need.lead"]}</p>
+              {onboardingReward ? <p className="formNotice" role="status">{onboardingReward}</p> : null}
               {params.saved === "1" ? (
                 <div id="need-saved" className="needSavedNotice" role="status">
                   <strong>✓ Запись сохранена</strong>

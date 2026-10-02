@@ -563,7 +563,7 @@ dd { margin: 6px 0 0; }
 .homePage { padding-top: clamp(40px, 7vw, 76px); }
 .homeIdentity { margin-top: clamp(32px, 5vw, 48px); }
 .homeIdentity .lead { margin-bottom: 0; }
-.homeActions { margin-top: 22px; }
+.homeActions { display: flex; flex-wrap: wrap; gap: 10px; margin-top: 22px; }
 .actionPill {
   display: inline-flex;
   align-items: center;

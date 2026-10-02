@@ -9,12 +9,14 @@ import {
   updateProfileBio,
 } from "@/lib/profile-about";
 import { getCurrentParticipant } from "@/lib/session";
+import type { OnboardingReward } from "@/lib/onboarding-quests";
 
 export const runtime = "nodejs";
 
-function profileRedirect(status: string) {
+function profileRedirect(status: string, rewardId?: string) {
   const url = new URL("/profile", appBaseUrl());
   url.searchParams.set("about_update", status);
+  if (rewardId) url.searchParams.set("onboarding_reward", rewardId);
   return NextResponse.redirect(url, 303);
 }
 
@@ -36,6 +38,7 @@ export async function POST(request: NextRequest) {
   const action = formData.get("action");
 
   try {
+    let reward: OnboardingReward | undefined;
     if (action === "update_bio") {
       await updateProfileBio(
         participant.id,
@@ -43,7 +46,7 @@ export async function POST(request: NextRequest) {
         formData.get("visibility"),
       );
     } else if (action === "add_interest") {
-      await addProfileInterest(
+      reward = await addProfileInterest(
         participant.id,
         formData.get("label"),
         formData.get("visibility"),
@@ -51,7 +54,7 @@ export async function POST(request: NextRequest) {
     } else if (action === "remove_interest") {
       await removeProfileInterest(participant.id, requiredId(formData.get("interest_id")));
     } else if (action === "add_signal") {
-      await addProfileSignal(
+      reward = await addProfileSignal(
         participant.id,
         formData.get("kind"),
         formData.get("body"),
@@ -63,7 +66,7 @@ export async function POST(request: NextRequest) {
       return profileRedirect("invalid");
     }
 
-    return profileRedirect("updated");
+    return profileRedirect("updated", reward?.id);
   } catch (error) {
     if (error instanceof ProfileAboutValidationError) {
       return profileRedirect("invalid");
