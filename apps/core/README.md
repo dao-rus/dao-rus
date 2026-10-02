@@ -26,7 +26,7 @@
 - страница `/profile/activity` со статистикой за 7 и 30 дней и последними событиями;
 - создание простых предложений и список `/veche`;
 - приём сообщений одного разрешённого Telegram-чата через защищённый webhook;
-- одноразовый импорт Telegram roster snapshot; текущий v0.1 ещё не создаёт Participant, но архитектура предусматривает автосоздание по подтверждённому вступлению в основной форум;
+- одноразовый импорт Telegram roster snapshot и отдельный импорт исторического состава основного форума в нейтральные Core Participants;
 - защищённый прототипный Participant Registry для ручной классификации roster;
 - заглушки для трёх будущих профилей репутации: активность, отзывы, коммуникабельность;
 - локальный demo-login, чтобы проверить прототип до настройки BotFather;
@@ -383,7 +383,7 @@ default галочкой в форме. Только фактическое из
 
 ## 6. Одноразовый Telegram Roster v0.1
 
-**Важно:** описанный ниже importer отражает текущее поведение v0.1 и пока не реализует новое правило Telegram-first архитектуры: подтверждённое вступление в основной Telegram-форум должно создавать минимального `Participant` и связывать Telegram identity. До реализации этого vertical slice неизвестные Telegram ID в legacy importer остаются roster-записями без Participant.
+Обычный `telegram:roster:import` ниже сохраняет технический roster без создания Participant. Для однократного переноса исторического состава основного форума используйте отдельный `telegram:forum:import` в конце этого раздела.
 
 Bot API не предоставляет надёжный полный список участников закрытого supergroup/forum. Для лабораторного snapshot используется отдельный локальный MTProto-клиент под пользовательским Telegram-аккаунтом. Официальные точки отсчёта: [получение `api_id`/`api_hash`](https://core.telegram.org/api/obtaining_api_id), [авторизация пользователя](https://core.telegram.org/api/auth) и [`channels.getParticipants`](https://core.telegram.org/method/channels.getParticipants).
 
@@ -448,6 +448,45 @@ docker compose exec web npm run telegram:roster:import -- "/app/.local/telegram/
 Автоматическое связывание заполняет только пустой `participant_id` и никогда не меняет `identity_verification`. Если roster entry уже указывает на другого Participant, операция завершается integrity-ошибкой и транзакция откатывается; противоречащая связь не перезаписывается.
 
 Новая запись получает `identity_verification = 'unverified'`. Roster не создаёт `Participant` или `ExternalIdentity`, не доказывает членство, не импортирует сообщения/телефоны и не формирует репутацию. `identity_verification` означает отдельную человеческую проверку личности внутри ДАО и не является результатом Telegram OIDC/Core login.
+
+### Однократный перенос состава основного форума в Core
+
+Сначала создайте свежий snapshot через тот же Telethon exporter. Его `chat.id`
+должен соответствовать `TELEGRAM_FORUM_CHAT_ID`; другой чат importer отвергает.
+Для dry-run нужен доступ Core к PostgreSQL, но SQL-транзакция открывается как
+`READ ONLY`: выводятся только количества аккаунтов, ботов, уже связанных
+Participant, новых Participant и конфликтов, без Telegram ID и имён.
+
+```powershell
+cd apps/core
+npm run telegram:forum:import -- .local/telegram/telegram-roster-YYYYMMDDTHHMMSSZ.json --dry-run
+```
+
+Для будущего запуска в production после отдельного разрешения сначала
+разверните версию Core с этой командой, перенесите **только JSON snapshot** в
+защищённый файл на сервере вне Git и смонтируйте его в одноразовый контейнер.
+MTProto credentials и session на production не переносятся. Запустите
+`--dry-run` на том же файле, проверьте счётчики, затем явный `--apply`:
+
+```bash
+cd /opt/dao-rus/apps/core
+sudo docker compose --env-file .env.production -f compose.prod.yml run --rm --no-deps \
+  -v /secure/path/telegram-roster.json:/snapshot.json:ro web \
+  npm run telegram:forum:import -- /snapshot.json --dry-run
+sudo docker compose --env-file .env.production -f compose.prod.yml run --rm --no-deps \
+  -v /secure/path/telegram-roster.json:/snapshot.json:ro web \
+  npm run telegram:forum:import -- /snapshot.json --apply
+```
+
+`--apply` требует snapshot не старше 24 часов и ноль конфликтов. Он пропускает
+ботов, в одной транзакции обновляет roster, находит или создаёт нейтрального
+Participant (`membership_status='none'`), связывает Telegram identity и фиксирует
+`forum_status='joined'` с событием `onboarding.forum_joined`. Более новое
+наблюдение `absent` не перезаписывается старым snapshot. Повторный запуск не
+создаёт новых Participant и не повторяет событие `forum_joined`. Конфликт
+identity откатывает всю транзакцию без объединения профилей. Human Verification,
+принятие Кодекса, репутация и специальные права не создаются. Удалите серверную
+копию JSON после проверки результата; старая история Telegram не читается.
 
 При Membership Binding roster-имя может временно стать `participants.display_name`,
 но публичный каталог `/participants` показывает профиль только после собственного

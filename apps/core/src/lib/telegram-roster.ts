@@ -275,93 +275,100 @@ async function participantForTelegramIdentity(
   return identity.rowCount ? String(identity.rows[0].participant_id) : null;
 }
 
+export async function upsertTelegramRosterSnapshotWithClient(
+  client: TelegramRosterDatabaseClient,
+  snapshot: TelegramRosterSnapshot,
+): Promise<TelegramRosterImportResult> {
+  let rowsAffected = 0;
+
+  for (const entry of snapshot.entries) {
+    const result = await client.query(
+      `INSERT INTO telegram_roster_entries(
+         telegram_user_id,
+         username,
+         display_name,
+         is_bot,
+         observed_at,
+         telegram_presence_status,
+         telegram_last_seen_at,
+         telegram_presence_observed_at
+       )
+       VALUES (
+         $1::bigint, $2, $3, $4, $5::timestamptz,
+         $6, $7::timestamptz, $8::timestamptz
+       )
+       ON CONFLICT (telegram_user_id) DO UPDATE SET
+         username = CASE
+           WHEN telegram_roster_entries.observed_at <= EXCLUDED.observed_at
+           THEN EXCLUDED.username ELSE telegram_roster_entries.username END,
+         display_name = CASE
+           WHEN telegram_roster_entries.observed_at <= EXCLUDED.observed_at
+           THEN EXCLUDED.display_name ELSE telegram_roster_entries.display_name END,
+         is_bot = CASE
+           WHEN telegram_roster_entries.observed_at <= EXCLUDED.observed_at
+           THEN EXCLUDED.is_bot ELSE telegram_roster_entries.is_bot END,
+         observed_at = GREATEST(
+           telegram_roster_entries.observed_at,
+           EXCLUDED.observed_at
+         ),
+         telegram_presence_status = CASE
+           WHEN telegram_roster_entries.telegram_presence_observed_at
+                  <= EXCLUDED.telegram_presence_observed_at
+           THEN EXCLUDED.telegram_presence_status
+           ELSE telegram_roster_entries.telegram_presence_status END,
+         telegram_last_seen_at = CASE
+           WHEN telegram_roster_entries.telegram_presence_observed_at
+                  <= EXCLUDED.telegram_presence_observed_at
+           THEN EXCLUDED.telegram_last_seen_at
+           ELSE telegram_roster_entries.telegram_last_seen_at END,
+         telegram_presence_observed_at = GREATEST(
+           telegram_roster_entries.telegram_presence_observed_at,
+           EXCLUDED.telegram_presence_observed_at
+         )`,
+      [
+        entry.telegramUserId,
+        entry.username,
+        entry.displayName,
+        entry.isBot,
+        snapshot.observedAt,
+        entry.telegramPresenceStatus,
+        entry.telegramLastSeenAt,
+        entry.telegramPresenceObservedAt,
+      ],
+    );
+    rowsAffected += result.rowCount ?? 0;
+
+    const identityParticipantId = await participantForTelegramIdentity(
+      client,
+      entry.telegramUserId,
+    );
+    if (identityParticipantId) {
+      await linkTelegramRosterEntryWithClient(
+        client,
+        entry.telegramUserId,
+        identityParticipantId,
+      );
+    }
+  }
+
+  return {
+    entriesProcessed: snapshot.entries.length,
+    rowsAffected,
+    observedAt: snapshot.observedAt,
+  };
+}
+
 export async function importTelegramRosterSnapshotWithDatabase(
   database: TelegramRosterDatabase,
   snapshotValue: unknown,
 ): Promise<TelegramRosterImportResult> {
   const snapshot = parseTelegramRosterSnapshot(snapshotValue);
   const client = await database.connect();
-  let rowsAffected = 0;
-
   try {
     await client.query("BEGIN");
-
-    for (const entry of snapshot.entries) {
-      const result = await client.query(
-        `INSERT INTO telegram_roster_entries(
-           telegram_user_id,
-           username,
-           display_name,
-           is_bot,
-           observed_at,
-           telegram_presence_status,
-           telegram_last_seen_at,
-           telegram_presence_observed_at
-         )
-         VALUES (
-           $1::bigint, $2, $3, $4, $5::timestamptz,
-           $6, $7::timestamptz, $8::timestamptz
-         )
-         ON CONFLICT (telegram_user_id) DO UPDATE SET
-           username = CASE
-             WHEN telegram_roster_entries.observed_at <= EXCLUDED.observed_at
-             THEN EXCLUDED.username ELSE telegram_roster_entries.username END,
-           display_name = CASE
-             WHEN telegram_roster_entries.observed_at <= EXCLUDED.observed_at
-             THEN EXCLUDED.display_name ELSE telegram_roster_entries.display_name END,
-           is_bot = CASE
-             WHEN telegram_roster_entries.observed_at <= EXCLUDED.observed_at
-             THEN EXCLUDED.is_bot ELSE telegram_roster_entries.is_bot END,
-           observed_at = GREATEST(
-             telegram_roster_entries.observed_at,
-             EXCLUDED.observed_at
-           ),
-           telegram_presence_status = CASE
-             WHEN telegram_roster_entries.telegram_presence_observed_at
-                    <= EXCLUDED.telegram_presence_observed_at
-             THEN EXCLUDED.telegram_presence_status
-             ELSE telegram_roster_entries.telegram_presence_status END,
-           telegram_last_seen_at = CASE
-             WHEN telegram_roster_entries.telegram_presence_observed_at
-                    <= EXCLUDED.telegram_presence_observed_at
-             THEN EXCLUDED.telegram_last_seen_at
-             ELSE telegram_roster_entries.telegram_last_seen_at END,
-           telegram_presence_observed_at = GREATEST(
-             telegram_roster_entries.telegram_presence_observed_at,
-             EXCLUDED.telegram_presence_observed_at
-           )`,
-        [
-          entry.telegramUserId,
-          entry.username,
-          entry.displayName,
-          entry.isBot,
-          snapshot.observedAt,
-          entry.telegramPresenceStatus,
-          entry.telegramLastSeenAt,
-          entry.telegramPresenceObservedAt,
-        ],
-      );
-      rowsAffected += result.rowCount ?? 0;
-
-      const identityParticipantId = await participantForTelegramIdentity(
-        client,
-        entry.telegramUserId,
-      );
-      if (identityParticipantId) {
-        await linkTelegramRosterEntryWithClient(
-          client,
-          entry.telegramUserId,
-          identityParticipantId,
-        );
-      }
-    }
-
+    const result = await upsertTelegramRosterSnapshotWithClient(client, snapshot);
     await client.query("COMMIT");
-    return {
-      entriesProcessed: snapshot.entries.length,
-      rowsAffected,
-      observedAt: snapshot.observedAt,
-    };
+    return result;
   } catch (error) {
     try {
       await client.query("ROLLBACK");

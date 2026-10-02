@@ -10,7 +10,8 @@
     "test:watch": "vitest",
     "typecheck": "tsc --noEmit",
     "db:migrate": "tsx scripts/migrate.ts",
-    "telegram:roster:import": "tsx scripts/import-telegram-roster.ts"
+    "telegram:roster:import": "tsx scripts/import-telegram-roster.ts",
+    "telegram:forum:import": "tsx scripts/import-telegram-forum-roster.ts"
   },
   "dependencies": {
     "dotenv": "17.4.2",
