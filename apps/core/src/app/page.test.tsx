@@ -24,6 +24,13 @@ function textContent(node: ReactNode): string {
   return textContent((node.props as { children?: ReactNode }).children);
 }
 
+function links(node: ReactNode): string[] {
+  if (Array.isArray(node)) return node.flatMap(links);
+  if (!isValidElement(node)) return [];
+  const props = node.props as { href?: string; children?: ReactNode };
+  return [...(props.href ? [props.href] : []), ...links(props.children)];
+}
+
 describe("home interface texts", () => {
   beforeEach(() => {
     vi.clearAllMocks();
@@ -38,6 +45,7 @@ describe("home interface texts", () => {
       "home.code_title": "Кодекс руси",
       "onboarding.interest": "Добавьте интерес, чтобы найти единомышленников",
       "participants.title": "Моя сеть",
+      "nearby.title": "Рядом",
       "exchange.title": "Обмен",
       "nav.veche": "Наше вече",
     } });
@@ -57,6 +65,8 @@ describe("home interface texts", () => {
     expect(text).toContain("Открыть наш Кодекс");
     expect(mocks.getOnboardingQuests).not.toHaveBeenCalled();
     expect(text).not.toContain("DARUS");
+    expect(text).not.toContain("Рядом");
+    expect(links(page)).not.toContain("/nearby");
   });
 
   it("shows the overridden profile button after login", async () => {
@@ -64,6 +74,8 @@ describe("home interface texts", () => {
     const page = await Home({ searchParams: Promise.resolve({}) });
     expect(textContent(page)).toContain("Свой профиль");
     expect(textContent(page)).toContain("Моя сеть");
+    expect(textContent(page)).toContain("Рядом");
+    expect(links(page)).toContain("/nearby");
     expect(textContent(page)).toContain("Обмен");
     expect(textContent(page)).toContain("Наше вече");
     expect(textContent(page).indexOf("Наше вече")).toBeLessThan(
