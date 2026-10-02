@@ -63,7 +63,8 @@ function fakeDatabase() {
 function privateMessage(updateId = 1, extra: Record<string, unknown> = {}) {
   return { update_id: updateId, message: {
     message_id: 11, chat: { id: 42, type: "private" },
-    from: { id: 42, is_bot: false }, text: "Привет", ...extra,
+    from: { id: 42, is_bot: false, first_name: "Анна", last_name: "Иванова", username: "anna" },
+    text: "Привет", ...extra,
   } };
 }
 
@@ -77,7 +78,10 @@ function forumReply(updateId = 2, extra: Record<string, unknown> = {}) {
 
 function fakeBot(): ReceptionRelayBot {
   let nextId = 501;
-  return { copyMessage: vi.fn(async () => ({ status: "sent" as const, messageId: nextId++ })) };
+  return {
+    sendAttribution: vi.fn(async () => ({ status: "sent" as const, messageId: nextId++ })),
+    copyMessage: vi.fn(async () => ({ status: "sent" as const, messageId: nextId++ })),
+  };
 }
 
 describe("Reception relay", () => {
@@ -87,27 +91,57 @@ describe("Reception relay", () => {
     const { database, rows } = fakeDatabase();
     const bot = fakeBot();
     expect(await relayReceptionUpdate(privateMessage(), database, bot)).toBe("sent");
+    expect(bot.sendAttribution).toHaveBeenCalledWith({
+      chatId: "-1001234567890", topicId: 77, text: "От: Анна Иванова (@anna)",
+    });
+    expect(vi.mocked(bot.sendAttribution).mock.invocationCallOrder[0])
+      .toBeLessThan(vi.mocked(bot.copyMessage).mock.invocationCallOrder[0]);
     expect(bot.copyMessage).toHaveBeenCalledWith({
       chatId: "-1001234567890", fromChatId: "42", messageId: 11, topicId: 77,
     });
     expect(rows.get(1)).toMatchObject({
       status: "sent", privateChatId: "42", privateMessageId: 11,
-      forumMessageId: 501,
+      forumMessageId: 502,
     });
     expect(JSON.stringify(rows.get(1))).not.toContain("Привет");
+    expect(JSON.stringify(rows.get(1))).not.toContain("Анна");
+  });
+
+  it("uses only the first name when last name and username are absent", async () => {
+    const { database } = fakeDatabase();
+    const bot = fakeBot();
+    expect(await relayReceptionUpdate(privateMessage(1, {
+      from: { id: 42, is_bot: false, first_name: "Анна" },
+    }), database, bot)).toBe("sent");
+    expect(bot.sendAttribution).toHaveBeenCalledWith({
+      chatId: "-1001234567890", topicId: 77, text: "От: Анна",
+    });
+  });
+
+  it("puts attribution before a supported media copy without storing a caption", async () => {
+    const { database, rows } = fakeDatabase();
+    const bot = fakeBot();
+    expect(await relayReceptionUpdate(privateMessage(1, {
+      text: undefined, photo: [{ file_id: "photo" }], caption: "Личный текст",
+    }), database, bot)).toBe("sent");
+    expect(vi.mocked(bot.sendAttribution).mock.invocationCallOrder[0])
+      .toBeLessThan(vi.mocked(bot.copyMessage).mock.invocationCallOrder[0]);
+    expect(rows.get(1)?.forumMessageId).toBe(502);
+    expect(JSON.stringify(rows.get(1))).not.toContain("Личный текст");
   });
 
   it("copies a reply in the configured topic back to the mapped private chat", async () => {
     const { database, rows } = fakeDatabase();
     const bot = fakeBot();
     await relayReceptionUpdate(privateMessage(), database, bot);
-    expect(await relayReceptionUpdate(forumReply(), database, bot)).toBe("sent");
+    expect(await relayReceptionUpdate(forumReply(2, { reply_to_message: { message_id: 502 } }), database, bot)).toBe("sent");
     expect(bot.copyMessage).toHaveBeenLastCalledWith({
       chatId: "42", fromChatId: "-1001234567890", messageId: 90,
     });
     expect(rows.get(2)).toMatchObject({
-      direction: "forum_to_private", forumMessageId: 90, privateMessageId: 502,
+      direction: "forum_to_private", forumMessageId: 90, privateMessageId: 503,
     });
+    expect(bot.sendAttribution).toHaveBeenCalledTimes(1);
   });
 
   it("routes General topic replies and omits its unsupported thread ID on copy", async () => {
@@ -118,8 +152,12 @@ describe("Reception relay", () => {
     expect(bot.copyMessage).toHaveBeenCalledWith({
       chatId: "-1001234567890", fromChatId: "42", messageId: 11,
     });
+    expect(bot.sendAttribution).toHaveBeenCalledWith({
+      chatId: "-1001234567890", text: "От: Анна Иванова (@anna)",
+    });
     expect(await relayReceptionUpdate(forumReply(2, {
       message_thread_id: undefined, is_topic_message: undefined,
+      reply_to_message: { message_id: 502 },
     }), database, bot)).toBe("sent");
     expect(bot.copyMessage).toHaveBeenLastCalledWith({
       chatId: "42", fromChatId: "-1001234567890", messageId: 90,
@@ -128,6 +166,7 @@ describe("Reception relay", () => {
       is_topic_message: true, message_thread_id: 99,
     }), database, bot)).toBe("ignored");
     expect(bot.copyMessage).toHaveBeenCalledTimes(2);
+    expect(bot.sendAttribution).toHaveBeenCalledTimes(1);
   });
 
   it("ignores wrong forums, wrong topics, unmapped replies and bot messages", async () => {
@@ -138,6 +177,7 @@ describe("Reception relay", () => {
     expect(await relayReceptionUpdate(forumReply(4), database, bot)).toBe("ignored");
     expect(await relayReceptionUpdate(privateMessage(5, { from: { id: 777, is_bot: true } }), database, bot)).toBe("ignored");
     expect(bot.copyMessage).not.toHaveBeenCalled();
+    expect(bot.sendAttribution).not.toHaveBeenCalled();
     expect(query.mock.calls.some(([sql]) => sql.includes("INSERT INTO reception_relay_updates"))).toBe(false);
   });
 
@@ -147,18 +187,54 @@ describe("Reception relay", () => {
     expect(await relayReceptionUpdate(privateMessage(), database, bot)).toBe("sent");
     expect(await relayReceptionUpdate(privateMessage(), database, bot)).toBe("duplicate");
     expect(bot.copyMessage).toHaveBeenCalledTimes(1);
+    expect(bot.sendAttribution).toHaveBeenCalledTimes(1);
   });
 
   it("records unsupported messages and delivery failures without throwing", async () => {
     const { database, rows } = fakeDatabase();
-    const bot: ReceptionRelayBot = { copyMessage: vi.fn(async () => ({
-      status: "failed" as const, errorCode: "telegram_400",
-    })) };
+    const bot: ReceptionRelayBot = {
+      sendAttribution: vi.fn(async () => ({ status: "sent" as const, messageId: 500 })),
+      copyMessage: vi.fn(async () => ({ status: "failed" as const, errorCode: "telegram_400" })),
+    };
     expect(await relayReceptionUpdate(privateMessage(1, { text: undefined, dice: { emoji: "🎲" } }), database, bot)).toBe("unsupported");
     expect(rows.get(1)?.status).toBe("unsupported");
     expect(await relayReceptionUpdate(privateMessage(2, { text: undefined, photo: [{ file_id: "photo" }] }), database, bot)).toBe("failed");
     expect(rows.get(2)).toMatchObject({ status: "failed", errorCode: "telegram_400" });
     expect(bot.copyMessage).toHaveBeenCalledTimes(1);
+    expect(bot.sendAttribution).toHaveBeenCalledTimes(1);
+  });
+
+  it("does not copy an anonymous message when attribution fails", async () => {
+    const { database, rows } = fakeDatabase();
+    const bot: ReceptionRelayBot = {
+      sendAttribution: vi.fn(async () => ({ status: "failed" as const, errorCode: "telegram_403" })),
+      copyMessage: vi.fn(),
+    };
+    expect(await relayReceptionUpdate(privateMessage(), database, bot)).toBe("failed");
+    expect(bot.copyMessage).not.toHaveBeenCalled();
+    expect(rows.get(1)).toMatchObject({ status: "failed", errorCode: "attribution_telegram_403" });
+  });
+
+  it("keeps concurrent attribution and copy pairs together", async () => {
+    const { database } = fakeDatabase();
+    const calls: string[] = [];
+    const bot: ReceptionRelayBot = {
+      sendAttribution: vi.fn(async () => {
+        calls.push("attribution");
+        await Promise.resolve();
+        return { status: "sent" as const, messageId: calls.length + 500 };
+      }),
+      copyMessage: vi.fn(async () => {
+        calls.push("copy");
+        await Promise.resolve();
+        return { status: "sent" as const, messageId: calls.length + 500 };
+      }),
+    };
+    await Promise.all([
+      relayReceptionUpdate(privateMessage(1), database, bot),
+      relayReceptionUpdate(privateMessage(2, { message_id: 12 }), database, bot),
+    ]);
+    expect(calls).toEqual(["attribution", "copy", "attribution", "copy"]);
   });
 });
 
@@ -176,6 +252,19 @@ describe("copyMessage Bot API adapter", () => {
     expect(JSON.parse(String(options?.body))).toEqual({
       chat_id: "-1001234567890", from_chat_id: "42", message_id: 11,
       message_thread_id: 77,
+    });
+  });
+
+  it("sends a plain-text attribution to the same topic", async () => {
+    vi.mocked(fetch).mockResolvedValue({ json: async () => ({ ok: true, result: { message_id: 500 } }) } as Response);
+    const result = await receptionRelayBot("token").sendAttribution({
+      chatId: "-1001234567890", text: "От: Анна Иванова (@anna)", topicId: 77,
+    });
+    expect(result).toEqual({ status: "sent", messageId: 500 });
+    const [url, options] = vi.mocked(fetch).mock.calls[0];
+    expect(url).toBe("https://api.telegram.org/bottoken/sendMessage");
+    expect(JSON.parse(String(options?.body))).toEqual({
+      chat_id: "-1001234567890", text: "От: Анна Иванова (@anna)", message_thread_id: 77,
     });
   });
 });

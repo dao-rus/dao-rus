@@ -11,6 +11,7 @@ export type CopyResult =
   | { status: "failed"; errorCode: string };
 
 export type ReceptionRelayBot = {
+  sendAttribution(input: { chatId: string; text: string; topicId?: number }): Promise<CopyResult>;
   copyMessage(input: {
     chatId: string;
     fromChatId: string;
@@ -37,35 +38,60 @@ function supportedMessage(message: Record<string, unknown>): boolean {
     message[field] !== undefined);
 }
 
+function attribution(from: Record<string, unknown>): string {
+  const oneLine = (value: unknown) => typeof value === "string"
+    ? value.trim().replace(/\s+/gu, " ") : "";
+  const name = [oneLine(from.first_name), oneLine(from.last_name)].filter(Boolean).join(" ") || "Пользователь Telegram";
+  const username = oneLine(from.username);
+  return `От: ${name}${username ? ` (@${username})` : ""}`;
+}
+
+async function botMessage(token: string, method: "sendMessage" | "copyMessage", params: object): Promise<CopyResult> {
+  try {
+    const response = await fetch(`https://api.telegram.org/bot${token}/${method}`, {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify(params),
+      cache: "no-store",
+      signal: AbortSignal.timeout(5000),
+    });
+    const body = record(await response.json());
+    const result = record(body?.result);
+    if (body?.ok === true && safeInteger(result?.message_id)) {
+      return { status: "sent", messageId: result.message_id };
+    }
+    return { status: "failed", errorCode: safeInteger(body?.error_code)
+      ? `telegram_${body.error_code}` : "invalid_response" };
+  } catch {
+    // A timeout may occur after Telegram accepted the message. Do not resend automatically.
+    return { status: "failed", errorCode: "network_or_timeout" };
+  }
+}
+
 export function receptionRelayBot(token: string): ReceptionRelayBot {
   return {
-    async copyMessage({ chatId, fromChatId, messageId, topicId }) {
-      try {
-        const response = await fetch(`https://api.telegram.org/bot${token}/copyMessage`, {
-          method: "POST",
-          headers: { "content-type": "application/json" },
-          body: JSON.stringify({
-            chat_id: chatId,
-            from_chat_id: fromChatId,
-            message_id: messageId,
-            ...(topicId === undefined ? {} : { message_thread_id: topicId }),
-          }),
-          cache: "no-store",
-          signal: AbortSignal.timeout(5000),
-        });
-        const body = record(await response.json());
-        const result = record(body?.result);
-        if (body?.ok === true && safeInteger(result?.message_id)) {
-          return { status: "sent", messageId: result.message_id };
-        }
-        return { status: "failed", errorCode: safeInteger(body?.error_code)
-          ? `telegram_${body.error_code}` : "invalid_response" };
-      } catch {
-        // A timeout may occur after Telegram accepted the copy. Do not resend automatically.
-        return { status: "failed", errorCode: "network_or_timeout" };
-      }
+    sendAttribution({ chatId, text, topicId }) {
+      return botMessage(token, "sendMessage", {
+        chat_id: chatId, text,
+        ...(topicId === undefined ? {} : { message_thread_id: topicId }),
+      });
+    },
+    copyMessage({ chatId, fromChatId, messageId, topicId }) {
+      return botMessage(token, "copyMessage", {
+        chat_id: chatId,
+        from_chat_id: fromChatId,
+        message_id: messageId,
+        ...(topicId === undefined ? {} : { message_thread_id: topicId }),
+      });
     },
   };
+}
+
+let forumDelivery = Promise.resolve();
+function enqueueForumDelivery(task: () => Promise<CopyResult>): Promise<CopyResult> {
+  const next = forumDelivery.then(task);
+  forumDelivery = next.then(() => undefined, () => undefined);
+  return next;
 }
 
 export async function relayReceptionUpdate(
@@ -140,13 +166,25 @@ export async function relayReceptionUpdate(
   if (!supported) return "unsupported";
 
   const relayBot = bot ?? receptionRelayBot(token);
-  const copied = await relayBot.copyMessage({
-    chatId: direction === "private_to_forum" ? forumChatId : String(privateChatId),
-    fromChatId: direction === "private_to_forum" ? String(privateChatId) : forumChatId,
-    messageId: sourceMessageId,
-    // Bot API rejects message_thread_id=1 for General; omitting it targets General.
-    ...(direction === "private_to_forum" && threadId !== 1 ? { topicId: threadId } : {}),
-  });
+  const copied = direction === "private_to_forum"
+    ? await enqueueForumDelivery(async () => {
+      // Bot API rejects message_thread_id=1 for General; omitting it targets General.
+      const topic = threadId !== 1 ? { topicId: threadId } : {};
+      const heading = await relayBot.sendAttribution({
+        chatId: forumChatId, text: attribution(from!), ...topic,
+      });
+      if (heading.status === "failed") {
+        return { status: "failed", errorCode: `attribution_${heading.errorCode}` };
+      }
+      return relayBot.copyMessage({
+        chatId: forumChatId, fromChatId: String(privateChatId),
+        messageId: sourceMessageId, ...topic,
+      });
+    })
+    : await relayBot.copyMessage({
+      chatId: String(privateChatId), fromChatId: forumChatId,
+      messageId: sourceMessageId,
+    });
   if (copied.status === "failed") {
     await database.query(
       `UPDATE reception_relay_updates SET status = 'failed', error_code = $2,
