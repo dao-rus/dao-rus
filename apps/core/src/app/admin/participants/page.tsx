@@ -2,6 +2,7 @@ import Link from "next/link";
 import type { Metadata } from "next";
 import { redirect } from "next/navigation";
 import { RegistryFieldEditor } from "@/components/registry-field-editor";
+import { CoreNavigation } from "../../../components/core-navigation";
 import { LocalDateTime } from "@/components/local-date-time";
 import { hasPrototypeAdminAccess } from "@/lib/config";
 import {
@@ -83,6 +84,7 @@ export default async function ParticipantRegistryPage({
   return (
     <main className="shell registryShell">
       <section className="card registryPage">
+        <CoreNavigation />
         <div className="profileHeader">
           <div>
             <div className="eyebrow">Prototype admin · Participant Registry v0.1</div>

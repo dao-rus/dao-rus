@@ -2,6 +2,7 @@ import Link from "next/link";
 import type { Metadata } from "next";
 import { redirect } from "next/navigation";
 import { LocalDateTime } from "@/components/local-date-time";
+import { CoreNavigation } from "../../components/core-navigation";
 import { ParticipantName } from "../../components/participant-name";
 import { canCreateProposal } from "@/lib/eligibility";
 import { listProposals } from "@/lib/proposals";
@@ -40,16 +41,12 @@ export default async function ProposalsPage({ searchParams }: ProposalsPageProps
   return (
     <main className="shell">
       <section className="card proposalsPage">
+        <CoreNavigation current="veche" />
         <div className="profileHeader">
           <div>
             <div className="eyebrow">Governance · Proposal v0.1</div>
             <h1>Вече</h1>
             <p className="muted">Простые открытые предложения участников ДАО.</p>
-          </div>
-          <div className="profileActions">
-            <Link className="button secondary" href="/">Главная</Link>
-            <Link className="button secondary" href="/participants">Сеть</Link>
-            <Link className="button secondary" href="/profile">Ваш профиль</Link>
           </div>
         </div>
 

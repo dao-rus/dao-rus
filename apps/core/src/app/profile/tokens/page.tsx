@@ -2,6 +2,7 @@ import Link from "next/link";
 import type { Metadata } from "next";
 import { redirect } from "next/navigation";
 import { LocalDateTime } from "@/components/local-date-time";
+import { CoreNavigation } from "../../../components/core-navigation";
 import { getCurrentParticipant } from "@/lib/session";
 import { getDarusBalance, getDarusHistory } from "@/lib/tokenization";
 
@@ -18,6 +19,7 @@ export default async function TokensPage() {
   return (
     <main className="shell">
       <section className="card profile">
+        <CoreNavigation current="profile" />
         <div className="profileHeader">
           <div>
             <div className="eyebrow">Профиль участия</div>

@@ -2,6 +2,7 @@ import Link from "next/link";
 import type { Metadata } from "next";
 import { redirect } from "next/navigation";
 import { TelegramAvatar } from "@/components/telegram-avatar";
+import { CoreNavigation } from "../../components/core-navigation";
 import { ParticipantName } from "../../components/participant-name";
 import { readInterfaceTexts } from "@/lib/interface-texts";
 import { listParticipantsDirectory, type DirectorySort } from "@/lib/participants-directory";
@@ -77,6 +78,7 @@ export default async function ParticipantsPage({ searchParams }: ParticipantsPag
   return (
     <main className={`shell${community ? " communityShell" : ""}`}>
       <section className={`card participantsPage${community ? " communityPage" : ""}`}>
+        <CoreNavigation current="participants" texts={texts} />
         <div className="profileHeader">
           <div>
             <div className="eyebrow">ДАО Русь</div>
@@ -92,12 +94,6 @@ export default async function ParticipantsPage({ searchParams }: ParticipantsPag
             {residenceFilter ? (
               <p className="muted">Место жительства: {residenceLabel(residenceFilter)} · <Link href="/participants">Показать всех</Link></p>
             ) : null}
-          </div>
-          <div className="profileActions">
-            <Link className="button secondary" href="/">Главная</Link>
-            <Link className="button secondary" href="/veche">Вече</Link>
-            <Link className="button secondary" href="/exchange">{texts["exchange.title"]}</Link>
-            <Link className="button secondary" href="/profile">{texts["home.profile_button"]}</Link>
           </div>
         </div>
 

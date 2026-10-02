@@ -62,6 +62,13 @@ function classNames(node: ReactNode): string[] {
   return [...(props.className ? [props.className] : []), ...classNames(props.children)];
 }
 
+function hasMainNavigation(node: ReactNode): boolean {
+  if (Array.isArray(node)) return node.some(hasMainNavigation);
+  if (!isValidElement(node)) return false;
+  const props = node.props as { current?: string; children?: ReactNode };
+  return props.current === "participants" || hasMainNavigation(props.children);
+}
+
 describe("/participants", () => {
   beforeEach(() => {
     vi.clearAllMocks();
@@ -122,8 +129,7 @@ describe("/participants", () => {
     expect(text).toContain("Биография Алисы");
     expect(text).not.toContain("+79990000000");
     expect(text).not.toContain('Подтвердили:');
-    expect(hrefs(page)).toContain("/");
-    expect(hrefs(page)).toContain("/veche");
+    expect(hasMainNavigation(page)).toBe(true);
     expect(text).not.toContain(participantId);
     expect(text).not.toContain("Telegram ID");
     expect(text).not.toContain("Статус в ДАО");

@@ -2,6 +2,7 @@ import Link from "next/link";
 import type { Metadata } from "next";
 import { redirect } from "next/navigation";
 import { hasPrototypeAdminAccess } from "@/lib/config";
+import { CoreNavigation } from "../../components/core-navigation";
 import { getCurrentParticipant } from "@/lib/session";
 
 export const dynamic = "force-dynamic";
@@ -14,6 +15,7 @@ export default async function AdminPage() {
   return (
     <main className="shell">
       <section className="card profile">
+        <CoreNavigation />
         <div className="profileHeader">
           <div><div className="eyebrow">DAO Core</div><h1>Управление</h1></div>
           <Link className="button secondary" href="/profile">К профилю</Link>

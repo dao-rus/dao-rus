@@ -4,6 +4,7 @@ import { redirect } from "next/navigation";
 import { getCurrentParticipant } from "@/lib/session";
 import { readInterfaceTexts } from "@/lib/interface-texts";
 import { listRelayEncounters } from "@/lib/relay";
+import { CoreNavigation } from "../../components/core-navigation";
 
 export const dynamic = "force-dynamic";
 export const metadata: Metadata = { title: "Диалоги" };
@@ -24,6 +25,7 @@ export default async function RelayListPage({
   return (
     <main className="shell">
       <section className="card exchangePage">
+        <CoreNavigation current="exchange" texts={texts} />
         <div className="eyebrow">DAO Rus · Нужно / есть</div>
         <h1>{archive ? texts["relay.archive_title"] : texts["relay.list_title"]}</h1>
         <nav className="actions" aria-label="Диалоги">

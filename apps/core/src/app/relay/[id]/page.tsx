@@ -4,6 +4,7 @@ import { notFound, redirect } from "next/navigation";
 import { getCurrentParticipant } from "@/lib/session";
 import { readInterfaceTexts } from "@/lib/interface-texts";
 import { getRelayEncounter, listRelayMessages, RelayValidationError } from "@/lib/relay";
+import { CoreNavigation } from "../../../components/core-navigation";
 
 export const dynamic = "force-dynamic";
 export const metadata: Metadata = { title: "Диалог" };
@@ -33,6 +34,7 @@ export default async function RelayDetailPage({
   return (
     <main className="shell">
       <section className="card exchangePage">
+        <CoreNavigation current="exchange" texts={texts} />
         <div className="eyebrow">DAO Rus · Анонимный диалог</div>
         <h1>{texts["relay.dialog_title"]}</h1>
         <p className="relaySignal">{encounter.body}</p>

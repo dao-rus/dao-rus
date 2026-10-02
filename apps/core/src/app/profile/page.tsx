@@ -2,6 +2,7 @@ import Link from "next/link";
 import type { Metadata } from "next";
 import { redirect } from "next/navigation";
 import { LocalDateTime } from "@/components/local-date-time";
+import { CoreNavigation } from "../../components/core-navigation";
 import { TelegramAvatar } from "@/components/telegram-avatar";
 import { getActivitySummary } from "@/lib/activity";
 import { hasPrototypeAdminAccess, telegramReceptionConfig } from "@/lib/config";
@@ -96,6 +97,7 @@ export default async function ProfilePage({ searchParams }: ProfilePageProps) {
   return (
     <main className="shell">
       <section className="card profile">
+        <CoreNavigation current="profile" texts={texts} />
         <div className="profileHeader">
           <div className="profileIdentity">
             <TelegramAvatar participantId={participant.id} displayName={participant.displayName}
@@ -116,10 +118,7 @@ export default async function ProfilePage({ searchParams }: ProfilePageProps) {
             {receptionUsername ? <a className="button secondary" href={`https://t.me/${receptionUsername}?start=core`}>
               {texts["profile.reception_link"]}
             </a> : null}
-            <Link className="button secondary" href="/participants">{texts["participants.title"]}</Link>
-            <Link className="button secondary" href="/exchange">{texts["exchange.title"]}</Link>
             {hasAdminAccess ? <Link className="button secondary" href="/admin">Управление</Link> : null}
-            <Link className="button secondary" href="/veche">Вече</Link>
             <form action="/api/auth/logout" method="post">
               <button className="button secondary" type="submit">Выйти</button>
             </form>

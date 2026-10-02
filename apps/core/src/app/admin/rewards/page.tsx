@@ -2,6 +2,7 @@ import Link from "next/link";
 import type { Metadata } from "next";
 import { redirect } from "next/navigation";
 import { hasPrototypeAdminAccess } from "@/lib/config";
+import { CoreNavigation } from "../../../components/core-navigation";
 import { getCurrentParticipant } from "@/lib/session";
 import { getCurrentRewardRule } from "@/lib/tokenization";
 
@@ -24,6 +25,7 @@ export default async function RewardsPage({ searchParams }: RewardsPageProps) {
   return (
     <main className="shell">
       <section className="card profile">
+        <CoreNavigation />
         <div className="profileHeader">
           <div>
             <div className="eyebrow">DAO Core</div>

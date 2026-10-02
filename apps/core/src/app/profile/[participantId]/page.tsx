@@ -5,6 +5,7 @@ import { hasPrototypeAdminAccess } from "@/lib/config";
 import { DarusRewardCelebration } from "@/components/darus-reward-celebration";
 import { PositiveExperienceFeedback } from "@/components/positive-experience-feedback";
 import { TelegramAvatar } from "@/components/telegram-avatar";
+import { CoreNavigation } from "../../../components/core-navigation";
 import { ParticipantName } from "../../../components/participant-name";
 import { getVisibleProfileAbout, residenceDirectoryHref, residenceLabel } from "@/lib/profile-about";
 import { getReputationSummary } from "@/lib/reputation";
@@ -84,6 +85,7 @@ export default async function SubjectProfilePage({ params, searchParams }: Subje
   return (
     <main className="shell">
       <section className="card profile">
+        <CoreNavigation current="participants" />
         <div className="profileHeader">
           <div className="profileIdentity">
             {profile.hasLoggedIn ? (
@@ -101,7 +103,6 @@ export default async function SubjectProfilePage({ params, searchParams }: Subje
               {profile.hasLoggedIn && profile.telegramBio ? <p className="profileBio muted">Telegram: {profile.telegramBio}</p> : null}
             </div>
           </div>
-          <Link className="button secondary" href="/profile">Ваш профиль</Link>
         </div>
 
         {profile.hasLoggedIn && about && (about.bio || about.residence || about.interests.length || about.signals.length) ? (

@@ -34,6 +34,7 @@ describe("home interface texts", () => {
       "home.code_link": "Открыть наш Кодекс",
       "participants.title": "Моя сеть",
       "exchange.title": "Обмен",
+      "nav.veche": "Наше вече",
     } });
   });
 
@@ -56,6 +57,6 @@ describe("home interface texts", () => {
     expect(textContent(page)).toContain("Свой профиль");
     expect(textContent(page)).toContain("Моя сеть");
     expect(textContent(page)).toContain("Обмен");
-    expect(textContent(page)).toContain("Вече");
+    expect(textContent(page)).toContain("Наше вече");
   });
 });

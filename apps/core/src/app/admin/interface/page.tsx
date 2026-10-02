@@ -2,6 +2,7 @@ import Link from "next/link";
 import type { Metadata } from "next";
 import { redirect } from "next/navigation";
 import { hasPrototypeAdminAccess } from "@/lib/config";
+import { CoreNavigation } from "../../../components/core-navigation";
 import { interfaceTextFields, readInterfaceTexts } from "@/lib/interface-texts";
 import { getCurrentParticipant } from "@/lib/session";
 
@@ -36,6 +37,7 @@ export default async function InterfacePage({ searchParams }: InterfacePageProps
   return (
     <main className="shell">
       <section className="card profile">
+        <CoreNavigation texts={values} />
         <div className="profileHeader">
           <div>
             <div className="eyebrow">Ядро</div>

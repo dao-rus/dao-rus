@@ -1,6 +1,7 @@
 import Link from "next/link";
 import type { Metadata } from "next";
 import { redirect } from "next/navigation";
+import { CoreNavigation } from "../../components/core-navigation";
 import { getCurrentParticipant } from "@/lib/session";
 import { readInterfaceTexts } from "@/lib/interface-texts";
 import { listBlindSignals, listRelayEncounters } from "@/lib/relay";
@@ -26,6 +27,7 @@ export default async function ExchangePage({
   return (
     <main className="shell">
       <section className="card exchangePage">
+        <CoreNavigation current="exchange" texts={texts} />
         <div className="eyebrow">DAO Rus · Сеть</div>
         <h1>{texts["exchange.title"]}</h1>
         <p className="lead">{texts["exchange.lead"]}</p>

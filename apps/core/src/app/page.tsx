@@ -37,7 +37,7 @@ export default async function Home({
             </Link>
             <Link className="button secondary" href="/participants">{texts["participants.title"]}</Link>
             <Link className="button secondary" href="/exchange">{texts["exchange.title"]}</Link>
-            <Link className="button secondary" href="/veche">Вече</Link>
+            <Link className="button secondary" href="/veche">{texts["nav.veche"]}</Link>
           </div>
         ) : (
           <div className="actions">

@@ -4,6 +4,7 @@ import { isTelegramConfigured } from "@/lib/config";
 import { getCurrentParticipant } from "@/lib/session";
 import { readInterfaceTexts } from "@/lib/interface-texts";
 import { NeedAuthGate } from "./need-auth-gate";
+import { CoreNavigation } from "../../components/core-navigation";
 
 export const dynamic = "force-dynamic";
 export const metadata: Metadata = { title: "Что вам нужно?" };
@@ -22,6 +23,7 @@ export default async function NeedPage({
   return (
     <main className="shell">
       <section className="card needCard">
+        {participant ? <CoreNavigation current="exchange" texts={texts} /> : null}
         <div className="eyebrow">DAO Rus · Мне нужно</div>
         <h1>{texts["need.title"]}</h1>
         <NeedAuthGate>

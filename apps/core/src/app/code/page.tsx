@@ -1,6 +1,7 @@
 import Link from "next/link";
 import type { Metadata } from "next";
 import { CodeDiscussion } from "../../components/code-discussion";
+import { CoreNavigation } from "../../components/core-navigation";
 import { hasPrototypeAdminAccess } from "@/lib/config";
 import { DAO_CODE_CLAUSES, DAO_CODE_TITLE, DAO_CODE_VERSION } from "../../lib/dao-code";
 import { listCodeComments, parseCodeSort, parseCodeSection } from "../../lib/code-comments";
@@ -22,6 +23,7 @@ export default async function CodePage({ searchParams }: CodePageProps) {
   return (
     <main className="shell">
       <section className="card codePage">
+        {viewer ? <CoreNavigation current="code" /> : null}
         <div className="eyebrow">ДАО Русь · Основной документ</div>
         <h1>{DAO_CODE_TITLE}</h1>
         <p className="lead">Три базовых принципа, на которых строятся отношения участников и механизмы ДАО Русь.</p>

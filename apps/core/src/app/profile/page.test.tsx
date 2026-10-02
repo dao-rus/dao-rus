@@ -91,8 +91,9 @@ describe("/profile copy", () => {
     expect(text).toContain("У меня есть");
     expect(text).toContain("Кому видно");
     expect(text).not.toContain("Кто видит");
-    expect(text).toContain("Моя сеть");
-    expect(text).toContain("Обмен");
+    expect(findProps(page, (props) => props.current === "profile")?.texts).toMatchObject({
+      "participants.title": "Моя сеть", "exchange.title": "Обмен",
+    });
     expect(text).not.toContain("Ядро");
     expect(text).toContain("О себе в Telegram");
     expect(text).toContain("+79990000000");

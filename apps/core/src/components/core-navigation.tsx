@@ -1,0 +1,28 @@
+import Link from "next/link";
+import { readInterfaceTexts, type InterfaceTextValues } from "../lib/interface-texts";
+
+type CoreSection = "home" | "veche" | "exchange" | "participants" | "profile" | "code";
+
+export async function CoreNavigation({ current, texts: providedTexts }: {
+  current?: CoreSection;
+  texts?: InterfaceTextValues;
+}) {
+  const texts = providedTexts ?? (await readInterfaceTexts()).values;
+  const links: { section: CoreSection; href: string; label: string }[] = [
+    { section: "home", href: "/", label: texts["nav.home"] },
+    { section: "veche", href: "/veche", label: texts["nav.veche"] },
+    { section: "exchange", href: "/exchange", label: texts["exchange.title"] },
+    { section: "participants", href: "/participants", label: texts["participants.title"] },
+    { section: "profile", href: "/profile", label: texts["home.profile_button"] },
+    { section: "code", href: "/code", label: texts["nav.code"] },
+  ];
+
+  return (
+    <nav className="coreNavigation" aria-label="Основные разделы">
+      {links.map(({ section, href, label }) => (
+        <Link key={section} className="button secondary" href={href}
+          aria-current={current === section ? "page" : undefined}>{label}</Link>
+      ))}
+    </nav>
+  );
+}

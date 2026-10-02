@@ -2,6 +2,7 @@ import Link from "next/link";
 import type { Metadata } from "next";
 import { redirect } from "next/navigation";
 import { LocalDateTime } from "@/components/local-date-time";
+import { CoreNavigation } from "../../../components/core-navigation";
 import { activityEventLabel, getActivitySummary } from "@/lib/activity";
 import { getCurrentParticipant } from "@/lib/session";
 
@@ -17,6 +18,7 @@ export default async function ActivityPage() {
   return (
     <main className="shell">
       <section className="card profile">
+        <CoreNavigation current="profile" />
         <div className="profileHeader">
           <div>
             <div className="eyebrow">Профиль участия</div>
