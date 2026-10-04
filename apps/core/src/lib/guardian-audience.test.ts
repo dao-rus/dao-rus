@@ -10,6 +10,7 @@ function person(id: string, options: Record<string, unknown> = {}) {
     logged_in: false, is_bot: false, telegram_username: null,
     has_telegram_user_id: true, residence_name: null,
     residence_type: null, residence_country: null, interests: [],
+    has_any_interests: Array.isArray(options.interests) && options.interests.length > 0,
     ...options,
   };
 }
@@ -63,6 +64,18 @@ describe("Guardian read-only audience", () => {
   it("uses OR for multiple interests", async () => {
     const result = await getGuardianAudienceWithDatabase(database(), { city: cityKey(moscow), interests: ["art", "tech"] });
     expect(result.audience.map((entry) => entry.id)).toEqual(["one", "two"]);
+  });
+
+  it("counts a private-only interest without exposing it as an admin filter or match", async () => {
+    const privateOnly = person("private-only", { has_any_interests: true, interests: [] });
+    const db = { query: vi.fn().mockResolvedValue({ rows: [privateOnly] }) };
+    const result = await getGuardianAudienceWithDatabase(db);
+    expect(result.missingInterests).toEqual([]);
+    expect(result.interests).toEqual([]);
+    expect((await getGuardianAudienceWithDatabase(db, { interests: ["private-topic"] })).audience).toEqual([]);
+    const sql = db.query.mock.calls[0][0] as string;
+    expect(sql).toContain("interest.visibility IN ('public', 'members')");
+    expect(sql).toContain("AS has_any_interests");
   });
 
   it("does not perform writes or read historical quest completion", async () => {

@@ -43,11 +43,16 @@ export async function getGuardianAudienceWithDatabase(
                WHERE roster.participant_id = p.id
                  AND (roster.is_bot OR roster.membership_status = 'bot')
             ) AS is_bot,
+            EXISTS (
+              SELECT 1 FROM participant_interests any_interest
+               WHERE any_interest.participant_id = p.id
+            ) AS has_any_interests,
             COALESCE((
               SELECT jsonb_agg(jsonb_build_object('key', interest.normalized_label, 'label', interest.label)
                                ORDER BY interest.label)
                 FROM participant_interests interest
                WHERE interest.participant_id = p.id
+                 AND interest.visibility IN ('public', 'members')
             ), '[]'::jsonb) AS interests
        FROM participants p
        LEFT JOIN external_identities telegram
@@ -55,7 +60,7 @@ export async function getGuardianAudienceWithDatabase(
       ORDER BY lower(p.display_name), p.id`,
   );
 
-  const participants: GuardianParticipant[] = result.rows
+  const participants: Array<GuardianParticipant & { hasAnyInterests: boolean }> = result.rows
     .filter((row) => (row.forum_joined === true || row.logged_in === true)
       && row.membership_status !== "left"
       && row.membership_status !== "excluded"
@@ -73,6 +78,7 @@ export async function getGuardianAudienceWithDatabase(
           }
         : null,
       interests: (row.interests as Array<{ key: string; label: string }> | null) ?? [],
+      hasAnyInterests: row.has_any_interests === true,
     }));
 
   const cities = [...new Map(participants.flatMap((person) => person.residence
@@ -91,7 +97,7 @@ export async function getGuardianAudienceWithDatabase(
 
   return {
     missingCity: participants.filter((person) => person.residence === null),
-    missingInterests: participants.filter((person) => person.interests.length === 0),
+    missingInterests: participants.filter((person) => !person.hasAnyInterests),
     cities,
     interests,
     audience,
