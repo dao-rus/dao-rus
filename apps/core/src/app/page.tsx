@@ -2,10 +2,12 @@ import Link from "next/link";
 import { devAuthEnabled, isTelegramConfigured } from "@/lib/config";
 import { DAO_CODE_CLAUSES } from "../lib/dao-code";
 import { ActionPill } from "../components/action-pill";
+import { PrivateMessagesLink } from "../components/private-messages-link";
 import { readInterfaceTexts } from "@/lib/interface-texts";
 import { getCurrentParticipant } from "@/lib/session";
 import { getOnboardingQuests } from "@/lib/onboarding-quests";
 import { formatDarusAmount } from "../lib/tokenization";
+import { countUnreadNotifications } from "../lib/notifications";
 
 export const dynamic = "force-dynamic";
 
@@ -21,7 +23,9 @@ export default async function Home({
   ]);
   const telegramReady = isTelegramConfigured();
   const devReady = devAuthEnabled();
-  const quests = participant ? await getOnboardingQuests(participant.id) : [];
+  const [quests, unreadCount] = participant
+    ? await Promise.all([getOnboardingQuests(participant.id), countUnreadNotifications(participant.id)])
+    : [[], 0];
 
   return (
     <main className="shell">
@@ -54,6 +58,7 @@ export default async function Home({
             <Link className="button secondary" href="/nearby">{texts["nearby.title"]}</Link>
             <Link className="button secondary" href="/exchange">{texts["exchange.title"]}</Link>
             <Link className="button secondary" href="/veche">{texts["nav.veche"]}</Link>
+            <PrivateMessagesLink label={texts["nav.private_messages"]} unreadCount={unreadCount} />
           </div>
         ) : (
           <div className="actions">

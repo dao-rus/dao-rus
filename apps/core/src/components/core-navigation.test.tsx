@@ -1,19 +1,38 @@
 import { isValidElement, type ReactNode } from "react";
-import { describe, expect, it } from "vitest";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 import { interfaceTextFields, type InterfaceTextValues } from "../lib/interface-texts";
+import { PrivateMessagesLink } from "./private-messages-link";
 import { CoreNavigation } from "./core-navigation";
 
-function links(node: ReactNode): Array<{ href: string; label: string; current?: string }> {
+const mocks = vi.hoisted(() => ({ getCurrentParticipant: vi.fn(), countUnreadNotifications: vi.fn() }));
+vi.mock("../lib/session", () => ({ getCurrentParticipant: mocks.getCurrentParticipant }));
+vi.mock("../lib/notifications", () => ({ countUnreadNotifications: mocks.countUnreadNotifications }));
+
+function links(node: ReactNode): Array<{ href: string; label: string; current?: string; hasUnread?: boolean }> {
   if (Array.isArray(node)) return node.flatMap(links);
   if (!isValidElement(node)) return [];
-  const props = node.props as { href?: string; children?: ReactNode; "aria-current"?: string };
+  if (node.type === PrivateMessagesLink) return links(PrivateMessagesLink(node.props as Parameters<typeof PrivateMessagesLink>[0]));
+  const props = node.props as { href?: string; children?: ReactNode; "aria-current"?: string; "data-has-unread"?: boolean };
   return [
-    ...(props.href ? [{ href: props.href, label: String(props.children), current: props["aria-current"] }] : []),
+    ...(props.href ? [{ href: props.href, label: textOf(props.children), current: props["aria-current"],
+      ...(props["data-has-unread"] !== undefined ? { hasUnread: props["data-has-unread"] } : {}) }] : []),
     ...links(props.children),
   ];
 }
 
+function textOf(node: ReactNode): string {
+  if (typeof node === "string" || typeof node === "number") return String(node);
+  if (Array.isArray(node)) return node.map(textOf).join("");
+  if (!isValidElement(node)) return "";
+  return textOf((node.props as { children?: ReactNode }).children);
+}
+
 describe("CoreNavigation", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    mocks.getCurrentParticipant.mockResolvedValue({ id: "participant" });
+    mocks.countUnreadNotifications.mockResolvedValue(0);
+  });
   it("links all main sections, respects editable labels and marks the current one", async () => {
     const texts = Object.fromEntries(interfaceTextFields.map((field) => [field.key, field.defaultValue])) as InterfaceTextValues;
     texts["participants.title"] = "Люди";
@@ -29,9 +48,10 @@ describe("CoreNavigation", () => {
       { href: "/participants", label: "Люди", current: undefined },
       { href: "/nearby", label: "Рядом", current: undefined },
       { href: "/profile", label: "Ваш профиль", current: "page" },
-      { href: "/notifications", label: "Уведомления", current: undefined },
       { href: "/code", label: "Кодекс", current: undefined },
+      { href: "/notifications", label: "✉Личка", current: undefined, hasUnread: false },
     ]);
+    expect(mocks.countUnreadNotifications).toHaveBeenCalledWith("participant");
   });
 
   it("marks Nearby as the current section", async () => {
@@ -40,5 +60,12 @@ describe("CoreNavigation", () => {
     expect(links(navigation).find((link) => link.href === "/nearby")).toEqual({
       href: "/nearby", label: "Рядом", current: "page",
     });
+  });
+
+  it("marks the final personal messages link when there are unread notifications", async () => {
+    mocks.countUnreadNotifications.mockResolvedValue(2);
+    const texts = Object.fromEntries(interfaceTextFields.map((field) => [field.key, field.defaultValue])) as InterfaceTextValues;
+    const navigation = await CoreNavigation({ current: "notifications", texts });
+    expect(links(navigation).at(-1)).toEqual({ href: "/notifications", label: "✉Личка", current: "page", hasUnread: true });
   });
 });

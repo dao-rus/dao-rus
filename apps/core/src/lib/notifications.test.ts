@@ -1,5 +1,6 @@
 import { describe, expect, it, vi } from "vitest";
 import {
+  countUnreadNotificationsWithDatabase,
   createNotificationWithDatabase,
   listNotificationsWithDatabase,
   markNotificationReadWithDatabase,
@@ -22,6 +23,16 @@ function database(failDelivery = false) {
 }
 
 describe("Core notifications", () => {
+  it("counts only unread notifications belonging to the recipient", async () => {
+    const db = { query: vi.fn().mockResolvedValue({ rowCount: 1, rows: [{ unread_count: 2 }] }) };
+    expect(await countUnreadNotificationsWithDatabase(db, "recipient")).toBe(2);
+    expect(db.query).toHaveBeenCalledWith(
+      expect.stringContaining("participant_id = $1::uuid AND read_at IS NULL"),
+      ["recipient"],
+    );
+    db.query.mockResolvedValueOnce({ rowCount: 1, rows: [{ unread_count: 0 }] });
+    expect(await countUnreadNotificationsWithDatabase(db, "recipient")).toBe(0);
+  });
   it("creates an internal Notification without a delivery or Telegram API call", async () => {
     const db = database();
     const fetchSpy = vi.spyOn(globalThis, "fetch");

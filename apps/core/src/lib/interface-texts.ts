@@ -2,7 +2,7 @@ export const interfaceTextFields = [
   { section: "Навигация", key: "nav.home", label: "Главная", defaultValue: "Главная", multiline: false },
   { section: "Навигация", key: "nav.veche", label: "Вече", defaultValue: "Вече", multiline: false },
   { section: "Навигация", key: "nav.code", label: "Кодекс", defaultValue: "Кодекс", multiline: false },
-  { section: "Навигация", key: "nav.notifications", label: "Уведомления", defaultValue: "Уведомления", multiline: false },
+  { section: "Навигация", key: "nav.private_messages", label: "Личка", defaultValue: "Личка", multiline: false },
   { section: "Главная", key: "home.eyebrow", label: "Надпись над заголовком", defaultValue: "Ядро", multiline: false },
   { section: "Главная", key: "home.title", label: "Заголовок", defaultValue: "ДАО Русь", multiline: false },
   {

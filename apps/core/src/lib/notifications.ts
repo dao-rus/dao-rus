@@ -108,6 +108,18 @@ export async function listNotificationsWithDatabase(
   }));
 }
 
+export async function countUnreadNotificationsWithDatabase(
+  database: Pick<NotificationDatabase, "query">,
+  participantId: string,
+): Promise<number> {
+  const result = await database.query(
+    `SELECT count(*)::integer AS unread_count FROM notifications
+      WHERE participant_id = $1::uuid AND read_at IS NULL`,
+    [participantId],
+  );
+  return Number(result.rows[0]?.unread_count ?? 0);
+}
+
 export async function markNotificationReadWithDatabase(
   database: Pick<NotificationDatabase, "query">,
   participantId: string,
@@ -135,6 +147,11 @@ export async function createNotification(input: CreateNotification): Promise<str
 export async function listNotifications(participantId: string): Promise<Notification[]> {
   const { pool } = await import("./db");
   return listNotificationsWithDatabase(pool, participantId);
+}
+
+export async function countUnreadNotifications(participantId: string): Promise<number> {
+  const { pool } = await import("./db");
+  return countUnreadNotificationsWithDatabase(pool, participantId);
 }
 
 export async function markNotificationRead(participantId: string, notificationId: string): Promise<boolean> {
