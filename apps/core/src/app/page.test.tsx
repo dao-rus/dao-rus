@@ -42,6 +42,18 @@ function actionLinks(node: ReactNode): string[] {
   return props.className === "actions" ? links(props.children) : actionLinks(props.children);
 }
 
+function actionLinkClass(node: ReactNode, href: string): string | undefined {
+  if (Array.isArray(node)) return node.map((item) => actionLinkClass(item, href)).find(Boolean);
+  if (!isValidElement(node)) return undefined;
+  const props = node.props as { className?: string; href?: string; children?: ReactNode };
+  if (props.className === "actions") {
+    const children = Array.isArray(props.children) ? props.children : [props.children];
+    return children.find((child) => isValidElement(child) && (child.props as { href?: string }).href === href)
+      ?.props.className;
+  }
+  return actionLinkClass(props.children, href);
+}
+
 describe("home interface texts", () => {
   beforeEach(() => {
     vi.clearAllMocks();
@@ -92,7 +104,8 @@ describe("home interface texts", () => {
     expect(textContent(page)).toContain("Моя сеть");
     expect(textContent(page)).toContain("Рядом");
     expect(links(page)).toContain("/nearby");
-    expect(actionLinks(page)).toEqual(["/", "/veche", "/participants", "/exchange", "/nearby", "/notifications", "/profile"]);
+    expect(actionLinks(page)).toEqual(["/veche", "/participants", "/exchange", "/nearby", "/notifications", "/profile"]);
+    expect(actionLinkClass(page, "/profile")).toBe("button secondary");
     expect(mocks.countUnreadNotifications).toHaveBeenCalledWith("participant");
     expect(textContent(page)).toContain("Обмен");
     expect(textContent(page)).toContain("Наше вече");

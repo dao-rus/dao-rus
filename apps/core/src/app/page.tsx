@@ -51,13 +51,12 @@ export default async function Home({
 
         {participant ? (
           <div className="actions">
-            <Link className="button secondary" href="/" aria-current="page">{texts["nav.home"]}</Link>
             <Link className="button secondary" href="/veche">{texts["nav.veche"]}</Link>
             <Link className="button secondary" href="/participants">{texts["participants.title"]}</Link>
             <Link className="button secondary" href="/exchange">{texts["exchange.title"]}</Link>
             <Link className="button secondary" href="/nearby">{texts["nearby.title"]}</Link>
             <PrivateMessagesLink label={texts["nav.private_messages"]} unreadCount={unreadCount} />
-            <Link className="button primary" href="/profile">{texts["home.profile_button"]}</Link>
+            <Link className="button secondary" href="/profile">{texts["home.profile_button"]}</Link>
           </div>
         ) : (
           <div className="actions">
