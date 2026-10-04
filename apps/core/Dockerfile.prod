@@ -45,6 +45,8 @@ COPY --chown=nextjs:nodejs \
   src/lib/telegram-roster.ts \
   src/lib/telegram-participant.ts \
   src/lib/telegram-forum-roster-import.ts \
+  src/lib/config.ts \
+  src/lib/notification-delivery.ts \
   ./src/lib/
 
 USER nextjs

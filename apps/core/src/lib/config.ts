@@ -42,6 +42,10 @@ export function telegramBotToken(): string | undefined {
   return token && clientId && token.split(":", 1)[0] === clientId ? token : undefined;
 }
 
+export function telegramNotificationsEnabled(): boolean {
+  return env("TELEGRAM_NOTIFICATIONS_ENABLED") === "true";
+}
+
 export function telegramReceptionConfig() {
   const botUsername = env("TELEGRAM_RECEPTION_BOT_USERNAME");
   return {

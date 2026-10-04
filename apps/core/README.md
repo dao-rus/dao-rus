@@ -191,6 +191,16 @@ TELEGRAM_GUARDIAN_INVITES_ENABLED=false
 
 Access log Caddy не содержит request headers.
 
+Персональные уведомления хранятся в Core (`notifications`), а их Telegram-
+доставка учитывается отдельно (`notification_deliveries`). Compose запускает
+`notification-worker` из того же production image. По умолчанию
+`TELEGRAM_NOTIFICATIONS_ENABLED=false`: worker не забирает `pending` и ничего
+не отправляет. При включении он использует только `TELEGRAM_BOT_TOKEN` бота
+DAO RUS Dev, последовательно обрабатывает `pending` и не повторяет отправку
+после `unknown`. Запись, оставшаяся в `processing` более 10 минут, получает
+`unknown` без нового обращения к Telegram. Логи содержат только delivery ID,
+статус и безопасный код ошибки; текст уведомления и Telegram user ID не пишутся.
+
 Токен должен принадлежать именно «Приёмной», а `TELEGRAM_FORUM_CHAT_ID` —
 основному forum supergroup. Установите «Приёмную» администратором форума:
 `getChatMember` для других пользователей гарантирован только администратору.

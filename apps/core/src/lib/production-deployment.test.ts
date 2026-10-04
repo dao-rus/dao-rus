@@ -32,6 +32,21 @@ describe("production deployment", () => {
     expect(dockerfile).toContain("src/lib/db.ts");
   });
 
+  it("packages a separate notification worker with delivery disabled by default", async () => {
+    const dockerfile = await projectFile("Dockerfile.prod");
+    const compose = await projectFile("compose.prod.yml");
+    const worker = serviceBlock(compose, "notification-worker", "caddy");
+    const packageJson = await projectFile("package.json");
+
+    expect(dockerfile).toContain("src/lib/notification-delivery.ts");
+    expect(dockerfile).toContain("src/lib/config.ts");
+    expect(packageJson).toContain('"notifications:worker": "node --import tsx scripts/notification-worker.ts"');
+    expect(worker).toContain('command: ["node", "--import", "tsx", "scripts/notification-worker.ts"]');
+    expect(worker).toContain("- backend");
+    expect(worker).not.toContain("ports:");
+    expect(compose).toContain("TELEGRAM_NOTIFICATIONS_ENABLED: ${TELEGRAM_NOTIFICATIONS_ENABLED:-false}");
+  });
+
   it("publishes only Caddy while keeping PostgreSQL on the internal network", async () => {
     const compose = await projectFile("compose.prod.yml");
     const db = serviceBlock(compose, "db", "migrate");

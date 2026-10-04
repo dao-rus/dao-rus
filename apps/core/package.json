@@ -11,7 +11,8 @@
     "typecheck": "tsc --noEmit",
     "db:migrate": "tsx scripts/migrate.ts",
     "telegram:roster:import": "tsx scripts/import-telegram-roster.ts",
-    "telegram:forum:import": "tsx scripts/import-telegram-forum-roster.ts"
+    "telegram:forum:import": "tsx scripts/import-telegram-forum-roster.ts",
+    "notifications:worker": "node --import tsx scripts/notification-worker.ts"
   },
   "dependencies": {
     "dotenv": "17.4.2",

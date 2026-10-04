@@ -18,6 +18,7 @@ x-core-environment: &core-environment
   TELEGRAM_RECEPTION_TOPIC_ID: ${TELEGRAM_RECEPTION_TOPIC_ID:-}
   TELEGRAM_FORUM_INVITE_URL: ${TELEGRAM_FORUM_INVITE_URL:-}
   TELEGRAM_GUARDIAN_INVITES_ENABLED: ${TELEGRAM_GUARDIAN_INVITES_ENABLED:-false}
+  TELEGRAM_NOTIFICATIONS_ENABLED: ${TELEGRAM_NOTIFICATIONS_ENABLED:-false}
   ADMIN_PARTICIPANT_IDS: ${ADMIN_PARTICIPANT_IDS:-}
   SESSION_TTL_DAYS: ${SESSION_TTL_DAYS:-30}
   DEV_AUTH_BYPASS: "false"
@@ -90,6 +91,19 @@ services:
       timeout: 5s
       retries: 12
       start_period: 20s
+    logging: *default-logging
+
+  notification-worker:
+    <<: *core-image
+    command: ["node", "--import", "tsx", "scripts/notification-worker.ts"]
+    restart: unless-stopped
+    environment: *core-environment
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+    networks:
+      - backend
+    stop_grace_period: 30s
     logging: *default-logging
 
   caddy:
