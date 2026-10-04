@@ -1,3 +1,5 @@
+import { safeActionUrl } from "./notification-action-url";
+
 type QueryResult = { rowCount: number | null; rows: Array<Record<string, unknown>> };
 export type NotificationClient = {
   query(text: string, values?: unknown[]): Promise<QueryResult>;
@@ -12,6 +14,7 @@ export type Notification = {
   id: string;
   text: string;
   actionUrl: string | null;
+  actionLabel: string | null;
   createdAt: Date;
   readAt: Date | null;
 };
@@ -21,6 +24,7 @@ export type CreateNotification = {
   notificationType: string;
   text: string;
   actionUrl?: string | null;
+  actionLabel?: string | null;
   sourceType: "system" | "admin";
   createdByParticipantId?: string | null;
   queueTelegram?: boolean;
@@ -31,20 +35,6 @@ export class NotificationValidationError extends Error {
     super(message);
     this.name = "NotificationValidationError";
   }
-}
-
-function safeActionUrl(value: string | null | undefined): string | null {
-  if (value == null) return null;
-  const url = value.trim();
-  if (!url) return null;
-  if (url.startsWith("/") && !url.startsWith("//") && !url.includes("\\") && !/[\u0000-\u001f]/u.test(url)) return url;
-  if (/^https:\/\//iu.test(url)) {
-    try {
-      const parsed = new URL(url);
-      if (parsed.protocol === "https:" && !parsed.username && !parsed.password) return url;
-    } catch { /* Invalid URL. */ }
-  }
-  throw new NotificationValidationError("Invalid notification action URL");
 }
 
 export async function createNotificationWithDatabase(
@@ -60,15 +50,21 @@ export async function createNotificationWithDatabase(
   if (input.sourceType === "admin" && !input.createdByParticipantId) {
     throw new NotificationValidationError("Admin notification requires a creator");
   }
-  const actionUrl = safeActionUrl(input.actionUrl);
+  let actionUrl: string | null;
+  try { actionUrl = safeActionUrl(input.actionUrl); }
+  catch { throw new NotificationValidationError("Invalid notification action URL"); }
+  const actionLabel = input.actionLabel?.trim() ?? null;
+  if (input.actionLabel !== undefined && input.actionLabel !== null && !actionLabel) {
+    throw new NotificationValidationError("Notification action label cannot be empty");
+  }
 
   const client = await database.connect();
   try {
     await client.query("BEGIN");
     const result = await client.query(
-      `INSERT INTO notifications(participant_id, notification_type, text, action_url, source_type, created_by_participant_id)
-       VALUES ($1::uuid, $2, $3, $4, $5, $6::uuid) RETURNING id`,
-      [input.participantId, notificationType, body, actionUrl, input.sourceType, input.createdByParticipantId ?? null],
+      `INSERT INTO notifications(participant_id, notification_type, text, action_url, action_label, source_type, created_by_participant_id)
+       VALUES ($1::uuid, $2, $3, $4, $5, $6, $7::uuid) RETURNING id`,
+      [input.participantId, notificationType, body, actionUrl, actionLabel, input.sourceType, input.createdByParticipantId ?? null],
     );
     const id = String(result.rows[0].id);
     if (input.queueTelegram) {
@@ -93,7 +89,7 @@ export async function listNotificationsWithDatabase(
   participantId: string,
 ): Promise<Notification[]> {
   const result = await database.query(
-    `SELECT id, text, action_url, created_at, read_at
+    `SELECT id, text, action_url, action_label, created_at, read_at
        FROM notifications
       WHERE participant_id = $1::uuid
       ORDER BY (read_at IS NOT NULL), created_at DESC, id DESC`,
@@ -103,6 +99,7 @@ export async function listNotificationsWithDatabase(
     id: String(row.id),
     text: String(row.text),
     actionUrl: row.action_url ? String(row.action_url) : null,
+    actionLabel: row.action_label ? String(row.action_label) : null,
     createdAt: new Date(String(row.created_at)),
     readAt: row.read_at ? new Date(String(row.read_at)) : null,
   }));

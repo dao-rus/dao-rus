@@ -5,6 +5,7 @@ const mocks = vi.hoisted(() => ({
   getCurrentParticipant: vi.fn(),
   hasPrototypeAdminAccess: vi.fn(),
   getGuardianAudience: vi.fn(),
+  getProfileInterestsCampaign: vi.fn(),
   redirect: vi.fn(),
 }));
 
@@ -12,6 +13,7 @@ vi.mock("next/navigation", () => ({ redirect: mocks.redirect }));
 vi.mock("@/lib/session", () => ({ getCurrentParticipant: mocks.getCurrentParticipant }));
 vi.mock("@/lib/config", () => ({ hasPrototypeAdminAccess: mocks.hasPrototypeAdminAccess }));
 vi.mock("@/lib/guardian-audience", () => ({ getGuardianAudience: mocks.getGuardianAudience }));
+vi.mock("@/lib/guardian-campaign", () => ({ getProfileInterestsCampaign: mocks.getProfileInterestsCampaign }));
 vi.mock("@/lib/profile-about", () => ({
   residenceLabel: (residence: { name: string; country: string }) => `${residence.name}, ${residence.country}`,
 }));
@@ -25,9 +27,17 @@ function textContent(node: ReactNode): string {
   return textContent((node.props as { children?: ReactNode }).children);
 }
 
+function elementProps(node: ReactNode): Array<{ type: unknown; props: Record<string, unknown> }> {
+  if (Array.isArray(node)) return node.flatMap(elementProps);
+  if (!isValidElement(node)) return [];
+  const props = node.props as Record<string, unknown>;
+  return [{ type: node.type, props }, ...elementProps(props.children as ReactNode)];
+}
+
 describe("/admin/guardian", () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    mocks.getProfileInterestsCampaign.mockResolvedValue(null);
     mocks.redirect.mockImplementation((destination: string) => { throw new Error(`redirect:${destination}`); });
   });
 
@@ -52,7 +62,12 @@ describe("/admin/guardian", () => {
     expect(text).toContain("Не указан город: 1");
     expect(text).toContain("Не указаны интересы: 0");
     expect(text).toContain("Найдено участников: 1");
+    expect(elementProps(page).some(({ type }) => typeof type === "function" && type.name === "GuardianCampaignForm")).toBe(true);
     expect(text).toContain("@user");
     expect(text).toContain("Telegram ID не подтверждает возможность отправить личное сообщение");
+    const audienceDetails = elementProps(page).find(({ type, props }) => type === "details"
+      && textContent(props.children as ReactNode).includes("Найдено участников"));
+    expect(audienceDetails).toBeDefined();
+    expect(audienceDetails?.props.open).toBeUndefined();
   });
 });

@@ -31,7 +31,7 @@ export default async function NotificationsPage() {
                     <p>{notification.text}</p>
                     <span className="muted">Создано: <LocalDateTime value={notification.createdAt.toISOString()} /></span>
                     <span>{notification.readAt ? "Прочитано" : "Не прочитано"}</span>
-                    {notification.actionUrl ? <Link href={notification.actionUrl}>Открыть ссылку →</Link> : null}
+                    {notification.actionUrl ? <Link href={notification.actionUrl}>{notification.actionLabel ?? "Открыть"}</Link> : null}
                     {!notification.readAt ? (
                       <form action="/api/notifications/read" method="post">
                         <input type="hidden" name="notification_id" value={notification.id} />

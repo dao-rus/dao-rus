@@ -19,6 +19,7 @@ export type ClaimedDelivery = {
   participantId: string;
   text: string;
   actionUrl: string | null;
+  actionLabel: string | null;
 };
 
 const REQUEST_TIMEOUT_MS = 8000;
@@ -41,7 +42,8 @@ export async function claimPendingDelivery(database: Pick<DeliveryDatabase, "con
     await client.query("BEGIN");
     const result = await client.query(
       `WITH candidate AS (
-         SELECT delivery.id, notification.participant_id, notification.text, notification.action_url
+         SELECT delivery.id, notification.participant_id, notification.text,
+                notification.action_url, notification.action_label
            FROM notification_deliveries delivery
            JOIN notifications notification ON notification.id = delivery.notification_id
           WHERE delivery.channel = 'telegram' AND delivery.status = 'pending'
@@ -53,7 +55,8 @@ export async function claimPendingDelivery(database: Pick<DeliveryDatabase, "con
           SET status = 'processing', claimed_at = clock_timestamp()
          FROM candidate
         WHERE delivery.id = candidate.id
-       RETURNING delivery.id, candidate.participant_id, candidate.text, candidate.action_url`,
+       RETURNING delivery.id, candidate.participant_id, candidate.text,
+                 candidate.action_url, candidate.action_label`,
     );
     await client.query("COMMIT");
     if (!result.rowCount) return null;
@@ -63,6 +66,7 @@ export async function claimPendingDelivery(database: Pick<DeliveryDatabase, "con
       participantId: String(row.participant_id),
       text: String(row.text),
       actionUrl: row.action_url ? String(row.action_url) : null,
+      actionLabel: row.action_label ? String(row.action_label) : null,
     };
   } catch (error) {
     await client.query("ROLLBACK");
@@ -119,6 +123,7 @@ export async function sendTelegramDelivery(
   chatId: number,
   text: string,
   actionUrl: string | null,
+  actionLabel: string | null,
   request: typeof fetch = fetch,
 ): Promise<DeliveryOutcome> {
   try {
@@ -128,7 +133,7 @@ export async function sendTelegramDelivery(
       body: JSON.stringify({
         chat_id: chatId,
         text,
-        ...(actionUrl ? { reply_markup: { inline_keyboard: [[{ text: "Открыть", url: actionUrl }]] } } : {}),
+        ...(actionUrl ? { reply_markup: { inline_keyboard: [[{ text: actionLabel ?? "Открыть", url: actionUrl }]] } } : {}),
       }),
       signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS),
     });
@@ -211,7 +216,7 @@ export async function processNextNotificationDelivery(
       }
       if (actionUrl !== undefined) {
         if (!await markAttempt(database, delivery.id)) return { id: delivery.id, status: "unknown", errorCode: "claim_expired" };
-        outcome = await sendTelegramDelivery(token, chatId, delivery.text, actionUrl, request);
+        outcome = await sendTelegramDelivery(token, chatId, delivery.text, actionUrl, delivery.actionLabel, request);
       }
     }
   }

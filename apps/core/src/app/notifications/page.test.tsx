@@ -37,13 +37,21 @@ describe("/notifications", () => {
 
   it("shows only the current participant's notifications and action link", async () => {
     mocks.getCurrentParticipant.mockResolvedValue({ id: "recipient" });
-    mocks.listNotifications.mockResolvedValue([{ id: "note-1", text: "Ваше уведомление", actionUrl: "/need",
+    mocks.listNotifications.mockResolvedValue([{ id: "note-1", text: "Ваше уведомление", actionUrl: "/need", actionLabel: "Подробнее",
       createdAt: new Date("2026-10-04T12:00:00Z"), readAt: null }]);
     const page = await NotificationsPage();
     expect(mocks.listNotifications).toHaveBeenCalledWith("recipient");
     expect(textOf(page)).toContain("Ваше уведомление");
     expect(propsOf(page).some((props) => props.href === "/need")).toBe(true);
+    expect(textOf(page)).toContain("Подробнее");
     expect(propsOf(page).some((props) => props.action === "/api/notifications/read")).toBe(true);
+  });
+
+  it("uses the legacy action label for older notifications", async () => {
+    mocks.getCurrentParticipant.mockResolvedValue({ id: "recipient" });
+    mocks.listNotifications.mockResolvedValue([{ id: "note-2", text: "Старое", actionUrl: "/need", actionLabel: null,
+      createdAt: new Date("2026-10-04T12:00:00Z"), readAt: null }]);
+    expect(textOf(await NotificationsPage())).toContain("Открыть");
   });
 
   it("shows an ordinary empty state", async () => {

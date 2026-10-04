@@ -21,6 +21,7 @@ type Row = {
   participantId: string;
   text: string;
   actionUrl: string | null;
+  actionLabel: string | null;
   externalUserId: string | null;
   identityConflict: boolean;
   status: "pending" | "processing" | DeliveryStatus;
@@ -31,7 +32,7 @@ type Row = {
 
 function database(options: Partial<Row> = {}) {
   const row: Row = { id: "delivery-1", participantId: "participant-1", text: "Техническое сообщение",
-    actionUrl: null, externalUserId: "123456", identityConflict: false, status: "pending", attempted: false,
+    actionUrl: null, actionLabel: null, externalUserId: "123456", identityConflict: false, status: "pending", attempted: false,
     messageId: null, errorCode: null, ...options };
   let transactionOpen = 0;
   let claimCount = 0;
@@ -45,7 +46,7 @@ function database(options: Partial<Row> = {}) {
       row.status = "processing";
       claimCount++;
       return { rowCount: 1, rows: [{ id: row.id, participant_id: row.participantId,
-        text: row.text, action_url: row.actionUrl }] };
+        text: row.text, action_url: row.actionUrl, action_label: row.actionLabel }] };
     }
     if (statement.includes("SELECT identity.external_user_id")) {
       return row.externalUserId === null ? { rowCount: 0, rows: [] }
@@ -139,10 +140,10 @@ describe("notification delivery worker", () => {
   });
 
   it("classifies ambiguous 5xx and malformed responses as unknown", async () => {
-    expect((await sendTelegramDelivery("token", 123, "text", null, requestWith(502, { ok: false }))).status).toBe("unknown");
-    expect((await sendTelegramDelivery("token", 123, "text", null, requestWith(200, { ok: true }))).status).toBe("unknown");
+    expect((await sendTelegramDelivery("token", 123, "text", null, null, requestWith(502, { ok: false }))).status).toBe("unknown");
+    expect((await sendTelegramDelivery("token", 123, "text", null, null, requestWith(200, { ok: true }))).status).toBe("unknown");
     const unreadable = vi.fn(async () => ({ status: 200, ok: true, json: async () => { throw new Error("unreadable"); } } as unknown as Response)) as unknown as typeof fetch;
-    expect((await sendTelegramDelivery("token", 123, "text", null, unreadable)).status).toBe("unknown");
+    expect((await sendTelegramDelivery("token", 123, "text", null, null, unreadable)).status).toBe("unknown");
   });
 
   it("expires stale processing to unknown without any sendMessage", async () => {
@@ -198,6 +199,16 @@ describe("notification delivery worker", () => {
     const body = JSON.parse((request as ReturnType<typeof vi.fn>).mock.calls[0][1].body);
     expect(body).toEqual({ chat_id: 123456, text: "Техническое сообщение",
       reply_markup: { inline_keyboard: [[{ text: "Открыть", url: "https://core.daorus.org/profile" }]] } });
+  });
+
+  it("uses a saved action label for the Telegram button", async () => {
+    const db = database({ actionUrl: "/profile#profile-interests", actionLabel: "Добавить интересы" });
+    const request = requestWith(200, { ok: true, result: { message_id: 1 } });
+    await processNextNotificationDelivery(db, true, request);
+    const body = JSON.parse((request as ReturnType<typeof vi.fn>).mock.calls[0][1].body);
+    expect(body.reply_markup.inline_keyboard[0][0]).toEqual({
+      text: "Добавить интересы", url: "https://core.daorus.org/profile#profile-interests",
+    });
   });
 
   it("fails an unsafe stored action URL without calling Telegram", async () => {
