@@ -1,12 +1,3 @@
-export const PROFILE_INTERESTS_SCENARIO = {
-  key: "profile_interests_prompt:v1",
-  type: "profile_interests_prompt",
-  notificationType: "guardian.profile_interests_prompt",
-  defaultText: "Добавьте несколько интересов в профиль. Так ДАО сможет находить для вас людей, сообщества и возможности, которые могут быть вам полезны.",
-  actionLabel: "Добавить интересы",
-  actionUrl: "/profile#profile-interests",
-} as const;
-
 export type GuardianCampaignDraft = { text: string };
 
 export class GuardianCampaignValidationError extends Error {

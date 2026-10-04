@@ -1,5 +1,7 @@
+import { randomUUID } from "node:crypto";
 import { getGuardianAudienceWithDatabase } from "./guardian-audience";
-import { GuardianCampaignValidationError, parseGuardianCampaignDraft, PROFILE_INTERESTS_SCENARIO, type GuardianCampaignDraft } from "./guardian-campaign-input";
+import { GuardianCampaignValidationError, parseGuardianCampaignDraft } from "./guardian-campaign-input";
+import { guardianResidenceOptions, guardianScenario, guardianScenarios, resolveGuardianScenarioAudience, type GuardianScenarioType } from "./guardian-campaign-scenarios";
 
 type QueryResult = { rowCount: number | null; rows: Array<Record<string, unknown>> };
 type Client = { query(text: string, values?: unknown[]): Promise<QueryResult>; release(): void };
@@ -8,17 +10,14 @@ export type GuardianCampaignDatabase = {
   connect(): Promise<Client>;
 };
 
-const AUDIENCE_RULE = {
-  current: "forum_joined_or_logged_in",
-  excludeMembershipStatuses: ["left", "excluded"],
-  excludeRosterBots: true,
-  interests: "none_at_any_visibility",
-};
-
-export type GuardianCampaignSnapshot = GuardianCampaignDraft & {
+export type GuardianCampaignSnapshot = {
   id: string;
-  actionLabel: string;
-  actionUrl: string;
+  campaignKey: string;
+  campaignType: GuardianScenarioType;
+  text: string;
+  actionLabel: string | null;
+  actionUrl: string | null;
+  audienceRule: Record<string, unknown>;
   createdAt: Date;
   recipientCount: number;
   telegramDeliveryCount: number;
@@ -28,9 +27,12 @@ export type GuardianCampaignSnapshot = GuardianCampaignDraft & {
 function snapshot(row: Record<string, unknown>): GuardianCampaignSnapshot {
   return {
     id: String(row.id),
+    campaignKey: String(row.campaign_key),
+    campaignType: String(row.campaign_type) as GuardianScenarioType,
     text: String(row.text),
-    actionLabel: String(row.action_label),
-    actionUrl: String(row.action_url),
+    actionLabel: row.action_label == null ? null : String(row.action_label),
+    actionUrl: row.action_url == null ? null : String(row.action_url),
+    audienceRule: row.audience_rule as Record<string, unknown>,
     createdAt: new Date(String(row.created_at)),
     recipientCount: Number(row.recipient_count),
     telegramDeliveryCount: Number(row.telegram_delivery_count),
@@ -38,20 +40,36 @@ function snapshot(row: Record<string, unknown>): GuardianCampaignSnapshot {
   };
 }
 
-async function campaignWithDatabase(database: Pick<GuardianCampaignDatabase, "query">): Promise<GuardianCampaignSnapshot | null> {
+async function campaignWithDatabase(database: Pick<GuardianCampaignDatabase, "query">, key: string): Promise<GuardianCampaignSnapshot | null> {
   const result = await database.query(
-    `SELECT id, text, action_label, action_url, created_at, recipient_count,
+    `SELECT id, campaign_key, campaign_type, text, action_label, action_url, audience_rule, created_at, recipient_count,
             telegram_delivery_count, created_by_participant_id
        FROM guardian_campaigns WHERE campaign_key = $1`,
-    [PROFILE_INTERESTS_SCENARIO.key],
+    [key],
   );
   return result.rowCount ? snapshot(result.rows[0]) : null;
 }
 
-export async function getProfileInterestsCampaignWithDatabase(
+export async function getGuardianOneShotCampaignsWithDatabase(
   database: Pick<GuardianCampaignDatabase, "query">,
-): Promise<GuardianCampaignSnapshot | null> {
-  return campaignWithDatabase(database);
+): Promise<GuardianCampaignSnapshot[]> {
+  const keys = Object.values(guardianScenarios).flatMap((scenario) => scenario.campaignKey ? [scenario.campaignKey] : []);
+  const result = await database.query(
+    `SELECT id, campaign_key, campaign_type, text, action_label, action_url, audience_rule, created_at,
+            recipient_count, telegram_delivery_count, created_by_participant_id
+       FROM guardian_campaigns WHERE campaign_key = ANY($1::text[])`, [keys],
+  );
+  return result.rows.map(snapshot);
+}
+
+export async function getGuardianCampaignByIdWithDatabase(database: Pick<GuardianCampaignDatabase, "query">, id: string) {
+  if (!/^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/iu.test(id)) return null;
+  const result = await database.query(
+    `SELECT id, campaign_key, campaign_type, text, action_label, action_url, audience_rule, created_at,
+            recipient_count, telegram_delivery_count, created_by_participant_id
+       FROM guardian_campaigns WHERE id = $1::uuid`, [id],
+  );
+  return result.rowCount ? snapshot(result.rows[0]) : null;
 }
 
 async function telegramRecipients(client: Client, participantIds: string[]): Promise<string[]> {
@@ -88,36 +106,50 @@ async function telegramRecipients(client: Client, participantIds: string[]): Pro
   });
 }
 
-export async function launchProfileInterestsCampaignWithDatabase(
+export type GuardianCampaignLaunch = { scenario: GuardianScenarioType; text: string; residenceKey?: string };
+
+export async function launchGuardianCampaignWithDatabase(
   database: Pick<GuardianCampaignDatabase, "connect">,
   adminId: string,
-  draft: GuardianCampaignDraft,
+  input: GuardianCampaignLaunch,
 ): Promise<{ campaign: GuardianCampaignSnapshot; launched: boolean }> {
-  const validated = parseGuardianCampaignDraft(draft);
+  const scenario = guardianScenario(input.scenario);
+  const { text } = parseGuardianCampaignDraft({ text: input.text });
+  const campaignKey = scenario.campaignKey ?? `${scenario.type}:${randomUUID()}`;
   const client = await database.connect();
   try {
     await client.query("BEGIN");
-    await client.query("SELECT pg_advisory_xact_lock(42008, hashtext($1::text))", [PROFILE_INTERESTS_SCENARIO.key]);
-    const existing = await campaignWithDatabase(client);
-    if (existing) {
-      await client.query("COMMIT");
-      return { campaign: existing, launched: false };
+    if (scenario.repeatPolicy === "once_per_version") {
+      await client.query("SELECT pg_advisory_xact_lock(42008, hashtext($1::text))", [campaignKey]);
+      const existing = await campaignWithDatabase(client, campaignKey);
+      if (existing) {
+        await client.query("COMMIT");
+        return { campaign: existing, launched: false };
+      }
     }
 
-    // Reuse Guardian's current-participant and any-visibility interest semantics at launch time.
+    // Resolve current Core membership and profile state again inside the launch transaction.
     const overview = await getGuardianAudienceWithDatabase(client);
-    const recipientIds = [...new Set(overview.missingInterests.map((person) => person.id))];
+    const recipients = resolveGuardianScenarioAudience(scenario.type, overview, { residenceKey: input.residenceKey });
+    const recipientIds = recipients.map((person) => person.id);
     if (!recipientIds.length) throw new GuardianCampaignValidationError("Campaign audience is empty");
     const telegramIds = await telegramRecipients(client, recipientIds);
+    const residence = scenario.type === "town_meeting"
+      ? guardianResidenceOptions(overview).find((option) => option.key === input.residenceKey) : undefined;
+    const audienceRule = {
+      current: "forum_joined_or_logged_in", excludeMembershipStatuses: ["left", "excluded"],
+      excludeRosterBots: true, selection: scenario.audienceRule,
+      ...(residence ? { residence: { key: residence.key, label: residence.label } } : {}),
+    };
     const inserted = await client.query(
       `INSERT INTO guardian_campaigns(campaign_key, campaign_type, text, action_label,
            action_url, audience_rule, created_by_participant_id, recipient_count, telegram_delivery_count)
        VALUES ($1, $2, $3, $4, $5, $6::jsonb, $7::uuid, $8, $9)
        ON CONFLICT (campaign_key) DO NOTHING
-       RETURNING id, text, action_label, action_url, created_at, recipient_count,
+       RETURNING id, campaign_key, campaign_type, text, action_label, action_url, audience_rule, created_at, recipient_count,
                  telegram_delivery_count, created_by_participant_id`,
-      [PROFILE_INTERESTS_SCENARIO.key, PROFILE_INTERESTS_SCENARIO.type,
-        validated.text, PROFILE_INTERESTS_SCENARIO.actionLabel, PROFILE_INTERESTS_SCENARIO.actionUrl, JSON.stringify(AUDIENCE_RULE),
+      [campaignKey, scenario.type,
+        text, scenario.actionLabel, scenario.actionUrl, JSON.stringify(audienceRule),
         adminId, recipientIds.length, telegramIds.length],
     );
     if (!inserted.rowCount) throw new Error("Campaign key changed during locked launch");
@@ -129,8 +161,8 @@ export async function launchProfileInterestsCampaignWithDatabase(
               'admin', $7::uuid
          FROM unnest($2::uuid[]) AS recipient(recipient_id)
        RETURNING id`,
-      [campaign.id, recipientIds, PROFILE_INTERESTS_SCENARIO.notificationType, validated.text,
-        PROFILE_INTERESTS_SCENARIO.actionLabel, PROFILE_INTERESTS_SCENARIO.actionUrl, adminId],
+      [campaign.id, recipientIds, scenario.notificationType, text,
+        scenario.actionLabel, scenario.actionUrl, adminId],
     );
     if (notifications.rowCount !== recipientIds.length) throw new Error("Campaign notification count mismatch");
     const deliveries = await client.query(
@@ -153,12 +185,17 @@ export async function launchProfileInterestsCampaignWithDatabase(
   }
 }
 
-export async function getProfileInterestsCampaign() {
+export async function getGuardianOneShotCampaigns() {
   const { pool } = await import("./db");
-  return getProfileInterestsCampaignWithDatabase(pool);
+  return getGuardianOneShotCampaignsWithDatabase(pool);
 }
 
-export async function launchProfileInterestsCampaign(adminId: string, draft: GuardianCampaignDraft) {
+export async function getGuardianCampaignById(id: string) {
   const { pool } = await import("./db");
-  return launchProfileInterestsCampaignWithDatabase(pool, adminId, draft);
+  return getGuardianCampaignByIdWithDatabase(pool, id);
+}
+
+export async function launchGuardianCampaign(adminId: string, input: GuardianCampaignLaunch) {
+  const { pool } = await import("./db");
+  return launchGuardianCampaignWithDatabase(pool, adminId, input);
 }

@@ -1,20 +1,27 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
+import { cityKey } from "./guardian-audience";
 
 const audience = vi.hoisted(() => ({ getGuardianAudienceWithDatabase: vi.fn() }));
-vi.mock("./guardian-audience", () => ({ getGuardianAudienceWithDatabase: audience.getGuardianAudienceWithDatabase }));
+vi.mock("./guardian-audience", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("./guardian-audience")>()),
+  getGuardianAudienceWithDatabase: audience.getGuardianAudienceWithDatabase,
+}));
 
-import { launchProfileInterestsCampaignWithDatabase } from "./guardian-campaign";
-import { parseGuardianCampaignDraft, PROFILE_INTERESTS_SCENARIO } from "./guardian-campaign-input";
+import { launchGuardianCampaignWithDatabase } from "./guardian-campaign";
 
-const recipient = (id: string) => ({ id });
-const draft = { text: "Отредактированный текст" };
+const city = { name: "Москва", type: "город", country: "Россия" };
+const person = (id: string, residence: typeof city | null = null) => ({ id, residence });
+function overview(people = [person("one", city), person("two")]) {
+  return { missingCity: people.filter((p) => !p.residence), missingInterests: people,
+    audience: people, cities: [{ key: cityKey(city), residence: city }], interests: [] };
+}
 
 function database(identities: Record<string, string> = {}) {
-  const state: { campaign: Record<string, unknown> | null; notifications: string[]; deliveries: string[] } = {
-    campaign: null, notifications: [], deliveries: [],
+  const state: { campaigns: Array<Record<string, unknown>>; notifications: string[]; deliveries: string[] } = {
+    campaigns: [], notifications: [], deliveries: [],
   };
   const sql: string[] = [];
-  let notificationInput: unknown[] | null = null;
+  const notificationInputs: unknown[][] = [];
   let lock = Promise.resolve();
   const connect = vi.fn(async () => {
     let unlock = () => {};
@@ -22,7 +29,7 @@ function database(identities: Record<string, string> = {}) {
     const query = vi.fn(async (statement: string, values: unknown[] = []) => {
       sql.push(statement);
       if (statement === "BEGIN") {
-        before = { campaign: state.campaign, notifications: [...state.notifications], deliveries: [...state.deliveries] };
+        before = { campaigns: [...state.campaigns], notifications: [...state.notifications], deliveries: [...state.deliveries] };
         return { rowCount: null, rows: [] };
       }
       if (statement.includes("pg_advisory_xact_lock")) {
@@ -34,15 +41,16 @@ function database(identities: Record<string, string> = {}) {
       if (statement === "COMMIT") { unlock(); return { rowCount: null, rows: [] }; }
       if (statement === "ROLLBACK") {
         if (before) {
-          state.campaign = before.campaign;
+          state.campaigns = before.campaigns;
           state.notifications = before.notifications;
           state.deliveries = before.deliveries;
         }
         unlock();
         return { rowCount: null, rows: [] };
       }
-      if (statement.includes("FROM guardian_campaigns WHERE campaign_key")) {
-        return { rowCount: state.campaign ? 1 : 0, rows: state.campaign ? [state.campaign] : [] };
+      if (statement.includes("FROM guardian_campaigns WHERE campaign_key = $1")) {
+        const row = state.campaigns.find((campaign) => campaign.campaign_key === values[0]);
+        return { rowCount: row ? 1 : 0, rows: row ? [row] : [] };
       }
       if (statement.includes("FROM external_identities identity")) {
         const ids = values[0] as string[];
@@ -50,13 +58,16 @@ function database(identities: Record<string, string> = {}) {
         return { rowCount: rows.length, rows };
       }
       if (statement.includes("INSERT INTO guardian_campaigns")) {
-        state.campaign = { id: "campaign-1", text: values[2], action_label: values[3], action_url: values[4],
+        const row = { id: `00000000-0000-4000-8000-${String(state.campaigns.length + 1).padStart(12, "0")}`,
+          campaign_key: values[0], campaign_type: values[1], text: values[2],
+          action_label: values[3], action_url: values[4], audience_rule: JSON.parse(values[5] as string),
           created_at: "2026-10-04T00:00:00Z", recipient_count: values[7], telegram_delivery_count: values[8],
           created_by_participant_id: values[6] };
-        return { rowCount: 1, rows: [state.campaign] };
+        state.campaigns.push(row);
+        return { rowCount: 1, rows: [row] };
       }
       if (statement.includes("INSERT INTO notifications")) {
-        notificationInput = values;
+        notificationInputs.push(values);
         state.notifications.push(...values[1] as string[]);
         return { rowCount: (values[1] as string[]).length, rows: [] };
       }
@@ -68,63 +79,77 @@ function database(identities: Record<string, string> = {}) {
     });
     return { query, release: vi.fn() };
   });
-  return { state, sql, connect, get notificationInput() { return notificationInput; } };
+  return { state, sql, notificationInputs, connect };
 }
 
-describe("first Guardian campaign", () => {
-  beforeEach(() => { vi.clearAllMocks(); });
+describe("Guardian campaign transaction", () => {
+  beforeEach(() => { vi.clearAllMocks(); audience.getGuardianAudienceWithDatabase.mockResolvedValue(overview()); });
 
-  it("validates the editable text before any DB access", async () => {
-    const db = database();
-    expect(() => parseGuardianCampaignDraft({ text: null })).toThrow();
-    await expect(launchProfileInterestsCampaignWithDatabase(db, "admin", { ...draft, text: " " })).rejects.toThrow();
-    expect(db.connect).not.toHaveBeenCalled();
-  });
-
-  it("recomputes the current audience, excludes a newly interested person and fans out atomically", async () => {
+  it("re-resolves audience, keeps edited text and fixed CTA, and queues only eligible identities", async () => {
     const db = database({ one: "123456" });
-    let people = [recipient("one"), recipient("two"), recipient("three")];
-    audience.getGuardianAudienceWithDatabase.mockImplementation(async () => ({ missingInterests: people }));
-    // Preview is read-only and leaves the database untouched.
-    expect(people).toHaveLength(3);
-    expect(db.connect).not.toHaveBeenCalled();
-    people = [recipient("one"), recipient("three")]; // participant two added an interest
+    // Preview used an earlier count; participant two has since added an interest.
+    audience.getGuardianAudienceWithDatabase.mockResolvedValueOnce({ ...overview(), missingInterests: [person("one", city)] });
     const fetchSpy = vi.spyOn(globalThis, "fetch");
     try {
-      const result = await launchProfileInterestsCampaignWithDatabase(db, "admin", draft);
-      expect(result.launched).toBe(true);
-      expect(result.campaign).toMatchObject({ text: draft.text, actionLabel: "Добавить интересы",
-        actionUrl: "/profile#profile-interests", recipientCount: 2, telegramDeliveryCount: 1 });
-      expect(db.state.campaign).toMatchObject({ text: draft.text,
-        action_label: PROFILE_INTERESTS_SCENARIO.actionLabel, action_url: PROFILE_INTERESTS_SCENARIO.actionUrl });
-      expect(stateOf(db)).toEqual({ notifications: ["one", "three"], deliveries: ["one"] });
-      expect(db.sql).toContain("COMMIT");
-      const notificationInsert = db.sql.find((value) => value.includes("INSERT INTO notifications"));
-      expect(notificationInsert).toContain("notification_type");
-      expect(notificationInsert).toContain("action_label, action_url");
-      expect(db.notificationInput).toEqual(["campaign-1", ["one", "three"],
-        "guardian.profile_interests_prompt", draft.text, "Добавить интересы", "/profile#profile-interests", "admin"]);
+      const result = await launchGuardianCampaignWithDatabase(db, "admin", {
+        scenario: "profile_interests_prompt", text: "Отредактированный текст",
+      });
+      expect(result.campaign).toMatchObject({ campaignKey: "profile_interests_prompt:v1", recipientCount: 1,
+        telegramDeliveryCount: 1, text: "Отредактированный текст", actionLabel: "Добавить интересы",
+        actionUrl: "/profile#profile-interests" });
+      expect(db.notificationInputs[0]).toEqual([result.campaign.id, ["one"], "guardian.profile_interests_prompt",
+        "Отредактированный текст", "Добавить интересы", "/profile#profile-interests", "admin"]);
+      expect(db.state.notifications).toEqual(["one"]);
+      expect(db.state.deliveries).toEqual(["one"]);
       expect(fetchSpy).not.toHaveBeenCalled();
     } finally { fetchSpy.mockRestore(); }
   });
 
-  it("returns the immutable snapshot on repeated or concurrent launch", async () => {
-    const db = database({ one: "123456" });
-    audience.getGuardianAudienceWithDatabase.mockResolvedValue({ missingInterests: [recipient("one")] });
-    const [a, b] = await Promise.all([
-      launchProfileInterestsCampaignWithDatabase(db, "admin", draft),
-      launchProfileInterestsCampaignWithDatabase(db, "admin", { ...draft, text: "Second attempt" }),
-    ]);
-    expect([a.launched, b.launched].sort()).toEqual([false, true]);
-    expect(a.campaign.text).toBe(b.campaign.text);
-    expect(db.state.notifications).toEqual(["one"]);
-    expect(db.state.deliveries).toEqual(["one"]);
-    expect(db.sql.filter((value) => value.includes("INSERT INTO guardian_campaigns"))).toHaveLength(1);
+  it("creates Core Notification without a Telegram delivery when identity is absent", async () => {
+    const db = database();
+    audience.getGuardianAudienceWithDatabase.mockResolvedValue({ ...overview(), missingCity: [person("two")] });
+    const result = await launchGuardianCampaignWithDatabase(db, "admin", { scenario: "profile_residence_prompt", text: "Город" });
+    expect(result.campaign).toMatchObject({ campaignKey: "profile_residence_prompt:v1",
+      actionLabel: "Указать город", actionUrl: "/profile#residence-name", recipientCount: 1, telegramDeliveryCount: 0 });
+    expect(db.notificationInputs[0]?.slice(1, 6)).toEqual([["two"], "guardian.profile_residence_prompt", "Город",
+      "Указать город", "/profile#residence-name"]);
+    expect(db.state.deliveries).toEqual([]);
   });
 
-  it("rolls back campaign and fan-out if delivery insertion fails", async () => {
+  it("returns the same immutable one-shot campaign under concurrent launch", async () => {
     const db = database({ one: "123456" });
-    audience.getGuardianAudienceWithDatabase.mockResolvedValue({ missingInterests: [recipient("one")] });
+    const [a, b] = await Promise.all([
+      launchGuardianCampaignWithDatabase(db, "admin", { scenario: "profile_interests_prompt", text: "Первый" }),
+      launchGuardianCampaignWithDatabase(db, "admin", { scenario: "profile_interests_prompt", text: "Второй" }),
+    ]);
+    expect([a.launched, b.launched].sort()).toEqual([false, true]);
+    expect(a.campaign.id).toBe(b.campaign.id);
+    expect(db.state.campaigns).toHaveLength(1);
+    expect(db.state.notifications).toEqual(["one", "two"]);
+  });
+
+  it("deduplicates repeated participant rows within one campaign", async () => {
+    const db = database();
+    audience.getGuardianAudienceWithDatabase.mockResolvedValue({ ...overview(), audience: [person("one", city), person("one", city)] });
+    const result = await launchGuardianCampaignWithDatabase(db, "admin", { scenario: "online_meeting", text: "Встреча" });
+    expect(result.campaign.recipientCount).toBe(1);
+    expect(db.state.notifications).toEqual(["one"]);
+  });
+
+  it.each(["town_meeting", "online_meeting"] as const)("launches repeatable %s twice with distinct keys and no CTA", async (scenario) => {
+    const db = database({ one: "123456" });
+    const input = { scenario, text: "Текст встречи", ...(scenario === "town_meeting" ? { residenceKey: cityKey(city) } : {}) };
+    const first = await launchGuardianCampaignWithDatabase(db, "admin", input);
+    const second = await launchGuardianCampaignWithDatabase(db, "admin", input);
+    expect(first.campaign.campaignKey).not.toBe(second.campaign.campaignKey);
+    expect(db.state.campaigns).toHaveLength(2);
+    expect(first.campaign).toMatchObject({ actionLabel: null, actionUrl: null });
+    expect(db.notificationInputs[0]?.slice(2, 6)).toEqual([`guardian.${scenario}`, "Текст встречи", null, null]);
+    expect(db.state.notifications).toHaveLength(scenario === "town_meeting" ? 2 : 4);
+  });
+
+  it("rolls back campaign, notifications and deliveries if fan-out fails", async () => {
+    const db = database({ one: "123456" });
     const originalConnect = db.connect;
     db.connect = vi.fn(async () => {
       const client = await originalConnect();
@@ -135,12 +160,9 @@ describe("first Guardian campaign", () => {
       });
       return client;
     });
-    await expect(launchProfileInterestsCampaignWithDatabase(db, "admin", draft)).rejects.toThrow("delivery insert failed");
+    await expect(launchGuardianCampaignWithDatabase(db, "admin", { scenario: "online_meeting", text: "Встреча" }))
+      .rejects.toThrow("delivery insert failed");
     expect(db.sql.at(-1)).toBe("ROLLBACK");
-    expect(db.state).toEqual({ campaign: null, notifications: [], deliveries: [] });
+    expect(db.state).toEqual({ campaigns: [], notifications: [], deliveries: [] });
   });
 });
-
-function stateOf(db: ReturnType<typeof database>) {
-  return { notifications: db.state.notifications, deliveries: db.state.deliveries };
-}
