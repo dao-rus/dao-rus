@@ -52,13 +52,14 @@ describe("home interface texts", () => {
       "home.title": "Свой заголовок",
       "home.lead": "Свой основной текст",
       "home.login_button": "Свой вход",
-      "home.profile_button": "Свой профиль",
+      "home.profile_button": "Профиль",
       "home.code_link": "Открыть наш Кодекс",
       "home.code_title": "Кодекс руси",
       "onboarding.interest": "Добавьте интерес, чтобы найти единомышленников",
       "participants.title": "Моя сеть",
       "nearby.title": "Рядом",
       "exchange.title": "Обмен",
+      "nav.home": "Главная",
       "nav.veche": "Наше вече",
       "nav.private_messages": "Личка",
     } });
@@ -84,14 +85,14 @@ describe("home interface texts", () => {
     expect(mocks.countUnreadNotifications).not.toHaveBeenCalled();
   });
 
-  it("shows the overridden profile button after login", async () => {
+  it("shows the requested navigation order after login", async () => {
     mocks.getCurrentParticipant.mockResolvedValue({ id: "participant" });
     const page = await Home({ searchParams: Promise.resolve({}) });
-    expect(textContent(page)).toContain("Свой профиль");
+    expect(textContent(page)).toContain("Профиль");
     expect(textContent(page)).toContain("Моя сеть");
     expect(textContent(page)).toContain("Рядом");
     expect(links(page)).toContain("/nearby");
-    expect(actionLinks(page).at(-1)).toBe("/notifications");
+    expect(actionLinks(page)).toEqual(["/", "/veche", "/participants", "/exchange", "/nearby", "/notifications", "/profile"]);
     expect(mocks.countUnreadNotifications).toHaveBeenCalledWith("participant");
     expect(textContent(page)).toContain("Обмен");
     expect(textContent(page)).toContain("Наше вече");
@@ -106,7 +107,7 @@ describe("home interface texts", () => {
     mocks.countUnreadNotifications.mockResolvedValue(2);
     const page = await Home({ searchParams: Promise.resolve({}) });
     const actions = (page.props.children as ReactNode);
-    expect(actionLinks(page).at(-1)).toBe("/notifications");
+    expect(actionLinks(page).at(-2)).toBe("/notifications");
     function findPrivateMessages(node: ReactNode): ReactNode | null {
       if (Array.isArray(node)) return node.map(findPrivateMessages).find(Boolean) ?? null;
       if (!isValidElement(node)) return null;

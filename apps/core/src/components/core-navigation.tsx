@@ -16,11 +16,9 @@ export async function CoreNavigation({ current, texts: providedTexts }: {
   const links: { section: CoreSection; href: string; label: string }[] = [
     { section: "home", href: "/", label: texts["nav.home"] },
     { section: "veche", href: "/veche", label: texts["nav.veche"] },
-    { section: "exchange", href: "/exchange", label: texts["exchange.title"] },
     { section: "participants", href: "/participants", label: texts["participants.title"] },
+    { section: "exchange", href: "/exchange", label: texts["exchange.title"] },
     { section: "nearby", href: "/nearby", label: texts["nearby.title"] },
-    { section: "profile", href: "/profile", label: texts["home.profile_button"] },
-    { section: "code", href: "/code", label: texts["nav.code"] },
   ];
 
   return (
@@ -31,6 +29,8 @@ export async function CoreNavigation({ current, texts: providedTexts }: {
       ))}
       {participant ? <PrivateMessagesLink label={texts["nav.private_messages"]}
         unreadCount={unreadCount} current={current === "notifications"} /> : null}
+      <Link className="button secondary" href="/profile"
+        aria-current={current === "profile" ? "page" : undefined}>{texts["home.profile_button"]}</Link>
     </nav>
   );
 }

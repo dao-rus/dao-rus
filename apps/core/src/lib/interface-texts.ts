@@ -1,7 +1,6 @@
 export const interfaceTextFields = [
   { section: "Навигация", key: "nav.home", label: "Главная", defaultValue: "Главная", multiline: false },
   { section: "Навигация", key: "nav.veche", label: "Вече", defaultValue: "Вече", multiline: false },
-  { section: "Навигация", key: "nav.code", label: "Кодекс", defaultValue: "Кодекс", multiline: false },
   { section: "Навигация", key: "nav.private_messages", label: "Личка", defaultValue: "Личка", multiline: false },
   { section: "Главная", key: "home.eyebrow", label: "Надпись над заголовком", defaultValue: "Ядро", multiline: false },
   { section: "Главная", key: "home.title", label: "Заголовок", defaultValue: "ДАО Русь", multiline: false },
@@ -13,7 +12,7 @@ export const interfaceTextFields = [
     multiline: true,
   },
   { section: "Главная", key: "home.login_button", label: "Кнопка входа", defaultValue: "Войти через Telegram", multiline: false },
-  { section: "Главная", key: "home.profile_button", label: "Кнопка профиля", defaultValue: "Ваш профиль", multiline: false },
+  { section: "Главная", key: "home.profile_button", label: "Кнопка профиля", defaultValue: "Профиль", multiline: false },
   { section: "Главная", key: "home.code_link", label: "Ссылка на Кодекс", defaultValue: "Открыть Кодекс →", multiline: false },
   { section: "Главная", key: "home.code_title", label: "Заголовок Кодекса", defaultValue: "Кодекс руси", multiline: false },
   { section: "Главная", key: "onboarding.residence", label: "Первый город", defaultValue: "Укажите город, чтобы найти сообщество рядом", multiline: false },

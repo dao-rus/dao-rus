@@ -44,12 +44,11 @@ describe("CoreNavigation", () => {
     expect(links(navigation)).toEqual([
       { href: "/", label: "Главная", current: undefined },
       { href: "/veche", label: "Вече", current: undefined },
-      { href: "/exchange", label: "Обмен", current: undefined },
       { href: "/participants", label: "Люди", current: undefined },
+      { href: "/exchange", label: "Обмен", current: undefined },
       { href: "/nearby", label: "Рядом", current: undefined },
-      { href: "/profile", label: "Ваш профиль", current: "page" },
-      { href: "/code", label: "Кодекс", current: undefined },
       { href: "/notifications", label: "✉Личка", current: undefined, hasUnread: false },
+      { href: "/profile", label: "Профиль", current: "page" },
     ]);
     expect(mocks.countUnreadNotifications).toHaveBeenCalledWith("participant");
   });
@@ -66,6 +65,7 @@ describe("CoreNavigation", () => {
     mocks.countUnreadNotifications.mockResolvedValue(2);
     const texts = Object.fromEntries(interfaceTextFields.map((field) => [field.key, field.defaultValue])) as InterfaceTextValues;
     const navigation = await CoreNavigation({ current: "notifications", texts });
-    expect(links(navigation).at(-1)).toEqual({ href: "/notifications", label: "✉Личка", current: "page", hasUnread: true });
+    expect(links(navigation).at(-2)).toEqual({ href: "/notifications", label: "✉Личка", current: "page", hasUnread: true });
+    expect(links(navigation).at(-1)?.href).toBe("/profile");
   });
 });
