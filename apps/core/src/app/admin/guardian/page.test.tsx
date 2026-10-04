@@ -1,0 +1,58 @@
+import { isValidElement, type ReactNode } from "react";
+import { beforeEach, describe, expect, it, vi } from "vitest";
+
+const mocks = vi.hoisted(() => ({
+  getCurrentParticipant: vi.fn(),
+  hasPrototypeAdminAccess: vi.fn(),
+  getGuardianAudience: vi.fn(),
+  redirect: vi.fn(),
+}));
+
+vi.mock("next/navigation", () => ({ redirect: mocks.redirect }));
+vi.mock("@/lib/session", () => ({ getCurrentParticipant: mocks.getCurrentParticipant }));
+vi.mock("@/lib/config", () => ({ hasPrototypeAdminAccess: mocks.hasPrototypeAdminAccess }));
+vi.mock("@/lib/guardian-audience", () => ({ getGuardianAudience: mocks.getGuardianAudience }));
+vi.mock("@/lib/profile-about", () => ({
+  residenceLabel: (residence: { name: string; country: string }) => `${residence.name}, ${residence.country}`,
+}));
+
+import GuardianPage from "./page";
+
+function textContent(node: ReactNode): string {
+  if (typeof node === "string" || typeof node === "number") return String(node);
+  if (Array.isArray(node)) return node.map(textContent).join(" ");
+  if (!isValidElement(node)) return "";
+  return textContent((node.props as { children?: ReactNode }).children);
+}
+
+describe("/admin/guardian", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    mocks.redirect.mockImplementation((destination: string) => { throw new Error(`redirect:${destination}`); });
+  });
+
+  it("rejects non-admin before querying audience", async () => {
+    mocks.getCurrentParticipant.mockResolvedValue({ id: "ordinary" });
+    mocks.hasPrototypeAdminAccess.mockReturnValue(false);
+    await expect(GuardianPage({ searchParams: Promise.resolve({}) })).rejects.toThrow("redirect:/profile");
+    expect(mocks.getGuardianAudience).not.toHaveBeenCalled();
+  });
+
+  it("renders a read-only audience and current missing-data summaries", async () => {
+    mocks.getCurrentParticipant.mockResolvedValue({ id: "admin" });
+    mocks.hasPrototypeAdminAccess.mockReturnValue(true);
+    const person = { id: "one", displayName: "Участник", telegramUsername: "user", hasTelegramUserId: true };
+    mocks.getGuardianAudience.mockResolvedValue({
+      missingCity: [person], missingInterests: [], audience: [person],
+      cities: [], interests: [{ key: "art", label: "Искусство" }],
+    });
+    const page = await GuardianPage({ searchParams: Promise.resolve({ interest: ["art"] }) });
+    expect(mocks.getGuardianAudience).toHaveBeenCalledWith({ city: "", interests: ["art"] });
+    const text = textContent(page).replace(/\s+/gu, " ");
+    expect(text).toContain("Не указан город: 1");
+    expect(text).toContain("Не указаны интересы: 0");
+    expect(text).toContain("Найдено участников: 1");
+    expect(text).toContain("@user");
+    expect(text).toContain("Telegram ID не подтверждает возможность отправить личное сообщение");
+  });
+});

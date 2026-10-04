@@ -1,0 +1,94 @@
+import Link from "next/link";
+import type { Metadata } from "next";
+import { redirect } from "next/navigation";
+import { CoreNavigation } from "../../../components/core-navigation";
+import { hasPrototypeAdminAccess } from "@/lib/config";
+import { getGuardianAudience, type GuardianParticipant } from "@/lib/guardian-audience";
+import { residenceLabel } from "@/lib/profile-about";
+import { getCurrentParticipant } from "@/lib/session";
+
+export const dynamic = "force-dynamic";
+export const metadata: Metadata = { title: "Хранитель" };
+
+type SearchParams = { city?: string; interest?: string | string[] };
+
+function ParticipantLinks({ people }: { people: GuardianParticipant[] }) {
+  return people.length ? (
+    <ul>
+      {people.map((person) => (
+        <li key={person.id}><Link href={`/profile/${person.id}`}>{person.displayName}</Link></li>
+      ))}
+    </ul>
+  ) : <p className="muted">Таких участников нет.</p>;
+}
+
+export default async function GuardianPage({ searchParams }: { searchParams: Promise<SearchParams> }) {
+  const participant = await getCurrentParticipant();
+  if (!participant) redirect("/");
+  if (!hasPrototypeAdminAccess(participant.id)) redirect("/profile");
+
+  const params = await searchParams;
+  const selectedInterests = typeof params.interest === "string" ? [params.interest]
+    : Array.isArray(params.interest) ? params.interest : [];
+  const city = typeof params.city === "string" ? params.city : "";
+  const overview = await getGuardianAudience({ city, interests: selectedInterests });
+
+  return (
+    <main className="shell">
+      <section className="card profile">
+        <CoreNavigation />
+        <div className="profileHeader">
+          <div><div className="eyebrow">DAO Core</div><h1>Хранитель</h1></div>
+          <Link className="button secondary" href="/admin">К управлению</Link>
+        </div>
+
+        <h2>Незаполненные данные профиля</h2>
+        <details>
+          <summary>Не указан город: {overview.missingCity.length}</summary>
+          <ParticipantLinks people={overview.missingCity} />
+        </details>
+        <details>
+          <summary>Не указаны интересы: {overview.missingInterests.length}</summary>
+          <ParticipantLinks people={overview.missingInterests} />
+        </details>
+
+        <h2>Аудитория технического уведомления</h2>
+        <p className="muted">Выборка доступна только для просмотра. Наличие Telegram ID не подтверждает возможность отправить личное сообщение.</p>
+        <form method="get" className="registryFilters">
+          <label><span>Город</span>
+            <select name="city" defaultValue={city}>
+              <option value="">Все города</option>
+              {overview.cities.map((option) => (
+                <option key={option.key} value={option.key}>{residenceLabel(option.residence)} ({option.residence.type})</option>
+              ))}
+            </select>
+          </label>
+          <label><span>Интересы (несколько: Ctrl/Cmd + выбор)</span>
+            <select name="interest" multiple size={Math.min(Math.max(overview.interests.length, 2), 6)} defaultValue={selectedInterests}>
+              {overview.interests.map((option) => (
+                <option key={option.key} value={option.key}>{option.label}</option>
+              ))}
+            </select>
+          </label>
+          <button className="button" type="submit">Показать</button>
+          <Link className="button secondary" href="/admin/guardian">Сбросить</Link>
+        </form>
+        <p>Найдено участников: <strong>{overview.audience.length}</strong></p>
+        <div className="registryTableWrap">
+          <table className="registryTable">
+            <thead><tr><th>Участник</th><th>Telegram username</th><th>Telegram user ID</th></tr></thead>
+            <tbody>
+              {overview.audience.map((person) => (
+                <tr key={person.id}>
+                  <td><Link href={`/profile/${person.id}`}>{person.displayName}</Link></td>
+                  <td>{person.telegramUsername ? `@${person.telegramUsername}` : "—"}</td>
+                  <td>{person.hasTelegramUserId ? "есть" : "нет"}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      </section>
+    </main>
+  );
+}

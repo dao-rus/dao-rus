@@ -175,6 +175,7 @@ describe("admin access regression", () => {
     expect(treeContainsHref(page, "/admin/interface")).toBe(true);
     expect(treeContainsHref(page, "/admin/rewards")).toBe(true);
     expect(treeContainsHref(page, "/admin/reputation")).toBe(true);
+    expect(treeContainsHref(page, "/admin/guardian")).toBe(true);
   });
 
   it("shows only one management link in the admin profile", async () => {
