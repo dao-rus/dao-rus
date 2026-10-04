@@ -14,9 +14,7 @@ export async function POST(request: NextRequest) {
   const form = await request.formData();
   if (form.get("confirm") !== "launch") return new NextResponse("Campaign confirmation required", { status: 400 });
   try {
-    const draft = parseGuardianCampaignDraft({
-      text: form.get("text"), actionLabel: form.get("action_label"), actionUrl: form.get("action_url"),
-    });
+    const draft = parseGuardianCampaignDraft({ text: form.get("text") });
     const result = await launchProfileInterestsCampaign(participant.id, draft);
     const url = new URL("/admin/guardian", appBaseUrl());
     url.searchParams.set("campaign", result.launched ? "launched" : "already");

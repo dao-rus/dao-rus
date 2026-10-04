@@ -11,8 +11,7 @@ import { POST } from "./route";
 function request(values: Record<string, string> = {}) {
   return new NextRequest("https://core.daorus.org/api/admin/guardian/campaign", {
     method: "POST",
-    body: new URLSearchParams({ text: "Отредактированный текст", action_label: "Интересы",
-      action_url: "/profile#profile-interests", ...values }),
+    body: new URLSearchParams({ text: "Отредактированный текст", ...values }),
   });
 }
 
@@ -34,15 +33,13 @@ describe("POST Guardian campaign", () => {
 
   it("requires explicit confirmation and validates before any write", async () => {
     expect((await POST(request())).status).toBe(400);
-    expect((await POST(request({ confirm: "launch", action_url: "javascript:alert(1)" }))).status).toBe(400);
+    expect((await POST(request({ confirm: "launch", text: " " }))).status).toBe(400);
     expect(mocks.launch).not.toHaveBeenCalled();
   });
 
-  it("launches from edited fields and redirects to the saved result", async () => {
-    const response = await POST(request({ confirm: "launch" }));
-    expect(mocks.launch).toHaveBeenCalledWith("admin", {
-      text: "Отредактированный текст", actionLabel: "Интересы", actionUrl: "/profile#profile-interests",
-    });
+  it("launches from edited text and ignores user-supplied CTA or URL", async () => {
+    const response = await POST(request({ confirm: "launch", action_label: "Подмена", action_url: "https://example.org" }));
+    expect(mocks.launch).toHaveBeenCalledWith("admin", { text: "Отредактированный текст" });
     expect(response.status).toBe(303);
     expect(response.headers.get("location")).toBe("https://core.daorus.org/admin/guardian?campaign=launched");
   });

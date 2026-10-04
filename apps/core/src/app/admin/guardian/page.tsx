@@ -63,7 +63,6 @@ export default async function GuardianPage({ searchParams }: { searchParams: Pro
           <p>Telegram deliveries поставлено в очередь: <strong>{campaign.telegramDeliveryCount}</strong></p>
           <p>Текст сообщения: {campaign.text}</p>
           <p>Кнопка действия: {campaign.actionLabel}</p>
-          <p>Ссылка действия: {campaign.actionUrl}</p>
         </section> : <GuardianCampaignForm recipientCount={overview.missingInterests.length} />}
 
         <h2>Аудитория технического уведомления</h2>

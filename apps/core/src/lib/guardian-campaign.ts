@@ -1,5 +1,5 @@
 import { getGuardianAudienceWithDatabase } from "./guardian-audience";
-import { GuardianCampaignValidationError, parseGuardianCampaignDraft, type GuardianCampaignDraft } from "./guardian-campaign-input";
+import { GuardianCampaignValidationError, parseGuardianCampaignDraft, PROFILE_INTERESTS_SCENARIO, type GuardianCampaignDraft } from "./guardian-campaign-input";
 
 type QueryResult = { rowCount: number | null; rows: Array<Record<string, unknown>> };
 type Client = { query(text: string, values?: unknown[]): Promise<QueryResult>; release(): void };
@@ -7,9 +7,6 @@ export type GuardianCampaignDatabase = {
   query(text: string, values?: unknown[]): Promise<QueryResult>;
   connect(): Promise<Client>;
 };
-
-export const PROFILE_INTERESTS_CAMPAIGN_KEY = "profile_interests_prompt:v1";
-export const PROFILE_INTERESTS_CAMPAIGN_TYPE = "profile_interests_prompt";
 
 const AUDIENCE_RULE = {
   current: "forum_joined_or_logged_in",
@@ -20,6 +17,8 @@ const AUDIENCE_RULE = {
 
 export type GuardianCampaignSnapshot = GuardianCampaignDraft & {
   id: string;
+  actionLabel: string;
+  actionUrl: string;
   createdAt: Date;
   recipientCount: number;
   telegramDeliveryCount: number;
@@ -44,7 +43,7 @@ async function campaignWithDatabase(database: Pick<GuardianCampaignDatabase, "qu
     `SELECT id, text, action_label, action_url, created_at, recipient_count,
             telegram_delivery_count, created_by_participant_id
        FROM guardian_campaigns WHERE campaign_key = $1`,
-    [PROFILE_INTERESTS_CAMPAIGN_KEY],
+    [PROFILE_INTERESTS_SCENARIO.key],
   );
   return result.rowCount ? snapshot(result.rows[0]) : null;
 }
@@ -98,7 +97,7 @@ export async function launchProfileInterestsCampaignWithDatabase(
   const client = await database.connect();
   try {
     await client.query("BEGIN");
-    await client.query("SELECT pg_advisory_xact_lock(42008, hashtext($1::text))", [PROFILE_INTERESTS_CAMPAIGN_KEY]);
+    await client.query("SELECT pg_advisory_xact_lock(42008, hashtext($1::text))", [PROFILE_INTERESTS_SCENARIO.key]);
     const existing = await campaignWithDatabase(client);
     if (existing) {
       await client.query("COMMIT");
@@ -117,8 +116,8 @@ export async function launchProfileInterestsCampaignWithDatabase(
        ON CONFLICT (campaign_key) DO NOTHING
        RETURNING id, text, action_label, action_url, created_at, recipient_count,
                  telegram_delivery_count, created_by_participant_id`,
-      [PROFILE_INTERESTS_CAMPAIGN_KEY, PROFILE_INTERESTS_CAMPAIGN_TYPE,
-        validated.text, validated.actionLabel, validated.actionUrl, JSON.stringify(AUDIENCE_RULE),
+      [PROFILE_INTERESTS_SCENARIO.key, PROFILE_INTERESTS_SCENARIO.type,
+        validated.text, PROFILE_INTERESTS_SCENARIO.actionLabel, PROFILE_INTERESTS_SCENARIO.actionUrl, JSON.stringify(AUDIENCE_RULE),
         adminId, recipientIds.length, telegramIds.length],
     );
     if (!inserted.rowCount) throw new Error("Campaign key changed during locked launch");
@@ -126,11 +125,12 @@ export async function launchProfileInterestsCampaignWithDatabase(
     const notifications = await client.query(
       `INSERT INTO notifications(campaign_id, participant_id, notification_type, text,
            action_label, action_url, source_type, created_by_participant_id)
-       SELECT $1::uuid, recipient.recipient_id, 'guardian.profile_interests_prompt', $3, $4, $5,
-              'admin', $6::uuid
+       SELECT $1::uuid, recipient.recipient_id, $3, $4, $5, $6,
+              'admin', $7::uuid
          FROM unnest($2::uuid[]) AS recipient(recipient_id)
        RETURNING id`,
-      [campaign.id, recipientIds, validated.text, validated.actionLabel, validated.actionUrl, adminId],
+      [campaign.id, recipientIds, PROFILE_INTERESTS_SCENARIO.notificationType, validated.text,
+        PROFILE_INTERESTS_SCENARIO.actionLabel, PROFILE_INTERESTS_SCENARIO.actionUrl, adminId],
     );
     if (notifications.rowCount !== recipientIds.length) throw new Error("Campaign notification count mismatch");
     const deliveries = await client.query(
