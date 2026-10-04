@@ -1,7 +1,7 @@
 import Link from "next/link";
 import { readInterfaceTexts, type InterfaceTextValues } from "../lib/interface-texts";
 
-type CoreSection = "home" | "veche" | "exchange" | "participants" | "nearby" | "profile" | "code";
+type CoreSection = "home" | "veche" | "exchange" | "participants" | "nearby" | "profile" | "code" | "notifications";
 
 export async function CoreNavigation({ current, texts: providedTexts }: {
   current?: CoreSection;
@@ -15,6 +15,7 @@ export async function CoreNavigation({ current, texts: providedTexts }: {
     { section: "participants", href: "/participants", label: texts["participants.title"] },
     { section: "nearby", href: "/nearby", label: texts["nearby.title"] },
     { section: "profile", href: "/profile", label: texts["home.profile_button"] },
+    { section: "notifications", href: "/notifications", label: texts["nav.notifications"] },
     { section: "code", href: "/code", label: texts["nav.code"] },
   ];
 

@@ -29,6 +29,7 @@ describe("CoreNavigation", () => {
       { href: "/participants", label: "Люди", current: undefined },
       { href: "/nearby", label: "Рядом", current: undefined },
       { href: "/profile", label: "Ваш профиль", current: "page" },
+      { href: "/notifications", label: "Уведомления", current: undefined },
       { href: "/code", label: "Кодекс", current: undefined },
     ]);
   });
