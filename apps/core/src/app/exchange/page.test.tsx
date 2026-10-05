@@ -9,8 +9,9 @@ const mocks = vi.hoisted(() => ({
 }));
 vi.mock("@/lib/session", () => ({ getCurrentParticipant: mocks.participant }));
 vi.mock("@/lib/interface-texts", () => ({ readInterfaceTexts: mocks.texts }));
+vi.mock("@/lib/profile-about", () => ({ PROFILE_SIGNAL_KINDS: ["want", "need", "can", "have"] }));
 vi.mock("@/lib/relay", () => ({
-  listBlindSignals: mocks.signals,
+  listExchangeSignals: mocks.signals,
   listRelayEncounters: mocks.encounters,
 }));
 
@@ -30,23 +31,28 @@ function collectProps(node: ReactNode, matches: (props: Record<string, unknown>)
   return [...(matches(props) ? [props] : []), ...collectProps(props.children as ReactNode, matches)];
 }
 
-describe("anonymous Need/Have catalog", () => {
+describe("network exchange catalog", () => {
   beforeEach(() => {
     vi.clearAllMocks();
     mocks.participant.mockResolvedValue({ id: "viewer" });
     mocks.encounters.mockResolvedValue([]);
     mocks.texts.mockResolvedValue({ values: {
-      "exchange.title": "Нужно / есть",
+      "exchange.title": "Обмен",
       "exchange.lead": "Сначала — дело, потом — знакомство. Контакты открываются только по взаимному согласию.",
+      "exchange.privacy_hint": "Анонимные сигналы опубликованы без имени автора.",
       "exchange.empty": "Сигналов пока нет.",
+      "exchange.tab_need": "? Нужно", "exchange.tab_can": "! Могу",
+      "exchange.tab_want": "♥ Хочу", "exchange.tab_have": "+ Есть",
+      "exchange.add_need": "Добавить «Мне нужно»", "exchange.add_can": "Добавить «Я могу»",
+      "exchange.add_want": "Добавить «Я хочу»", "exchange.add_have": "Добавить «У меня есть»",
       "relay.list_title": "Диалоги",
     } });
   });
 
   it("shows only safe text and own marker, and never offers self-response", async () => {
     mocks.signals.mockResolvedValue([
-      { id: "own", kind: "need", body: "Мой запрос", mine: true },
-      { id: "other", kind: "need", body: "Чужой запрос", mine: false },
+      { id: "own", kind: "need", body: "Мой запрос", mine: true, anonymous: true, author: null },
+      { id: "other", kind: "need", body: "Чужой запрос", mine: false, anonymous: true, author: null },
     ]);
     const page = await ExchangePage({ searchParams: Promise.resolve({ tab: "need" }) });
     expect(textContent(page)).toContain("Мой запрос");
@@ -59,12 +65,43 @@ describe("anonymous Need/Have catalog", () => {
     expect(collectProps(page, (props) => String(props.href ?? "").startsWith("/profile/"))).toHaveLength(0);
   });
 
-  it("requests only have signals for the second tab", async () => {
+  it("opens Need by default and offers all four categories", async () => {
+    mocks.signals.mockResolvedValue([]);
+    const page = await ExchangePage({ searchParams: Promise.resolve({}) });
+    expect(mocks.signals).toHaveBeenCalledWith("viewer", "need");
+    for (const [kind, label] of [["need", "? Нужно"], ["can", "! Могу"],
+      ["want", "♥ Хочу"], ["have", "+ Есть"]]) {
+      const link = collectProps(page, (props) => props.href === `/exchange?tab=${kind}`)[0];
+      expect(textContent(link.children as ReactNode)).toBe(label);
+      expect(link["aria-current"]).toBe(kind === "need" ? "page" : undefined);
+    }
+  });
+
+  it.each(["need", "can", "want", "have"])("requests %s signals when selected", async (kind) => {
+    mocks.signals.mockResolvedValue([]);
+    await ExchangePage({ searchParams: Promise.resolve({ tab: kind }) });
+    expect(mocks.signals).toHaveBeenCalledWith("viewer", kind);
+  });
+
+  it("shows a public author but never offers the anonymous Relay form for that record", async () => {
+    mocks.signals.mockResolvedValue([{ id: "public", kind: "can", body: "Могу помочь", mine: false,
+      anonymous: false, author: { id: "author", name: "Анна" } }]);
+    const page = await ExchangePage({ searchParams: Promise.resolve({ tab: "can" }) });
+    expect(textContent(page)).toContain("Могу помочь");
+    expect(collectProps(page, (props) => props.href === "/profile/author")).toHaveLength(1);
+    expect(collectProps(page, (props) => props.action === "/api/relay")).toHaveLength(0);
+  });
+
+  it("uses editable texts for the empty Have tab", async () => {
     mocks.signals.mockResolvedValue([]);
     mocks.texts.mockResolvedValue({ values: {
       "exchange.title": "Свои дела",
       "exchange.lead": "Новый вводный текст",
       "exchange.empty": "Список пуст",
+      "exchange.privacy_hint": "Анонимность",
+      "exchange.tab_need": "? Нужно", "exchange.tab_can": "! Могу",
+      "exchange.tab_want": "♥ Хочу", "exchange.tab_have": "+ Есть",
+      "exchange.add_have": "Добавить «У меня есть»",
       "relay.list_title": "Переписки",
     } });
     const page = await ExchangePage({ searchParams: Promise.resolve({ tab: "have" }) });

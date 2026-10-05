@@ -5,6 +5,7 @@ import {
   createRelayEncounterWithDatabase,
   getRelayEncounterWithDatabase,
   listBlindSignalsWithDatabase,
+  listExchangeSignalsWithDatabase,
   listRelayMessagesWithDatabase,
   sendRelayMessageWithDatabase,
   type RelayDatabase,
@@ -21,6 +22,26 @@ function databaseWith(query: RelayDatabase["query"]) {
 }
 
 describe("Blind Match privacy and Relay access", () => {
+  it("lists active visible network signals without serializing blind authors", async () => {
+    const database = databaseWith(async () => ({ rowCount: 2, rows: [
+      { id: signal, kind: "need", body: "Нужна помощь", mine: false, anonymous: true,
+        author_id: author, author_name: "Скрытое имя" },
+      { id: encounter, kind: "need", body: "Нужны материалы", mine: false, anonymous: false,
+        author_id: author, author_name: "Анна" },
+    ] }));
+    const signals = await listExchangeSignalsWithDatabase(database, responder, "need");
+    expect(signals[0]).toEqual({ id: signal, kind: "need", body: "Нужна помощь",
+      mine: false, anonymous: true, author: null });
+    expect(signals[1].author).toEqual({ id: author, name: "Анна" });
+    const [sql, values] = database.query.mock.calls[0];
+    expect(sql).toContain("s.status = 'active'");
+    expect(sql).toContain("s.visibility IN ('public', 'members', 'network_blind')");
+    expect(sql).toContain("CASE WHEN s.visibility <> 'network_blind' THEN author.id END");
+    expect(sql).toContain("ORDER BY s.created_at DESC, s.id DESC");
+    expect(sql).not.toContain("match_only");
+    expect(values).toEqual([responder, "need"]);
+  });
+
   it("publishes only active network-blind need/have text and own marker, with no author identity", async () => {
     const database = databaseWith(async () => ({
       rowCount: 1,

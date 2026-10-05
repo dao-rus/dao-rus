@@ -61,6 +61,13 @@ function hrefs(node: ReactNode): string[] {
   return [...(props.href ? [props.href] : []), ...hrefs(props.children)];
 }
 
+function ids(node: ReactNode): string[] {
+  if (Array.isArray(node)) return node.flatMap(ids);
+  if (!isValidElement(node)) return [];
+  const props = node.props as { children?: ReactNode; id?: string };
+  return [...(props.id ? [props.id] : []), ...ids(props.children)];
+}
+
 function hasCelebration(node: ReactNode): boolean {
   if (Array.isArray(node)) return node.some(hasCelebration);
   if (!isValidElement(node)) return false;
@@ -119,7 +126,13 @@ describe("public subject profile name", () => {
       bioVisibility: "members",
       residence: { name: "Казань", type: "город", country: "Россия" },
       interests: [{ id: "i1", label: "История", visibility: "members" }],
-      signals: [{ id: "s1", kind: "can", body: "Могу редактировать тексты", visibility: "members" }],
+      signals: [
+        { id: "s0", kind: "need", body: "Нужен редактор", visibility: "members" },
+        { id: "s1", kind: "can", body: "Могу редактировать тексты", visibility: "members" },
+        { id: "s2", kind: "want", body: "Хочу учиться", visibility: "members" },
+        { id: "s3", kind: "have", body: "Есть книги", visibility: "members" },
+        { id: "s4", kind: "can", body: "Могу переводить", visibility: "members" },
+      ],
     });
 
     const page = await SubjectProfilePage({
@@ -137,6 +150,9 @@ describe("public subject profile name", () => {
     expect(hrefs(page)).toContain("/participants?residence_name=Kazan");
     expect(hrefs(page)).toContain(`/participants?interest=${encodeURIComponent("История")}`);
     expect(text).toContain("Могу редактировать тексты");
+    for (const kind of ["need", "can", "want", "have"]) {
+      expect(ids(page).filter((id) => id === `signal-${kind}`)).toHaveLength(1);
+    }
     expect(text).not.toContain("+79990000000");
   });
 

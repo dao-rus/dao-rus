@@ -74,6 +74,9 @@ export default async function ParticipantsPage({ searchParams }: ParticipantsPag
   const communityUrl = community ? communityHref(community) : null;
   const isMember = community ? members.some((participant) => participant.participantId === viewer.id) : false;
   const signalLabels = { want: "Я хочу", need: "Мне нужно", can: "Я могу", have: "У меня есть" };
+  const signalIndicators = { need: { symbol: "?", label: "Нужно" },
+    can: { symbol: "!", label: "Могу" }, want: { symbol: "♥", label: "Хочу" },
+    have: { symbol: "+", label: "Есть" } } as const;
 
   return (
     <main className={`shell${community ? " communityShell" : ""}`}>
@@ -148,6 +151,16 @@ export default async function ParticipantsPage({ searchParams }: ParticipantsPag
                     </span>
                     {participant.telegramBio ? <small className="muted">{participant.telegramBio}</small> : null}
                     {participant.residence ? <small className="muted">{residenceLabel(participant.residence)}</small> : null}</> : null}
+                    <div className="participantSignalIndicators">
+                      {(["need", "can", "want", "have"] as const).map((kind) => {
+                        const count = participant.signalCounts?.[kind] ?? 0;
+                        const { symbol, label } = signalIndicators[kind];
+                        return count > 0 ? <Link key={kind} href={`/profile/${participant.participantId}#signal-${kind}`}
+                          title={label} aria-label={`${label}: ${count}`}>
+                          <span aria-hidden="true">{symbol}</span> {count}
+                        </Link> : null;
+                      })}
+                    </div>
                   </div>
                 </div>
                 {community?.type === "residence" ? (

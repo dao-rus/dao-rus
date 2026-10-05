@@ -155,14 +155,14 @@ describe("interface texts", () => {
   it("saves and resets the exchange shell copy through the existing audit flow", async () => {
     const database = new FakeDatabase();
     const form = formWithDefaults();
-    form.set("exchange.title", "Обмен");
+    form.set("exchange.title", "Общий обмен");
     form.set("exchange.lead", "Новый вводный текст");
     form.set("exchange.empty", "Пока пусто.");
 
     expect(await saveInterfaceTextsWithDatabase(database, "admin-id", parseInterfaceTextForm(form)))
       .toEqual(["exchange.title", "exchange.lead", "exchange.empty"]);
     const state = await readInterfaceTextsWithDatabase(database);
-    expect(state.values["exchange.title"]).toBe("Обмен");
+    expect(state.values["exchange.title"]).toBe("Общий обмен");
     expect(state.values["exchange.lead"]).toBe("Новый вводный текст");
     expect(state.values["exchange.empty"]).toBe("Пока пусто.");
     expect(database.events[0].payload.keys).toEqual(["exchange.title", "exchange.lead", "exchange.empty"]);
@@ -173,9 +173,9 @@ describe("interface texts", () => {
     expect(await saveInterfaceTextsWithDatabase(database, "admin-id", parseInterfaceTextForm(form)))
       .toEqual(["exchange.title", "exchange.lead", "exchange.empty"]);
     const restored = await readInterfaceTextsWithDatabase(database);
-    expect(restored.values["exchange.title"]).toBe("Нужно / есть");
+    expect(restored.values["exchange.title"]).toBe("Обмен");
     expect(restored.values["exchange.lead"])
-      .toBe("Сначала — дело, потом — знакомство. Контакты открываются только по взаимному согласию.");
+      .toBe("Потребности, возможности, желания и ресурсы участников сети.");
     expect(restored.values["exchange.empty"]).toBe("Сигналов пока нет.");
   });
 });

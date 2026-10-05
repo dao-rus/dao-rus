@@ -129,8 +129,9 @@ export default async function SubjectProfilePage({ params, searchParams }: Subje
               <div className="aboutBlock">
                 <h3>Сигналы</h3>
                 <ul className="profileItems signalItems">
-                  {about.signals.map((signal) => (
-                    <li key={signal.id}>
+                  {about.signals.map((signal, index) => (
+                    <li key={signal.id} id={about.signals.findIndex((entry) => entry.kind === signal.kind) === index
+                      ? `signal-${signal.kind}` : undefined}>
                       <div>
                         <span className="signalKind">{signalLabels[signal.kind] ?? signal.kind}</span>
                         <strong>{signal.body}</strong>

@@ -55,6 +55,14 @@ function hrefs(node: ReactNode): string[] {
   return [...(props.href ? [props.href] : []), ...hrefs(props.children)];
 }
 
+function linkProps(node: ReactNode): Array<{ href: string; title?: string; "aria-label"?: string }> {
+  if (Array.isArray(node)) return node.flatMap(linkProps);
+  if (!isValidElement(node)) return [];
+  const props = node.props as { children?: ReactNode; href?: string; title?: string; "aria-label"?: string };
+  return [...(props.href ? [{ href: props.href, title: props.title, "aria-label": props["aria-label"] }] : []),
+    ...linkProps(props.children)];
+}
+
 function classNames(node: ReactNode): string[] {
   if (Array.isArray(node)) return node.flatMap(classNames);
   if (!isValidElement(node)) return [];
@@ -136,6 +144,23 @@ describe("/participants", () => {
     expect(text).not.toContain("Последний раз в Telegram");
     expect(hrefs(page)).toContain(`/profile/${participantId}`);
     expect(hrefs(page)).not.toContain("/admin/participants");
+  });
+
+  it("shows only nonzero signal indicators and links them to profile anchors", async () => {
+    mocks.getCurrentParticipant.mockResolvedValue({ id: "viewer" });
+    mocks.listParticipantsDirectory.mockResolvedValue([{
+      participantId: "member", displayName: "Анна", verificationPoints: 0, positiveCount: 0,
+      signalCounts: { need: 2, can: 0, want: 1, have: 4 },
+      signals: [{ body: "Скрытый текст сигнала" }],
+    }]);
+    const page = await ParticipantsPage({ searchParams: Promise.resolve({}) });
+    const indicators = linkProps(page).filter(({ href }) => href.startsWith("/profile/member#signal-"));
+    expect(indicators).toEqual([
+      { href: "/profile/member#signal-need", title: "Нужно", "aria-label": "Нужно: 2" },
+      { href: "/profile/member#signal-want", title: "Хочу", "aria-label": "Хочу: 1" },
+      { href: "/profile/member#signal-have", title: "Есть", "aria-label": "Есть: 4" },
+    ]);
+    expect(textContent(page)).not.toContain("Скрытый текст сигнала");
   });
 
   it("shows the overridden section title", async () => {

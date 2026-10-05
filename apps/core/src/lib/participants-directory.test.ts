@@ -46,6 +46,7 @@ describe("participants directory", () => {
         avatarUrl: null,
         hasTelegramPhoto: false,
         verificationPoints: 2, positiveCount: 3,
+        signalCounts: { need: 0, can: 0, want: 0, have: 0 },
         residence: null,
       },
       {
@@ -56,9 +57,30 @@ describe("participants directory", () => {
         avatarUrl: null,
         hasTelegramPhoto: false,
         verificationPoints: 0, positiveCount: 0,
+        signalCounts: { need: 0, can: 0, want: 0, have: 0 },
         residence: null,
       },
     ]);
+  });
+
+  it("counts only active attributable signals visible to the viewer", async () => {
+    const viewerId = "10000000-0000-4000-8000-000000000001";
+    const queries: Array<{ text: string; values?: unknown[] }> = [];
+    const entries = await listParticipantsDirectoryWithDatabase({ async query(text, values) {
+      queries.push({ text, values });
+      return { rows: [{ participant_id: "other", display_name: "Анна", verification_points: 0,
+        need_count: 2, can_count: 0, want_count: 1, have_count: 4 }] };
+    } }, "", { viewerParticipantId: viewerId });
+    expect(entries[0].signalCounts).toEqual({ need: 2, can: 0, want: 1, have: 4 });
+    expect(queries[0].values?.[2]).toBe(viewerId);
+    expect(queries[0].text).toContain("FROM profile_signals signal");
+    expect(queries[0].text).toContain("signal.participant_id = participant.id");
+    expect(queries[0].text).toContain("signal.status = 'active'");
+    expect(queries[0].text).toContain("signal.visibility <> 'network_blind'");
+    expect(queries[0].text).toContain("signal.visibility IN ('public', 'members') OR participant.id = $3::uuid");
+    for (const kind of ["need", "can", "want", "have"]) {
+      expect(queries[0].text).toContain(`count(*) FILTER (WHERE signal.kind = '${kind}')`);
+    }
   });
 
   it("admits forum members or Core visitors without requiring both", async () => {

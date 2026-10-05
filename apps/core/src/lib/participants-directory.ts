@@ -1,5 +1,5 @@
 import { VERIFIED_SUBJECTS_CTE } from "./verification";
-import type { Residence } from "./profile-about";
+import type { ProfileSignalKind, Residence } from "./profile-about";
 
 export type ParticipantDirectoryEntry = {
   participantId: string;
@@ -10,6 +10,7 @@ export type ParticipantDirectoryEntry = {
   hasTelegramPhoto: boolean;
   verificationPoints: number;
   positiveCount: number;
+  signalCounts: Record<ProfileSignalKind, number>;
   residence: Residence | null;
 };
 
@@ -62,11 +63,24 @@ export async function listParticipantsDirectoryWithDatabase(
             (SELECT count(*)::integer FROM reputation_signals reputation
               WHERE reputation.subject_participant_id = participant.id
                 AND reputation.dimension = 'interaction_quality'
-                AND reputation.signal_type = 'positive' AND reputation.revoked_at IS NULL) AS positive_count
+                AND reputation.signal_type = 'positive' AND reputation.revoked_at IS NULL) AS positive_count,
+            signal_counts.need_count, signal_counts.can_count,
+            signal_counts.want_count, signal_counts.have_count
        FROM participants participant
        LEFT JOIN external_identities telegram
          ON telegram.participant_id = participant.id
         AND telegram.provider = 'telegram'
+       LEFT JOIN LATERAL (
+         SELECT count(*) FILTER (WHERE signal.kind = 'need')::integer AS need_count,
+                count(*) FILTER (WHERE signal.kind = 'can')::integer AS can_count,
+                count(*) FILTER (WHERE signal.kind = 'want')::integer AS want_count,
+                count(*) FILTER (WHERE signal.kind = 'have')::integer AS have_count
+           FROM profile_signals signal
+          WHERE signal.participant_id = participant.id
+            AND signal.status = 'active'
+            AND signal.visibility <> 'network_blind'
+            AND (signal.visibility IN ('public', 'members') OR participant.id = $3::uuid)
+       ) signal_counts ON true
       WHERE (
         EXISTS (
           SELECT 1 FROM participant_forum_onboarding forum
@@ -123,6 +137,10 @@ export async function listParticipantsDirectoryWithDatabase(
     hasTelegramPhoto: Boolean(row.telegram_photo_file_id) && row.telegram_photo_count !== "0",
     verificationPoints: Number(row.verification_points),
     positiveCount: Number(row.positive_count ?? 0),
+    signalCounts: {
+      need: Number(row.need_count ?? 0), can: Number(row.can_count ?? 0),
+      want: Number(row.want_count ?? 0), have: Number(row.have_count ?? 0),
+    },
     residence: row.residence_name && row.residence_type && row.residence_country
       ? {
           name: String(row.residence_name),
