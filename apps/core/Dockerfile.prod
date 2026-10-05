@@ -45,9 +45,13 @@ COPY --chown=nextjs:nodejs \
   src/lib/telegram-roster.ts \
   src/lib/telegram-participant.ts \
   src/lib/telegram-forum-roster-import.ts \
+  src/lib/telegram-departure-archive.ts \
+  src/lib/telegram-departure-review-html.ts \
   src/lib/config.ts \
   src/lib/notification-delivery.ts \
   ./src/lib/
+
+COPY --chown=nextjs:nodejs tools/telegram/departure_identity_query.sql ./tools/telegram/departure_identity_query.sql
 
 USER nextjs
 

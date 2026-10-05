@@ -449,6 +449,9 @@ Bot API не предоставляет надёжный полный списо
 
 ### Локальный экспорт JSON
 
+Исторический архив убытия `@list_of_exites`: отдельный [export → dry-run → reviewed apply](../../docs/development/telegram-departure-archive.md).
+Первый запуск не записывает данные в Core; скриншоты и отчёты остаются локально.
+
 1. Создай Telegram API application на [my.telegram.org](https://my.telegram.org) и получи собственные `api_id` и `api_hash`.
 2. Установи локальный Python helper в игнорируемое окружение:
 
