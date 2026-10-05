@@ -83,12 +83,33 @@ describe("Guardian read-only audience", () => {
     await getGuardianAudienceWithDatabase(db);
     expect(db.query).toHaveBeenCalledTimes(1);
     const sql = db.query.mock.calls[0][0] as string;
-    expect(sql.trimStart()).toMatch(/^SELECT\b/);
+    expect(sql.trimStart()).toMatch(/^WITH RECURSIVE\b/);
     expect(sql).not.toMatch(/\b(?:INSERT|UPDATE|DELETE|FOR UPDATE)\b/i);
     expect(sql).not.toContain("onboarding_quest_completions");
     expect(sql).toContain("participant_interests");
     expect(sql).toContain("participant_forum_onboarding");
     expect(sql).toContain("participant.logged_in");
     expect(sql).toContain("telegram_roster_entries");
+  });
+
+  it.each(["without_residence", "without_interests", "without_bio", "without_want", "without_need", "without_can", "without_have", "never_logged_in", "unverified"] as const)("resolves %s only among current participants", async condition => {
+    const empty = person("empty");
+    const complete = person("complete", { ...withCity(moscow), has_any_interests: true, has_bio: true, logged_in: true, is_verified: true,
+      active_signal_kinds: ["want", "need", "can", "have"] });
+    const db = { query: vi.fn().mockResolvedValue({ rows: [empty, complete, person("former", { membership_status: "left" }), person("bot", { is_bot: true }), person("inactive", { forum_joined: false })] }) };
+    expect((await getGuardianAudienceWithDatabase(db, { conditions: [condition] })).audience.map(p => p.id)).toEqual(["empty"]);
+  });
+  it("ANDs predicates and city while ORing interests; private bio/signals count without exposing their text", async () => {
+    const data = [person("match", { ...withCity(moscow), interests: [{ key: "art", label: "Искусство" }], has_bio: false, is_verified: false }),
+      person("verified", { ...withCity(moscow), interests: [{ key: "tech", label: "Технологии" }], has_bio: false, is_verified: true }),
+      person("private-bio", { ...withCity(moscow), interests: [{ key: "tech", label: "Технологии" }], has_bio: true }),
+      person("other-city", { ...withCity(kazan), interests: [{ key: "art", label: "Искусство" }] })];
+    const db = { query: vi.fn().mockResolvedValue({ rows: data }) };
+    const result = await getGuardianAudienceWithDatabase(db, { city: cityKey(moscow), interests: ["art", "tech"], conditions: ["without_bio", "unverified"] });
+    expect(result.audience.map(p => p.id)).toEqual(["match"]);
+    const sql = db.query.mock.calls[0][0];
+    expect(sql).toContain("status = 'active'"); expect(sql).toContain("verification_roots");
+    expect(sql).toContain("attestation.revoked_at IS NULL"); expect(sql).not.toContain("profile_bio_visibility");
+    expect(sql).not.toContain("body");
   });
 });

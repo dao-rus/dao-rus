@@ -2,7 +2,7 @@ import { cityKey, type GuardianParticipant, getGuardianAudienceWithDatabase } fr
 import { residenceLabel } from "./profile-about";
 import { GuardianCampaignValidationError } from "./guardian-campaign-input";
 
-export type GuardianScenarioType = "profile_residence_prompt" | "profile_interests_prompt" | "town_meeting" | "online_meeting";
+export type GuardianScenarioType = "profile_residence_prompt" | "profile_interests_prompt" | "core_login_prompt" | "town_meeting" | "online_meeting";
 type Overview = Awaited<ReturnType<typeof getGuardianAudienceWithDatabase>>;
 export type GuardianScenarioParameters = { residenceKey?: string };
 
@@ -64,6 +64,15 @@ export const guardianScenarios = {
       if (!option) throw new GuardianCampaignValidationError("Выберите город из списка Core.");
       return unique(overview.audience.filter((person) => person.residence && cityKey(person.residence) === option.key));
     },
+  },
+  core_login_prompt: {
+    type: "core_login_prompt", title: "Войти в Ядро",
+    defaultText: "Авторизуйтесь в Ядре ДАО, чтобы получить доступ к дополнительным возможностям системы. Номер телефона не потребуется — достаточно обычной авторизации через Telegram.",
+    notificationType: "guardian.core_login_prompt", rewardAction: null,
+    actionLabel: "Войти в Ядро", actionUrl: "/api/auth/telegram/start",
+    repeatPolicy: "once_per_version", campaignKey: "core_login_prompt:v1",
+    audienceRule: "never_logged_in", audienceDescription: "Актуальные участники, никогда не входившие в Ядро",
+    resolveAudience: (overview: Overview) => unique(overview.neverLoggedIn),
   },
   online_meeting: {
     type: "online_meeting",

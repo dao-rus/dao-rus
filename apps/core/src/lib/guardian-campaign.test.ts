@@ -7,13 +7,13 @@ vi.mock("./guardian-audience", async (importOriginal) => ({
   getGuardianAudienceWithDatabase: audience.getGuardianAudienceWithDatabase,
 }));
 
-import { launchGuardianCampaignWithDatabase, launchTechnicalBroadcastWithDatabase } from "./guardian-campaign";
+import { launchGuardianCampaignWithDatabase, launchTechnicalBroadcastWithDatabase, dispatchGuardianMessageWithDatabase, previewGuardianMessageWithDatabase, technicalBroadcastCounts, getGuardianOneShotCampaignsWithDatabase } from "./guardian-campaign";
 
 const city = { name: "Москва", type: "город", country: "Россия" };
 const person = (id: string, residence: typeof city | null = null) => ({ id, residence });
 function overview(people = [person("one", city), person("two")]) {
   return { missingCity: people.filter((p) => !p.residence), missingInterests: people,
-    audience: people, cities: [{ key: cityKey(city), residence: city }], interests: [] };
+    audience: people, neverLoggedIn: [people[0]], missingBio: people, unverified: people, cities: [{ key: cityKey(city), residence: city }], interests: [] };
 }
 
 function database(identities: Record<string, string> = {}, reward: { amount: string; active: boolean } | null = null, conflicting: string[] = []) {
@@ -100,7 +100,7 @@ describe("Guardian campaign transaction", () => {
         telegramDeliveryCount: 1, text: "Отредактированный текст", actionLabel: "Добавить интересы",
         actionUrl: "/profile#profile-interests" });
       expect(db.notificationInputs[0]).toEqual([result.campaign.id, ["one"], "guardian.profile_interests_prompt",
-        "Отредактированный текст", "Добавить интересы", "/profile#profile-interests", "admin"]);
+        "Отредактированный текст", "Добавить интересы", "/profile#profile-interests", "admin", true]);
       expect(db.state.notifications).toEqual(["one"]);
       expect(db.state.deliveries).toEqual(["one"]);
       expect(fetchSpy).not.toHaveBeenCalled();
@@ -206,7 +206,7 @@ describe("technical broadcast transaction", () => {
       expect(result.campaign).toMatchObject({campaignType:"technical_broadcast",text:"Техническое сообщение",actionUrl:null,actionLabel:null,
         audienceRule:{filters:{city:"",interests:[]},channels:{core:Boolean(core),telegram:Boolean(telegram)}}});
       expect(db.state.notifications).toEqual(["one","two"]);
-      expect(db.notificationInputs[0]).toEqual([result.campaign.id,["one","two"],"Техническое сообщение","admin",Boolean(core)]);
+      expect(db.notificationInputs[0]).toEqual([result.campaign.id,["one","two"],"guardian.technical_broadcast","Техническое сообщение",null,null,"admin",Boolean(core)]);
       expect(db.state.deliveries).toEqual(telegram?["one"]:[]);
       expect(fetchSpy).not.toHaveBeenCalled();
     }finally{fetchSpy.mockRestore();}
@@ -245,5 +245,61 @@ describe("technical broadcast transaction", () => {
     db.connect.mockImplementation(async()=>{const client=await connect();const query=client.query.getMockImplementation()!;client.query.mockImplementation(async(sql,values)=>{if(sql.includes("INSERT INTO notification_deliveries"))throw new Error("delivery insert failed");return query(sql,values);});return client;});
     await expect(launchTechnicalBroadcastWithDatabase(db,"admin",{...broadcast,telegram:true})).rejects.toThrow("delivery insert failed");
     expect(db.state).toEqual({campaigns:[],notifications:[],deliveries:[]});
+  });
+});
+
+const messageDraft = { ...broadcast, text: "Сообщение", conditions: [], preset: null, template: null };
+describe("unified Guardian dispatch", () => {
+  beforeEach(() => { vi.clearAllMocks(); audience.getGuardianAudienceWithDatabase.mockResolvedValue(overview()); });
+  it.each(["profile_residence_prompt", "profile_interests_prompt", "core_login_prompt"] as const)("preserves one-per-version for %s across new submissions and administrators", async preset => {
+    const db = database({ one: "123456", two: "234567" });
+    const first = await dispatchGuardianMessageWithDatabase(db, "admin", { ...messageDraft, preset, telegram: true });
+    const retry = await dispatchGuardianMessageWithDatabase(db, "another-admin", { ...messageDraft, preset, text: "Другой текст", submissionId: "22222222-2222-4222-8222-222222222222" });
+    expect(first.campaign.campaignKey).toBe(preset + ":v1"); expect(retry.launched).toBe(false);
+    expect(retry.campaign.id).toBe(first.campaign.id); expect(db.state.campaigns).toHaveLength(1);
+    expect(db.state.notifications).toHaveLength(first.counts.recipients);
+  });
+  it("Core login enforces never_logged_in and its canonical CTA while keeping Telegram-only canonical records hidden", async () => {
+    const db = database({ one: "123456", two: "234567" });
+    const result = await dispatchGuardianMessageWithDatabase(db, "admin", { ...messageDraft, preset: "core_login_prompt", core: false, telegram: true });
+    expect(db.state.notifications).toEqual(["one"]); expect(db.state.deliveries).toEqual(["one"]);
+    expect(result.campaign).toMatchObject({ actionLabel: "Войти в Ядро", actionUrl: "/api/auth/telegram/start", audienceRule: { filters: { conditions: ["never_logged_in"] } } });
+    expect(result.counts).toEqual({ recipients: 1, coreInbox: 0, telegramQueued: 1, telegramUnavailable: 0 });
+    expect(db.notificationInputs[0][7]).toBe(false);
+    expect(db.sql.some(sql => sql.includes("FROM reward_rules"))).toBe(false);
+  });
+  it("read-only preview and send independently resolve current audience and reward, ignoring client IDs", async () => {
+    const db = database({}, { amount: "2.750000", active: true });
+    const input = { ...messageDraft, preset: "profile_interests_prompt" as const, ...{ recipientIds: ["fake"], rewardSentence: "Подмена" } };
+    const previewDb = { query: vi.fn().mockResolvedValue({ rows: [{ amount: "1.250000", active: true }], rowCount: 1 }) };
+    audience.getGuardianAudienceWithDatabase.mockResolvedValueOnce({ ...overview(), audience: [person("one")] });
+    const preview = await previewGuardianMessageWithDatabase(previewDb, input);
+    expect(preview.recipientCount).toBe(1); expect(preview.text).toContain("+1,25 DARUS"); expect(preview.actionLabel).toBe("Добавить интересы");
+    expect(previewDb.query.mock.calls.every(([sql]) => sql.trimStart().startsWith("SELECT"))).toBe(true);
+    const result = await dispatchGuardianMessageWithDatabase(db, "admin", input);
+    expect(result.counts.recipients).toBe(2); expect(result.campaign.text).toContain("+2,75 DARUS");
+    expect(db.state.notifications).toEqual(["one", "two"]); expect(db.sql[0]).toBe("BEGIN");
+  });
+  it("ordinary meeting templates use the same repeatable broadcast, with no system CTA or reward", async () => {
+    const db = database();
+    const first = await dispatchGuardianMessageWithDatabase(db, "admin", { ...messageDraft, template: "town_meeting", city: cityKey(city) });
+    const second = await dispatchGuardianMessageWithDatabase(db, "admin", { ...messageDraft, template: "online_meeting", submissionId: "22222222-2222-4222-8222-222222222222" });
+    expect(first.campaign.campaignType).toBe("technical_broadcast"); expect(second.campaign.campaignType).toBe("technical_broadcast");
+    expect(first.campaign).toMatchObject({ actionLabel: null, actionUrl: null, audienceRule: { template: "town_meeting" } });
+    expect(db.sql.some(sql => sql.includes("FROM reward_rules"))).toBe(false);
+    expect(db.state.campaigns).toHaveLength(2);
+  });
+  it("keeps legacy immutable one-shot rows valid without channel/filter snapshots", async () => {
+    const db = database();
+    db.state.campaigns.push({ id: "legacy", campaign_key: "profile_residence_prompt:v1", campaign_type: "profile_residence_prompt",
+      text: "Старый текст", action_label: "Указать город", action_url: "/profile#residence-name", audience_rule: { selection: "current_without_residence" },
+      created_at: "2026-10-04T00:00:00Z", recipient_count: 4, telegram_delivery_count: 3, created_by_participant_id: "old-admin" });
+    const result = await dispatchGuardianMessageWithDatabase(db, "admin", { ...messageDraft, preset: "profile_residence_prompt" });
+    expect(result.launched).toBe(false); expect(result.counts).toEqual({ recipients: 4, coreInbox: 4, telegramQueued: 3, telegramUnavailable: 1 });
+    expect(db.state.notifications).toEqual([]); expect(result.campaign.text).toBe("Старый текст");
+    expect(technicalBroadcastCounts(result.campaign).coreInbox).toBe(4);
+    const query = vi.fn().mockResolvedValue({ rows: db.state.campaigns, rowCount: 1 });
+    expect((await getGuardianOneShotCampaignsWithDatabase({ query }))[0].id).toBe("legacy");
+    expect(query.mock.calls[0][1][0]).toContain("core_login_prompt:v1");
   });
 });

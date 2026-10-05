@@ -29,14 +29,16 @@ async function overview() {
 }
 
 describe("Guardian smart/simple scenario catalog", () => {
-  it("defines exactly four scenarios with system-owned actions and repeat rules", () => {
+  it("preserves legacy scenarios and adds the versioned Core login preset", () => {
     expect(guardianScenarioTypes).toEqual([
-      "profile_residence_prompt", "profile_interests_prompt", "town_meeting", "online_meeting",
+      "profile_residence_prompt", "profile_interests_prompt", "town_meeting", "core_login_prompt", "online_meeting",
     ]);
     expect(guardianScenarios.profile_residence_prompt).toMatchObject({ campaignKey: "profile_residence_prompt:v1",
       repeatPolicy: "once_per_version", actionLabel: "Указать город", actionUrl: "/profile#residence-name" });
     expect(guardianScenarios.profile_interests_prompt).toMatchObject({ campaignKey: "profile_interests_prompt:v1",
       repeatPolicy: "once_per_version", actionLabel: "Добавить интересы", actionUrl: "/profile#profile-interests" });
+    expect(guardianScenarios.core_login_prompt).toMatchObject({ campaignKey: "core_login_prompt:v1", repeatPolicy: "once_per_version",
+      actionLabel: "Войти в Ядро", actionUrl: "/api/auth/telegram/start", rewardAction: null });
     for (const type of ["town_meeting", "online_meeting"] as const) {
       expect(guardianScenarios[type]).toMatchObject({ repeatPolicy: "repeatable", actionLabel: null, actionUrl: null });
     }
@@ -50,6 +52,7 @@ describe("Guardian smart/simple scenario catalog", () => {
       .toEqual(["missing", "city-no-interests"]);
     expect(resolveGuardianScenarioAudience("online_meeting", data).map(({ id }) => id))
       .toEqual(["missing", "city-no-interests", "city-private-interest", "village"]);
+    expect(resolveGuardianScenarioAudience("core_login_prompt", data).map(({ id }) => id)).toEqual(["missing", "city-no-interests", "city-private-interest"]);
   });
 
   it("shows Core residence options with counts and selects the exact residence", async () => {

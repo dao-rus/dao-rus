@@ -1,4 +1,5 @@
 import type { Residence } from "./profile-about";
+import { VERIFIED_SUBJECTS_CTE } from "./verification";
 
 type QueryResult = { rows: Array<Record<string, unknown>> };
 export type GuardianAudienceDatabase = {
@@ -14,7 +15,9 @@ export type GuardianParticipant = {
   interests: Array<{ key: string; label: string }>;
 };
 
-export type GuardianFilters = { city?: string; interests?: string[] };
+export const guardianAudienceConditions = ["without_residence", "without_interests", "without_bio", "without_want", "without_need", "without_can", "without_have", "never_logged_in", "unverified"] as const;
+export type GuardianAudienceCondition = typeof guardianAudienceConditions[number];
+export type GuardianFilters = { city?: string; interests?: string[]; conditions?: GuardianAudienceCondition[] };
 
 export function cityKey(residence: Residence): string {
   return JSON.stringify([residence.name, residence.type, residence.country]
@@ -26,7 +29,11 @@ export async function getGuardianAudienceWithDatabase(
   filters: GuardianFilters = {},
 ) {
   const result = await database.query(
-    `SELECT p.id, p.display_name, p.membership_status,
+    `${VERIFIED_SUBJECTS_CTE}
+     SELECT p.id, p.display_name, p.membership_status,
+            btrim(p.profile_bio) <> '' AS has_bio,
+            EXISTS (SELECT 1 FROM verified WHERE subject_id = p.id) AS is_verified,
+            ARRAY(SELECT DISTINCT kind FROM profile_signals WHERE participant_id = p.id AND status = 'active') AS active_signal_kinds,
             p.residence_name, p.residence_type, p.residence_country,
             telegram.username AS telegram_username,
             (telegram.external_user_id IS NOT NULL AND btrim(telegram.external_user_id) <> '') AS has_telegram_user_id,
@@ -60,7 +67,7 @@ export async function getGuardianAudienceWithDatabase(
       ORDER BY lower(p.display_name), p.id`,
   );
 
-  const participants: Array<GuardianParticipant & { hasAnyInterests: boolean }> = result.rows
+  const participants = result.rows
     .filter((row) => (row.forum_joined === true || row.logged_in === true)
       && row.membership_status !== "left"
       && row.membership_status !== "excluded"
@@ -79,6 +86,10 @@ export async function getGuardianAudienceWithDatabase(
         : null,
       interests: (row.interests as Array<{ key: string; label: string }> | null) ?? [],
       hasAnyInterests: row.has_any_interests === true,
+      hasBio: row.has_bio === true,
+      loggedIn: row.logged_in === true,
+      verified: row.is_verified === true,
+      activeSignalKinds: (row.active_signal_kinds as string[] | null) ?? [],
     }));
 
   const cities = [...new Map(participants.flatMap((person) => person.residence
@@ -91,13 +102,25 @@ export async function getGuardianAudienceWithDatabase(
     .sort((a, b) => a.label.localeCompare(b.label, "ru"));
 
   const selectedInterests = new Set(filters.interests ?? []);
+  const matches = (person: typeof participants[number], condition: GuardianAudienceCondition) => {
+    if (condition === "without_residence") return person.residence === null;
+    if (condition === "without_interests") return !person.hasAnyInterests;
+    if (condition === "without_bio") return !person.hasBio;
+    if (condition === "never_logged_in") return !person.loggedIn;
+    if (condition === "unverified") return !person.verified;
+    return !person.activeSignalKinds.includes(condition.slice("without_".length));
+  };
   const audience = participants.filter((person) =>
     (!filters.city || (person.residence !== null && cityKey(person.residence) === filters.city))
-    && (selectedInterests.size === 0 || person.interests.some((interest) => selectedInterests.has(interest.key))));
+    && (selectedInterests.size === 0 || person.interests.some((interest) => selectedInterests.has(interest.key)))
+    && (filters.conditions ?? []).every(condition => matches(person, condition)));
 
   return {
     missingCity: participants.filter((person) => person.residence === null),
     missingInterests: participants.filter((person) => !person.hasAnyInterests),
+    missingBio: participants.filter(person => !person.hasBio),
+    neverLoggedIn: participants.filter(person => !person.loggedIn),
+    unverified: participants.filter(person => !person.verified),
     cities,
     interests,
     audience,

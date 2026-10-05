@@ -3,162 +3,78 @@ import { randomUUID } from "node:crypto";
 import type { Metadata } from "next";
 import { redirect } from "next/navigation";
 import { CoreNavigation } from "../../../components/core-navigation";
-import { GuardianCampaignForm } from "../../../components/guardian-campaign-form";
-import { GuardianBroadcastForm } from "../../../components/guardian-broadcast-form";
+import { GuardianMessageComposer } from "../../../components/guardian-message-composer";
 import { hasPrototypeAdminAccess } from "@/lib/config";
-import { getGuardianCampaignById, getGuardianOneShotCampaigns, technicalBroadcastCounts } from "@/lib/guardian-campaign";
-import { getGuardianAudience, type GuardianParticipant } from "@/lib/guardian-audience";
-import { guardianResidenceOptions, guardianScenarios, guardianScenarioTypes, resolveGuardianScenarioAudience, type GuardianScenarioType } from "../../../lib/guardian-campaign-scenarios";
-import { residenceLabel } from "@/lib/profile-about";
 import { getCurrentParticipant } from "@/lib/session";
-import { getGuardianCampaignReward } from "../../../lib/guardian-campaign-reward";
+import { getGuardianAudience, guardianAudienceConditions } from "../../../lib/guardian-audience";
+import { getGuardianCampaignById, getGuardianOneShotCampaigns, technicalBroadcastCounts } from "../../../lib/guardian-campaign";
+import { guardianScenarios } from "../../../lib/guardian-campaign-scenarios";
+import { guardianSystemPresets } from "../../../lib/guardian-campaign-input";
+import { residenceLabel } from "../../../lib/profile-about";
 import { getGuardianDepartureSummary } from "../../../lib/guardian-departures";
-import { readInterfaceTexts } from "../../../lib/interface-texts";
+import { readInterfaceTexts, type InterfaceTextKey } from "../../../lib/interface-texts";
 
 export const dynamic = "force-dynamic";
 export const metadata: Metadata = { title: "Хранитель" };
-
-type SearchParams = { city?: string; interest?: string | string[]; scenario?: string; campaign?: string; campaign_id?: string; broadcast?: string };
-
-function ParticipantLinks({ people }: { people: GuardianParticipant[] }) {
-  return people.length ? (
-    <ul>
-      {people.map((person) => (
-        <li key={person.id}><Link href={`/profile/${person.id}`}>{person.displayName}</Link></li>
-      ))}
-    </ul>
-  ) : <p className="muted">Таких участников нет.</p>;
-}
-
+type SearchParams = { preset?: string; template?: string; condition?: string | string[]; city?: string; interest?: string | string[];
+  message?: string; broadcast?: string; campaign_id?: string; scenario?: string };
 export default async function GuardianPage({ searchParams }: { searchParams: Promise<SearchParams> }) {
   const participant = await getCurrentParticipant();
   if (!participant) redirect("/");
   if (!hasPrototypeAdminAccess(participant.id)) redirect("/profile");
-
   const params = await searchParams;
-  const selectedInterests = typeof params.interest === "string" ? [params.interest]
-    : Array.isArray(params.interest) ? params.interest : [];
-  const city = typeof params.city === "string" ? params.city : "";
-  const currentOverviewPromise = getGuardianAudience();
-  const [currentOverview, oneShotCampaigns, launchedCampaign, overview, departures, { values: texts }, broadcast] = await Promise.all([
-    currentOverviewPromise,
-    getGuardianOneShotCampaigns(),
-    params.campaign_id ? getGuardianCampaignById(params.campaign_id) : Promise.resolve(null),
-    city || selectedInterests.length ? getGuardianAudience({ city, interests: selectedInterests }) : currentOverviewPromise,
-    getGuardianDepartureSummary(),
+  const [overview, departures, campaigns, result, { values: texts }] = await Promise.all([
+    getGuardianAudience(), getGuardianDepartureSummary(), getGuardianOneShotCampaigns(),
+    params.message || params.broadcast || params.campaign_id ? getGuardianCampaignById(params.message ?? params.broadcast ?? params.campaign_id!) : null,
     readInterfaceTexts(),
-    params.broadcast ? getGuardianCampaignById(params.broadcast) : Promise.resolve(null),
   ]);
-  const selectedType = guardianScenarioTypes.includes(params.scenario as GuardianScenarioType)
-    ? params.scenario as GuardianScenarioType : null;
-  const selectedScenario = selectedType ? guardianScenarios[selectedType] : null;
-  const previous = selectedType ? oneShotCampaigns.find((campaign) => campaign.campaignType === selectedType) : null;
-  const recent = launchedCampaign?.campaignType === selectedType ? launchedCampaign : null;
-  const residenceOptions = guardianResidenceOptions(currentOverview);
-  const broadcastResult = broadcast?.campaignType === "technical_broadcast" ? technicalBroadcastCounts(broadcast) : null;
-  const reward = selectedType ? await getGuardianCampaignReward(selectedType) : null;
-
-  return (
-    <main className="shell">
-      <section className="card profile">
-        <CoreNavigation />
-        <div className="profileHeader">
-          <div><div className="eyebrow">DAO Core</div><h1>Хранитель</h1></div>
-          <Link className="button secondary" href="/admin">К управлению</Link>
-        </div>
-
-        <h2>Убытие</h2>
-        <p>{texts["guardian.departures_recent"]} <strong>{departures.last30Days}</strong></p>
-        <p>{texts["guardian.departures_total"]} <strong>{departures.total}</strong></p>
-        <Link className="button secondary" href="/admin/guardian/departures">{texts["guardian.departures_title"]}</Link>
-
-        <h2>Незаполненные данные профиля</h2>
-        <details>
-          <summary>Не указан город: {overview.missingCity.length}</summary>
-          <ParticipantLinks people={overview.missingCity} />
-        </details>
-        <details>
-          <summary>Не указаны интересы: {overview.missingInterests.length}</summary>
-          <ParticipantLinks people={overview.missingInterests} />
-        </details>
-        <h2>Кампании Хранителя</h2>
-        <div className="profileActions" aria-label="Сценарии Хранителя">
-          {guardianScenarioTypes.map((type) => {
-            const scenario = guardianScenarios[type];
-            const count = type === "town_meeting" ? null : resolveGuardianScenarioAudience(type, currentOverview).length;
-            const launched = oneShotCampaigns.some((campaign) => campaign.campaignType === type);
-            return <Link key={type} className="button secondary" href={`/admin/guardian?scenario=${type}`}>
-              {scenario.title}{count === null ? "" : ` · ${count}`}{launched ? " · запущена" : ""}
-            </Link>;
-          })}
-        </div>
-        {selectedScenario ? <section aria-label="Выбранная кампания">
-          {(recent ?? previous) ? <div>
-            <p>{params.campaign === "launched" && recent ? "Кампания запущена." : "Кампания уже запущена."}</p>
-            <p>Внутренних уведомлений создано: <strong>{(recent ?? previous)?.recipientCount}</strong></p>
-            <p>Telegram deliveries поставлено в очередь: <strong>{(recent ?? previous)?.telegramDeliveryCount}</strong></p>
-            <p>Текст сообщения: {(recent ?? previous)?.text}</p>
-          </div> : null}
-          {!previous || selectedScenario.repeatPolicy === "repeatable" ? <GuardianCampaignForm scenario={{
-            type: selectedScenario.type,
-            title: selectedScenario.title,
-            defaultText: selectedScenario.defaultText,
-            actionLabel: selectedScenario.actionLabel,
-            audienceDescription: selectedScenario.audienceDescription,
-            recipientCount: selectedType === "town_meeting" ? null : resolveGuardianScenarioAudience(selectedScenario.type, currentOverview).length,
-            residenceOptions: selectedType === "town_meeting" ? residenceOptions : [],
-            rewardNote: reward?.note ?? null,
-          }} /> : null}
-        </section> : <p className="muted">Выберите сценарий, чтобы подготовить сообщение.</p>}
-
-        <h2>Аудитория технического уведомления</h2>
-        <p className="muted">{texts["guardian.broadcast_lead"]}</p>
-        <form method="get" className="registryFilters">
-          <label><span>Город</span>
-            <select name="city" defaultValue={city}>
-              <option value="">Все города</option>
-              {overview.cities.map((option) => (
-                <option key={option.key} value={option.key}>{residenceLabel(option.residence)} ({option.residence.type})</option>
-              ))}
-            </select>
-          </label>
-          <label><span>Интересы (несколько: Ctrl/Cmd + выбор)</span>
-            <select name="interest" multiple size={Math.min(Math.max(overview.interests.length, 2), 6)} defaultValue={selectedInterests}>
-              {overview.interests.map((option) => (
-                <option key={option.key} value={option.key}>{option.label}</option>
-              ))}
-            </select>
-          </label>
-          <button className="button" type="submit">Показать</button>
-          <Link className="button secondary" href="/admin/guardian">Сбросить</Link>
-        </form>
-        <details>
-          <summary>Найдено участников: <strong>{overview.audience.length}</strong></summary>
-          <div className="registryTableWrap">
-            <table className="registryTable">
-              <thead><tr><th>Участник</th><th>Telegram username</th></tr></thead>
-              <tbody>
-                {overview.audience.map((person) => (
-                  <tr key={person.id}>
-                    <td><Link href={`/profile/${person.id}`}>{person.displayName}</Link></td>
-                    <td>{person.telegramUsername ? `@${person.telegramUsername}` : "—"}</td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        </details>
-        <GuardianBroadcastForm city={city} interests={selectedInterests} recipientCount={overview.audience.length}
-          submissionId={randomUUID()} texts={{ "guardian.message": texts["guardian.message"],
-            "guardian.channel_core": texts["guardian.channel_core"], "guardian.channel_telegram": texts["guardian.channel_telegram"],
-            "guardian.send": texts["guardian.send"] }} />
-        {broadcastResult ? <section aria-label="Результат отправки" role="status">
-          <p>{texts["guardian.result_recipients"]} <strong>{broadcastResult.recipients}</strong></p>
-          <p>{texts["guardian.result_core"]} <strong>{broadcastResult.coreInbox}</strong></p>
-          <p>{texts["guardian.result_telegram"]} <strong>{broadcastResult.telegramQueued}</strong></p>
-          <p>{texts["guardian.result_unavailable"]} <strong>{broadcastResult.telegramUnavailable}</strong></p>
-        </section> : null}
-      </section>
-    </main>
-  );
+  const labels = (key: string) => texts[("guardian." + key) as InterfaceTextKey];
+  const conditions = typeof params.condition === "string" ? [params.condition] : params.condition ?? [];
+  const presetConditions = { profile_residence_prompt: "without_residence", profile_interests_prompt: "without_interests", core_login_prompt: "never_logged_in" } as const;
+  const templates = [...guardianSystemPresets, "town_meeting", "online_meeting"].map(key => {
+    const scenario = guardianScenarios[key as keyof typeof guardianScenarios];
+    const previous = campaigns.find(c => c.campaignType === key), counts = previous ? technicalBroadcastCounts(previous) : null;
+    return { key, title: scenario.title, defaultText: scenario.defaultText, condition: Object.hasOwn(presetConditions, key)
+      ? presetConditions[key as keyof typeof presetConditions] : key === "town_meeting" ? "city" : null,
+      system: Object.hasOwn(presetConditions, key), core: key !== "core_login_prompt", telegram: true,
+      previous: previous && counts ? { text: previous.text, recipients: counts.recipients, coreInbox: counts.coreInbox, telegramQueued: counts.telegramQueued } : null };
+  });
+  const selectedTemplate = params.preset ?? params.template ?? params.scenario ?? "";
+  const summary = [
+    { key: "without_residence", count: overview.missingCity.length, preset: "profile_residence_prompt" },
+    { key: "without_interests", count: overview.missingInterests.length, preset: "profile_interests_prompt" },
+    { key: "without_bio", count: overview.missingBio.length },
+    { key: "never_logged_in", count: overview.neverLoggedIn.length, preset: "core_login_prompt" },
+    { key: "unverified", count: overview.unverified.length },
+  ];
+  const resultCounts = result ? technicalBroadcastCounts(result) : null;
+  return <main className="shell"><section className="card profile">
+    <CoreNavigation />
+    <div className="profileHeader"><div><div className="eyebrow">DAO Core</div><h1>Хранитель</h1></div>
+      <Link className="button secondary" href="/admin">К управлению</Link></div>
+    <h2>{texts["guardian.state_title"]}</h2>
+    <table className="registryTable"><tbody>{summary.map(row => <tr key={row.key}>
+      <td>{labels(row.key)}</td><td><strong>{row.count}</strong></td>
+      <td><Link className="button secondary" href={"/admin/guardian?" + (row.preset ? "preset=" + row.preset : "condition=" + row.key) + "#guardian-composer"}>{texts["guardian.write"]}</Link></td>
+    </tr>)}</tbody></table>
+    <h2>Убытие</h2>
+    <p>{texts["guardian.departures_recent"]} <strong>{departures.last30Days}</strong></p>
+    <p>{texts["guardian.departures_total"]} <strong>{departures.total}</strong></p>
+    <Link className="button secondary" href="/admin/guardian/departures">{texts["guardian.departures_title"]}</Link>
+    <section id="guardian-composer"><h2>{texts["guardian.composer_title"]}</h2>
+      <GuardianMessageComposer key={selectedTemplate + ":" + conditions.join(",")} templates={templates} selectedTemplate={selectedTemplate}
+        initialConditions={conditions.filter(c => [...guardianAudienceConditions, "all_current", "city", "interests"].includes(c))}
+        initialCity={params.city ?? ""} initialInterests={typeof params.interest === "string" ? [params.interest] : params.interest ?? []}
+        cities={overview.cities.map(c => ({ key: c.key, label: residenceLabel(c.residence) + " (" + c.residence.type + ")" }))}
+        interests={overview.interests} submissionId={randomUUID()}
+        audiences={["all_current", ...guardianAudienceConditions, "city", "interests"].map(key => ({ key, label: labels(key) }))}
+        texts={Object.fromEntries(Object.entries(texts).filter(([key]) => key.startsWith("guardian.")))} />
+    </section>
+    {resultCounts ? <section role="status" aria-label="Результат отправки">
+      <p>{texts["guardian.result_recipients"]} <strong>{resultCounts.recipients}</strong></p>
+      <p>{texts["guardian.result_core"]} <strong>{resultCounts.coreInbox}</strong></p>
+      <p>{texts["guardian.result_telegram"]} <strong>{resultCounts.telegramQueued}</strong></p>
+      <p>{texts["guardian.result_unavailable"]} <strong>{resultCounts.telegramUnavailable}</strong></p>
+    </section> : null}
+  </section></main>;
 }

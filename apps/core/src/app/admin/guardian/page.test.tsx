@@ -1,117 +1,54 @@
 import { isValidElement, type ReactNode } from "react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
-
-const mocks = vi.hoisted(() => ({
-  getCurrentParticipant: vi.fn(),
-  hasPrototypeAdminAccess: vi.fn(),
-  getGuardianAudience: vi.fn(),
-  getGuardianOneShotCampaigns: vi.fn(),
-  getGuardianCampaignById: vi.fn(),
-  redirect: vi.fn(),
-  getGuardianCampaignReward: vi.fn(),
-  getGuardianDepartureSummary: vi.fn(),
-}));
-
+const mocks = vi.hoisted(() => ({ session: vi.fn(), admin: vi.fn(), audience: vi.fn(), campaigns: vi.fn(), result: vi.fn(), departures: vi.fn(), redirect: vi.fn() }));
 vi.mock("next/navigation", () => ({ redirect: mocks.redirect }));
-vi.mock("../../../lib/guardian-campaign-reward", () => ({ getGuardianCampaignReward: mocks.getGuardianCampaignReward }));
-vi.mock("../../../lib/guardian-departures", () => ({ getGuardianDepartureSummary: mocks.getGuardianDepartureSummary }));
-vi.mock("@/lib/session", () => ({ getCurrentParticipant: mocks.getCurrentParticipant }));
-vi.mock("@/lib/config", () => ({ hasPrototypeAdminAccess: mocks.hasPrototypeAdminAccess }));
-vi.mock("@/lib/guardian-audience", () => ({ getGuardianAudience: mocks.getGuardianAudience }));
-vi.mock("@/lib/guardian-campaign", async () => ({
-  ...(await import("../../../lib/guardian-campaign")),
-  getGuardianOneShotCampaigns: mocks.getGuardianOneShotCampaigns,
-  getGuardianCampaignById: mocks.getGuardianCampaignById,
-}));
-vi.mock("@/lib/profile-about", () => ({
-  residenceLabel: (residence: { name: string; country: string }) => `${residence.name}, ${residence.country}`,
-}));
-
-vi.mock("../../../lib/interface-texts", async (importOriginal) => {
-  const actual = await importOriginal<typeof import("../../../lib/interface-texts")>();
-  return { ...actual, readInterfaceTexts: async () => ({ values: Object.fromEntries(actual.interfaceTextFields.map(f => [f.key, f.defaultValue])), overrides: {} }) };
-});
-import GuardianPage from "./page";
-
-function textContent(node: ReactNode): string {
+vi.mock("@/lib/session", () => ({ getCurrentParticipant: mocks.session }));
+vi.mock("@/lib/config", () => ({ hasPrototypeAdminAccess: mocks.admin }));
+vi.mock("../../../lib/guardian-audience", async original => ({ ...(await original<typeof import("../../../lib/guardian-audience")>()), getGuardianAudience: mocks.audience }));
+vi.mock("../../../lib/guardian-campaign", async original => ({ ...(await original<typeof import("../../../lib/guardian-campaign")>()), getGuardianOneShotCampaigns: mocks.campaigns, getGuardianCampaignById: mocks.result }));
+vi.mock("../../../lib/guardian-departures", () => ({ getGuardianDepartureSummary: mocks.departures }));
+vi.mock("../../../lib/interface-texts", async original => { const actual = await original<typeof import("../../../lib/interface-texts")>();
+  return { ...actual, readInterfaceTexts: async () => ({ values: Object.fromEntries(actual.interfaceTextFields.map(f => [f.key, f.defaultValue])), overrides: {} }) }; });
+import Page from "./page";
+function text(node: ReactNode): string {
   if (typeof node === "string" || typeof node === "number") return String(node);
-  if (Array.isArray(node)) return node.map(textContent).join(" ");
-  if (!isValidElement(node)) return "";
-  return textContent((node.props as { children?: ReactNode }).children);
+  if (Array.isArray(node)) return node.map(text).join(" ");
+  return isValidElement(node) ? text((node.props as { children?: ReactNode }).children) : "";
 }
-
-function elementProps(node: ReactNode): Array<{ type: unknown; props: Record<string, unknown> }> {
-  if (Array.isArray(node)) return node.flatMap(elementProps);
+function nodes(node: ReactNode): Array<{ type: unknown; props: Record<string, unknown> }> {
+  if (Array.isArray(node)) return node.flatMap(nodes);
   if (!isValidElement(node)) return [];
-  const props = node.props as Record<string, unknown>;
-  return [{ type: node.type, props }, ...elementProps(props.children as ReactNode)];
+  const props = node.props as Record<string, unknown>; return [{ type: node.type, props }, ...nodes(props.children as ReactNode)];
 }
-
-describe("/admin/guardian", () => {
-  beforeEach(() => {
-    vi.clearAllMocks();
-    mocks.getGuardianOneShotCampaigns.mockResolvedValue([]);
-    mocks.getGuardianCampaignById.mockResolvedValue(null);
-    mocks.getGuardianCampaignReward.mockResolvedValue({ note: "Награда: +3 DARUS за первое добавление интереса" });
-    mocks.getGuardianDepartureSummary.mockResolvedValue({ last30Days: 1, total: 2, events: [
-      { id: "2", participantId: "two", displayName: "Второй", type: "forum.removed", observedAt: new Date("2026-10-05T10:00:00Z") },
-      { id: "1", participantId: "one", displayName: "Первый", type: "forum.left", observedAt: new Date("2026-08-01T10:00:00Z") },
-    ] });
-    mocks.redirect.mockImplementation((destination: string) => { throw new Error(`redirect:${destination}`); });
+describe("unified Guardian page", () => {
+  beforeEach(() => { vi.clearAllMocks(); mocks.session.mockResolvedValue({ id: "admin" }); mocks.admin.mockReturnValue(true);
+    mocks.redirect.mockImplementation((path: string) => { throw new Error("redirect:" + path); });
+    mocks.audience.mockResolvedValue({ missingCity: [{}], missingInterests: [{},{}], missingBio: [{}], neverLoggedIn: [{}], unverified: [{}], cities: [], interests: [], audience: [] });
+    mocks.campaigns.mockResolvedValue([]); mocks.result.mockResolvedValue(null); mocks.departures.mockResolvedValue({ total: 40, last30Days: 4 }); });
+  it("enforces admin authorization before reading participant state", async () => {
+    mocks.admin.mockReturnValueOnce(false); await expect(Page({ searchParams: Promise.resolve({}) })).rejects.toThrow("redirect:/profile");
+    expect(mocks.audience).not.toHaveBeenCalled();
   });
-
-  it("renders Telegram-only success counts from the immutable snapshot with zero Core inbox messages", async () => {
-    mocks.getCurrentParticipant.mockResolvedValue({ id: "admin" });
-    mocks.hasPrototypeAdminAccess.mockReturnValue(true);
-    mocks.getGuardianAudience.mockResolvedValue({ missingCity: [], missingInterests: [], audience: [], cities: [], interests: [] });
-    mocks.getGuardianCampaignById.mockResolvedValue({ campaignType: "technical_broadcast", recipientCount: 3,
-      telegramDeliveryCount: 2, audienceRule: { channels: { core: false, telegram: true } } });
-    const content = textContent(await GuardianPage({ searchParams: Promise.resolve({ broadcast: "id" }) })).replace(/\s+/gu, " ");
-    expect(content).toContain("Получателей: 3");
-    expect(content).toContain("В Личку Ядра: 0");
-    expect(content).toContain("Telegram поставлено в очередь: 2");
-    expect(content).toContain("Без доступной Telegram-доставки: 1");
+  it("renders exactly one composer and compact state/departure summaries without old blocks or profile warnings for signals", async () => {
+    const page = await Page({ searchParams: Promise.resolve({}) }), content = text(page).replace(/\s+/gu, " ");
+    expect(content).toContain("Состояние участников"); expect(content).toContain("Сообщение участникам");
+    expect(content).toContain("За последние 30 дней: 4"); expect(content).toContain("Всего зарегистрировано убытий: 40");
+    for (const removed of ["Кампании Хранителя", "Аудитория технического уведомления", "История убытий:", "Без активного"]) expect(content).not.toContain(removed);
+    const elements = nodes(page), composers = elements.filter(n => typeof n.type === "function" && n.type.name === "GuardianMessageComposer");
+    expect(composers).toHaveLength(1); expect(composers[0].props.audiences).toHaveLength(12);
+    const links = elements.filter(n => n.props.href).map(n => n.props.href as string);
+    expect(links).toContain("/admin/guardian/departures"); expect(links.filter(l => l.includes("#guardian-composer"))).toHaveLength(5);
+    expect(links.some(l => l.includes("preset=core_login_prompt"))).toBe(true);
   });
-
-  it("rejects non-admin before querying audience", async () => {
-    mocks.getCurrentParticipant.mockResolvedValue({ id: "ordinary" });
-    mocks.hasPrototypeAdminAccess.mockReturnValue(false);
-    await expect(GuardianPage({ searchParams: Promise.resolve({}) })).rejects.toThrow("redirect:/profile");
-    expect(mocks.getGuardianAudience).not.toHaveBeenCalled();
+  it("opens the requested state in the same composer and presets default login to Telegram only", async () => {
+    const page = await Page({ searchParams: Promise.resolve({ preset: "core_login_prompt", condition: ["unverified"] }) });
+    const composer = nodes(page).find(n => typeof n.type === "function" && n.type.name === "GuardianMessageComposer")!;
+    expect(composer.props.selectedTemplate).toBe("core_login_prompt"); expect(composer.props.initialConditions).toEqual(["unverified"]);
+    expect(composer.props.templates).toEqual(expect.arrayContaining([expect.objectContaining({ key: "core_login_prompt", core: false, telegram: true, system: true })]));
   });
-
-  it("renders a broadcast audience and current missing-data summaries", async () => {
-    mocks.getCurrentParticipant.mockResolvedValue({ id: "admin" });
-    mocks.hasPrototypeAdminAccess.mockReturnValue(true);
-    const person = { id: "one", displayName: "Участник", telegramUsername: "user", hasTelegramUserId: true,
-      residence: null, interests: [] };
-    mocks.getGuardianAudience.mockResolvedValue({
-      missingCity: [person], missingInterests: [], audience: [person],
-      cities: [], interests: [{ key: "art", label: "Искусство" }],
-    });
-    const page = await GuardianPage({ searchParams: Promise.resolve({ interest: ["art"], scenario: "profile_interests_prompt" }) });
-    expect(mocks.getGuardianAudience).toHaveBeenCalledWith({ city: "", interests: ["art"] });
-    const text = textContent(page).replace(/\s+/gu, " ");
-    expect(text).toContain("Не указан город: 1");
-    expect(text).toContain("За последние 30 дней: 1");
-    expect(text).toContain("Всего зарегистрировано убытий: 2");
-    expect(text).not.toContain("Удалён из форума");
-    expect(text).not.toContain("Вышел из форума");
-    expect(elementProps(page).some(({ props }) => props.href === "/admin/guardian/departures")).toBe(true);
-    expect(elementProps(page).some(({ type }) => typeof type === "function" && type.name === "GuardianBroadcastForm")).toBe(true);
-    expect(text).toContain("Не указаны интересы: 0");
-    expect(text).toContain("Найдено участников: 1");
-    for (const title of ["Заполнить город", "Заполнить интересы", "Встреча в городе", "Онлайн-встреча"]) {
-      expect(text).toContain(title);
-    }
-    expect(elementProps(page).some(({ type }) => typeof type === "function" && type.name === "GuardianCampaignForm")).toBe(true);
-    expect(elementProps(page).find(({ type }) => typeof type === "function" && type.name === "GuardianCampaignForm")?.props.scenario)
-      .toMatchObject({ rewardNote: "Награда: +3 DARUS за первое добавление интереса" });
-    expect(text).toContain("@user");
-    expect(text).toContain("Получатели будут проверены заново перед отправкой.");
-    const audienceDetails = elementProps(page).find(({ type, props }) => type === "details"
-      && textContent(props.children as ReactNode).includes("Найдено участников"));
-    expect(audienceDetails).toBeDefined();
-    expect(audienceDetails?.props.open).toBeUndefined();
+  it("shows Telegram-only result counts from canonical batch with zero inbox messages", async () => {
+    mocks.result.mockResolvedValue({ recipientCount: 3, telegramDeliveryCount: 2, audienceRule: { channels: { core: false, telegram: true } } });
+    const content = text(await Page({ searchParams: Promise.resolve({ message: "id" }) })).replace(/\s+/gu, " ");
+    for (const phrase of ["Получателей: 3", "В Личку Ядра: 0", "Telegram поставлено в очередь: 2", "Без доступной Telegram-доставки: 1"]) expect(content).toContain(phrase);
   });
 });
