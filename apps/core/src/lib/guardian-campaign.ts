@@ -1,7 +1,7 @@
 import { randomUUID } from "node:crypto";
 import { getGuardianCampaignRewardWithDatabase } from "./guardian-campaign-reward";
 import { getGuardianAudienceWithDatabase } from "./guardian-audience";
-import { GuardianCampaignValidationError, parseGuardianCampaignDraft } from "./guardian-campaign-input";
+import { GuardianCampaignValidationError, parseGuardianCampaignDraft, parseTechnicalBroadcastDraft, type TechnicalBroadcastDraft } from "./guardian-campaign-input";
 import { guardianResidenceOptions, guardianScenario, guardianScenarios, resolveGuardianScenarioAudience, type GuardianScenarioType } from "./guardian-campaign-scenarios";
 
 type QueryResult = { rowCount: number | null; rows: Array<Record<string, unknown>> };
@@ -14,7 +14,7 @@ export type GuardianCampaignDatabase = {
 export type GuardianCampaignSnapshot = {
   id: string;
   campaignKey: string;
-  campaignType: GuardianScenarioType;
+  campaignType: GuardianScenarioType | "technical_broadcast";
   text: string;
   actionLabel: string | null;
   actionUrl: string | null;
@@ -29,7 +29,7 @@ function snapshot(row: Record<string, unknown>): GuardianCampaignSnapshot {
   return {
     id: String(row.id),
     campaignKey: String(row.campaign_key),
-    campaignType: String(row.campaign_type) as GuardianScenarioType,
+    campaignType: String(row.campaign_type) as GuardianCampaignSnapshot["campaignType"],
     text: String(row.text),
     actionLabel: row.action_label == null ? null : String(row.action_label),
     actionUrl: row.action_url == null ? null : String(row.action_url),
@@ -193,6 +193,72 @@ export async function launchGuardianCampaignWithDatabase(
 export async function getGuardianOneShotCampaigns() {
   const { pool } = await import("./db");
   return getGuardianOneShotCampaignsWithDatabase(pool);
+}
+
+export function technicalBroadcastCounts(campaign: GuardianCampaignSnapshot) {
+  const channels = campaign.audienceRule.channels as { core: boolean; telegram: boolean };
+  return { recipients: campaign.recipientCount, coreInbox: channels.core ? campaign.recipientCount : 0,
+    telegramQueued: campaign.telegramDeliveryCount, telegramUnavailable: channels.telegram ? campaign.recipientCount - campaign.telegramDeliveryCount : 0 };
+}
+
+export async function launchTechnicalBroadcastWithDatabase(database: Pick<GuardianCampaignDatabase, "connect">, adminId: string, input: TechnicalBroadcastDraft) {
+  const draft = parseTechnicalBroadcastDraft(input);
+  const campaignKey = `technical_broadcast:${adminId}:${draft.submissionId}`;
+  const filters = { city: draft.city, interests: draft.interests };
+  const channels = { core: draft.core, telegram: draft.telegram };
+  const client = await database.connect();
+  try {
+    await client.query("BEGIN");
+    await client.query("SELECT pg_advisory_xact_lock(42008, hashtext($1::text))", [campaignKey]);
+    const existing = await campaignWithDatabase(client, campaignKey);
+    if (existing) {
+      const savedFilters = existing.audienceRule.filters as typeof filters | undefined;
+      const savedChannels = existing.audienceRule.channels as typeof channels | undefined;
+      if (existing.campaignType !== "technical_broadcast" || existing.createdByParticipantId !== adminId || existing.text !== draft.text ||
+          savedFilters?.city !== filters.city || JSON.stringify(savedFilters?.interests) !== JSON.stringify(filters.interests) ||
+          savedChannels?.core !== channels.core || savedChannels?.telegram !== channels.telegram) {
+        throw new GuardianCampaignValidationError("Ключ отправки уже использован для другого сообщения или аудитории.");
+      }
+      await client.query("COMMIT");
+      return { campaign: existing, launched: false, counts: technicalBroadcastCounts(existing) };
+    }
+    const overview = await getGuardianAudienceWithDatabase(client, filters);
+    const recipientIds = [...new Set(overview.audience.map(p => p.id))];
+    if (!recipientIds.length) throw new GuardianCampaignValidationError("Аудитория сообщения пуста.");
+    const telegramIds = draft.telegram ? await telegramRecipients(client, recipientIds) : [];
+    const rule = { current: "forum_joined_or_logged_in", excludeMembershipStatuses: ["left", "excluded"], excludeRosterBots: true,
+      selection: "technical_broadcast", filters, channels };
+    const inserted = await client.query(
+      `INSERT INTO guardian_campaigns(campaign_key, campaign_type, text, action_label,
+          action_url, audience_rule, created_by_participant_id, recipient_count, telegram_delivery_count)
+       VALUES ($1, $2, $3, $4, $5, $6::jsonb, $7::uuid, $8, $9)
+       RETURNING id, campaign_key, campaign_type, text, action_label, action_url, audience_rule, created_at,
+                 recipient_count, telegram_delivery_count, created_by_participant_id`,
+      [campaignKey, "technical_broadcast", draft.text, null, null, JSON.stringify(rule), adminId, recipientIds.length, telegramIds.length]);
+    const campaign = snapshot(inserted.rows[0]);
+    const notifications = await client.query(
+      `INSERT INTO notifications(campaign_id, participant_id, notification_type, text,
+          action_label, action_url, source_type, created_by_participant_id, visible_in_inbox)
+       SELECT $1::uuid, recipient.recipient_id, 'guardian.technical_broadcast', $3, NULL, NULL, 'admin', $4::uuid, $5
+         FROM unnest($2::uuid[]) AS recipient(recipient_id) RETURNING id`,
+      [campaign.id, recipientIds, draft.text, adminId, draft.core]);
+    if (notifications.rowCount !== recipientIds.length) throw new Error("Broadcast notification count mismatch");
+    if (telegramIds.length) {
+      const deliveries = await client.query(
+        `INSERT INTO notification_deliveries(notification_id, channel, status)
+         SELECT notification.id, 'telegram', 'pending' FROM notifications notification
+          WHERE notification.campaign_id = $1::uuid AND notification.participant_id = ANY($2::uuid[]) RETURNING id`, [campaign.id, telegramIds]);
+      if (deliveries.rowCount !== telegramIds.length) throw new Error("Broadcast delivery count mismatch");
+    }
+    await client.query("COMMIT");
+    return { campaign, launched: true, counts: technicalBroadcastCounts(campaign) };
+  } catch (error) { await client.query("ROLLBACK"); throw error; }
+  finally { client.release(); }
+}
+
+export async function launchTechnicalBroadcast(adminId: string, input: TechnicalBroadcastDraft) {
+  const { pool } = await import("./db");
+  return launchTechnicalBroadcastWithDatabase(pool, adminId, input);
 }
 
 export async function getGuardianCampaignById(id: string) {

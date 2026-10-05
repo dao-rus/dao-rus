@@ -23,6 +23,24 @@ function database(failDelivery = false) {
 }
 
 describe("Core notifications", () => {
+  it("defaults existing notification callers to visible while supporting Telegram-only audit records", async () => {
+    const db = database();
+    await createNotificationWithDatabase(db, base);
+    expect(db.queries[1].sql).toContain("visible_in_inbox");
+    expect(db.queries[1].values?.at(-1)).toBe(true);
+    const hidden = database();
+    await createNotificationWithDatabase(hidden, { ...base, visibleInInbox: false, queueTelegram: true });
+    expect(hidden.queries[1].values?.at(-1)).toBe(false);
+    expect(hidden.queries[2].sql).toContain("notification_deliveries");
+  });
+  it("excludes hidden canonical records from list, unread count and both mark-read paths", async () => {
+    const db = { query: vi.fn().mockResolvedValue({ rowCount: 0, rows: [] }) };
+    expect(await listNotificationsWithDatabase(db, "owner")).toEqual([]);
+    expect(await countUnreadNotificationsWithDatabase(db, "owner")).toBe(0);
+    expect(await markNotificationReadWithDatabase(db, "owner", "hidden")).toBe(false);
+    expect(db.query).toHaveBeenCalledTimes(4);
+    for (const [sql] of db.query.mock.calls) expect(sql).toContain("AND visible_in_inbox");
+  });
   it("counts only unread notifications belonging to the recipient", async () => {
     const db = { query: vi.fn().mockResolvedValue({ rowCount: 1, rows: [{ unread_count: 2 }] }) };
     expect(await countUnreadNotificationsWithDatabase(db, "recipient")).toBe(2);

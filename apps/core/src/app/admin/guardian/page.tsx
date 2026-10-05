@@ -1,21 +1,24 @@
 import Link from "next/link";
+import { randomUUID } from "node:crypto";
 import type { Metadata } from "next";
 import { redirect } from "next/navigation";
 import { CoreNavigation } from "../../../components/core-navigation";
 import { GuardianCampaignForm } from "../../../components/guardian-campaign-form";
+import { GuardianBroadcastForm } from "../../../components/guardian-broadcast-form";
 import { hasPrototypeAdminAccess } from "@/lib/config";
-import { getGuardianCampaignById, getGuardianOneShotCampaigns } from "@/lib/guardian-campaign";
+import { getGuardianCampaignById, getGuardianOneShotCampaigns, technicalBroadcastCounts } from "@/lib/guardian-campaign";
 import { getGuardianAudience, type GuardianParticipant } from "@/lib/guardian-audience";
 import { guardianResidenceOptions, guardianScenarios, guardianScenarioTypes, resolveGuardianScenarioAudience, type GuardianScenarioType } from "../../../lib/guardian-campaign-scenarios";
 import { residenceLabel } from "@/lib/profile-about";
 import { getCurrentParticipant } from "@/lib/session";
 import { getGuardianCampaignReward } from "../../../lib/guardian-campaign-reward";
-import { getGuardianDepartures } from "../../../lib/guardian-departures";
+import { getGuardianDepartureSummary } from "../../../lib/guardian-departures";
+import { readInterfaceTexts } from "../../../lib/interface-texts";
 
 export const dynamic = "force-dynamic";
 export const metadata: Metadata = { title: "Хранитель" };
 
-type SearchParams = { city?: string; interest?: string | string[]; scenario?: string; campaign?: string; campaign_id?: string };
+type SearchParams = { city?: string; interest?: string | string[]; scenario?: string; campaign?: string; campaign_id?: string; broadcast?: string };
 
 function ParticipantLinks({ people }: { people: GuardianParticipant[] }) {
   return people.length ? (
@@ -37,12 +40,14 @@ export default async function GuardianPage({ searchParams }: { searchParams: Pro
     : Array.isArray(params.interest) ? params.interest : [];
   const city = typeof params.city === "string" ? params.city : "";
   const currentOverviewPromise = getGuardianAudience();
-  const [currentOverview, oneShotCampaigns, launchedCampaign, overview, departures] = await Promise.all([
+  const [currentOverview, oneShotCampaigns, launchedCampaign, overview, departures, { values: texts }, broadcast] = await Promise.all([
     currentOverviewPromise,
     getGuardianOneShotCampaigns(),
     params.campaign_id ? getGuardianCampaignById(params.campaign_id) : Promise.resolve(null),
     city || selectedInterests.length ? getGuardianAudience({ city, interests: selectedInterests }) : currentOverviewPromise,
-    getGuardianDepartures(),
+    getGuardianDepartureSummary(),
+    readInterfaceTexts(),
+    params.broadcast ? getGuardianCampaignById(params.broadcast) : Promise.resolve(null),
   ]);
   const selectedType = guardianScenarioTypes.includes(params.scenario as GuardianScenarioType)
     ? params.scenario as GuardianScenarioType : null;
@@ -50,6 +55,7 @@ export default async function GuardianPage({ searchParams }: { searchParams: Pro
   const previous = selectedType ? oneShotCampaigns.find((campaign) => campaign.campaignType === selectedType) : null;
   const recent = launchedCampaign?.campaignType === selectedType ? launchedCampaign : null;
   const residenceOptions = guardianResidenceOptions(currentOverview);
+  const broadcastResult = broadcast?.campaignType === "technical_broadcast" ? technicalBroadcastCounts(broadcast) : null;
   const reward = selectedType ? await getGuardianCampaignReward(selectedType) : null;
 
   return (
@@ -62,16 +68,9 @@ export default async function GuardianPage({ searchParams }: { searchParams: Pro
         </div>
 
         <h2>Убытие</h2>
-        <p>За последние 30 дней: <strong>{departures.last30Days}</strong></p>
-        <p>Всего зарегистрировано убытий: <strong>{departures.total}</strong></p>
-        <details>
-          <summary>История убытий: {departures.total}</summary>
-          {departures.events.length ? <ul>{departures.events.map((event) => <li key={event.id}>
-            <time dateTime={event.observedAt.toISOString()}>{event.observedAt.toLocaleString("ru-RU", { timeZone: "Europe/Moscow" })}</time>
-            {" · "}{event.participantId ? <Link href={`/profile/${event.participantId}`}>{event.displayName}</Link> : "Профиль недоступен"}
-            {" · "}{event.type === "forum.left" ? "Вышел из форума" : "Удалён из форума"}
-          </li>)}</ul> : <p className="muted">Зарегистрированных убытий пока нет.</p>}
-        </details>
+        <p>{texts["guardian.departures_recent"]} <strong>{departures.last30Days}</strong></p>
+        <p>{texts["guardian.departures_total"]} <strong>{departures.total}</strong></p>
+        <Link className="button secondary" href="/admin/guardian/departures">{texts["guardian.departures_title"]}</Link>
 
         <h2>Незаполненные данные профиля</h2>
         <details>
@@ -113,7 +112,7 @@ export default async function GuardianPage({ searchParams }: { searchParams: Pro
         </section> : <p className="muted">Выберите сценарий, чтобы подготовить сообщение.</p>}
 
         <h2>Аудитория технического уведомления</h2>
-        <p className="muted">Выборка доступна только для просмотра. Наличие Telegram ID не подтверждает возможность отправить личное сообщение.</p>
+        <p className="muted">{texts["guardian.broadcast_lead"]}</p>
         <form method="get" className="registryFilters">
           <label><span>Город</span>
             <select name="city" defaultValue={city}>
@@ -137,19 +136,28 @@ export default async function GuardianPage({ searchParams }: { searchParams: Pro
           <summary>Найдено участников: <strong>{overview.audience.length}</strong></summary>
           <div className="registryTableWrap">
             <table className="registryTable">
-              <thead><tr><th>Участник</th><th>Telegram username</th><th>Telegram user ID</th></tr></thead>
+              <thead><tr><th>Участник</th><th>Telegram username</th></tr></thead>
               <tbody>
                 {overview.audience.map((person) => (
                   <tr key={person.id}>
                     <td><Link href={`/profile/${person.id}`}>{person.displayName}</Link></td>
                     <td>{person.telegramUsername ? `@${person.telegramUsername}` : "—"}</td>
-                    <td>{person.hasTelegramUserId ? "есть" : "нет"}</td>
                   </tr>
                 ))}
               </tbody>
             </table>
           </div>
         </details>
+        <GuardianBroadcastForm city={city} interests={selectedInterests} recipientCount={overview.audience.length}
+          submissionId={randomUUID()} texts={{ "guardian.message": texts["guardian.message"],
+            "guardian.channel_core": texts["guardian.channel_core"], "guardian.channel_telegram": texts["guardian.channel_telegram"],
+            "guardian.send": texts["guardian.send"] }} />
+        {broadcastResult ? <section aria-label="Результат отправки" role="status">
+          <p>{texts["guardian.result_recipients"]} <strong>{broadcastResult.recipients}</strong></p>
+          <p>{texts["guardian.result_core"]} <strong>{broadcastResult.coreInbox}</strong></p>
+          <p>{texts["guardian.result_telegram"]} <strong>{broadcastResult.telegramQueued}</strong></p>
+          <p>{texts["guardian.result_unavailable"]} <strong>{broadcastResult.telegramUnavailable}</strong></p>
+        </section> : null}
       </section>
     </main>
   );

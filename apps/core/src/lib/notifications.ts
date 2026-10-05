@@ -28,6 +28,7 @@ export type CreateNotification = {
   sourceType: "system" | "admin";
   createdByParticipantId?: string | null;
   queueTelegram?: boolean;
+  visibleInInbox?: boolean;
 };
 
 export class NotificationValidationError extends Error {
@@ -43,6 +44,7 @@ export async function createNotificationWithDatabase(
 ): Promise<string> {
   const notificationType = input.notificationType.trim();
   const body = input.text.trim();
+  if (input.visibleInInbox !== undefined && typeof input.visibleInInbox !== "boolean") throw new NotificationValidationError("Invalid inbox visibility");
   if (!notificationType || !body) throw new NotificationValidationError("Notification type and text are required");
   if (input.sourceType !== "system" && input.sourceType !== "admin") {
     throw new NotificationValidationError("Invalid notification source");
@@ -62,9 +64,9 @@ export async function createNotificationWithDatabase(
   try {
     await client.query("BEGIN");
     const result = await client.query(
-      `INSERT INTO notifications(participant_id, notification_type, text, action_url, action_label, source_type, created_by_participant_id)
-       VALUES ($1::uuid, $2, $3, $4, $5, $6, $7::uuid) RETURNING id`,
-      [input.participantId, notificationType, body, actionUrl, actionLabel, input.sourceType, input.createdByParticipantId ?? null],
+      `INSERT INTO notifications(participant_id, notification_type, text, action_url, action_label, source_type, created_by_participant_id, visible_in_inbox)
+       VALUES ($1::uuid, $2, $3, $4, $5, $6, $7::uuid, $8) RETURNING id`,
+      [input.participantId, notificationType, body, actionUrl, actionLabel, input.sourceType, input.createdByParticipantId ?? null, input.visibleInInbox ?? true],
     );
     const id = String(result.rows[0].id);
     if (input.queueTelegram) {
@@ -91,7 +93,7 @@ export async function listNotificationsWithDatabase(
   const result = await database.query(
     `SELECT id, text, action_url, action_label, created_at, read_at
        FROM notifications
-      WHERE participant_id = $1::uuid
+      WHERE participant_id = $1::uuid AND visible_in_inbox
       ORDER BY (read_at IS NOT NULL), created_at DESC, id DESC`,
     [participantId],
   );
@@ -111,7 +113,7 @@ export async function countUnreadNotificationsWithDatabase(
 ): Promise<number> {
   const result = await database.query(
     `SELECT count(*)::integer AS unread_count FROM notifications
-      WHERE participant_id = $1::uuid AND read_at IS NULL`,
+      WHERE participant_id = $1::uuid AND read_at IS NULL AND visible_in_inbox`,
     [participantId],
   );
   return Number(result.rows[0]?.unread_count ?? 0);
@@ -124,13 +126,13 @@ export async function markNotificationReadWithDatabase(
 ): Promise<boolean> {
   const updated = await database.query(
     `UPDATE notifications SET read_at = now()
-      WHERE id = $1::uuid AND participant_id = $2::uuid AND read_at IS NULL
+      WHERE id = $1::uuid AND participant_id = $2::uuid AND read_at IS NULL AND visible_in_inbox
       RETURNING id`,
     [notificationId, participantId],
   );
   if (updated.rowCount) return true;
   const existing = await database.query(
-    `SELECT 1 FROM notifications WHERE id = $1::uuid AND participant_id = $2::uuid`,
+    `SELECT 1 FROM notifications WHERE id = $1::uuid AND participant_id = $2::uuid AND visible_in_inbox`,
     [notificationId, participantId],
   );
   return Boolean(existing.rowCount);

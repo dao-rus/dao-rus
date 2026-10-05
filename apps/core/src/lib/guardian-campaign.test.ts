@@ -7,7 +7,7 @@ vi.mock("./guardian-audience", async (importOriginal) => ({
   getGuardianAudienceWithDatabase: audience.getGuardianAudienceWithDatabase,
 }));
 
-import { launchGuardianCampaignWithDatabase } from "./guardian-campaign";
+import { launchGuardianCampaignWithDatabase, launchTechnicalBroadcastWithDatabase } from "./guardian-campaign";
 
 const city = { name: "Москва", type: "город", country: "Россия" };
 const person = (id: string, residence: typeof city | null = null) => ({ id, residence });
@@ -16,7 +16,7 @@ function overview(people = [person("one", city), person("two")]) {
     audience: people, cities: [{ key: cityKey(city), residence: city }], interests: [] };
 }
 
-function database(identities: Record<string, string> = {}, reward: { amount: string; active: boolean } | null = null) {
+function database(identities: Record<string, string> = {}, reward: { amount: string; active: boolean } | null = null, conflicting: string[] = []) {
   const state: { campaigns: Array<Record<string, unknown>>; notifications: string[]; deliveries: string[] } = {
     campaigns: [], notifications: [], deliveries: [],
   };
@@ -37,6 +37,7 @@ function database(identities: Record<string, string> = {}, reward: { amount: str
         const previous = lock;
         lock = new Promise<void>((resolve) => { unlock = resolve; });
         await previous;
+        before = { campaigns: [...state.campaigns], notifications: [...state.notifications], deliveries: [...state.deliveries] };
         return { rowCount: 1, rows: [] };
       }
       if (statement === "COMMIT") { unlock(); return { rowCount: null, rows: [] }; }
@@ -55,7 +56,7 @@ function database(identities: Record<string, string> = {}, reward: { amount: str
       }
       if (statement.includes("FROM external_identities identity")) {
         const ids = values[0] as string[];
-        const rows = ids.flatMap((id) => identities[id] ? [{ participant_id: id, external_user_id: identities[id], identity_conflict: false }] : []);
+        const rows = ids.flatMap((id) => identities[id] ? [{ participant_id: id, external_user_id: identities[id], identity_conflict: conflicting.includes(id) }] : []);
         return { rowCount: rows.length, rows };
       }
       if (statement.includes("INSERT INTO guardian_campaigns")) {
@@ -190,5 +191,59 @@ describe("Guardian campaign transaction", () => {
       .rejects.toThrow("delivery insert failed");
     expect(db.sql.at(-1)).toBe("ROLLBACK");
     expect(db.state).toEqual({ campaigns: [], notifications: [], deliveries: [] });
+  });
+});
+
+const submissionId = "11111111-1111-4111-8111-111111111111";
+const broadcast = { text: " Техническое сообщение ", city: "", interests: [], core: true, telegram: false, submissionId };
+describe("technical broadcast transaction", () => {
+  beforeEach(() => { vi.clearAllMocks(); audience.getGuardianAudienceWithDatabase.mockResolvedValue(overview()); });
+  it.each([[true,false,2,0,0],[false,true,0,1,1],[true,true,2,1,1]])("channels core=%s telegram=%s retain canonical messages and correct result counts", async (core,telegram,inbox,queued,unavailable) => {
+    const db=database({one:"123456"}); const fetchSpy=vi.spyOn(globalThis,"fetch");
+    try {
+      const result=await launchTechnicalBroadcastWithDatabase(db,"admin",{...broadcast,core:Boolean(core),telegram:Boolean(telegram)});
+      expect(result.counts).toEqual({recipients:2,coreInbox:inbox,telegramQueued:queued,telegramUnavailable:unavailable});
+      expect(result.campaign).toMatchObject({campaignType:"technical_broadcast",text:"Техническое сообщение",actionUrl:null,actionLabel:null,
+        audienceRule:{filters:{city:"",interests:[]},channels:{core:Boolean(core),telegram:Boolean(telegram)}}});
+      expect(db.state.notifications).toEqual(["one","two"]);
+      expect(db.notificationInputs[0]).toEqual([result.campaign.id,["one","two"],"Техническое сообщение","admin",Boolean(core)]);
+      expect(db.state.deliveries).toEqual(telegram?["one"]:[]);
+      expect(fetchSpy).not.toHaveBeenCalled();
+    }finally{fetchSpy.mockRestore();}
+  });
+  it("re-resolves filters inside transaction, ignores preview recipients/count, and deduplicates DB recipients",async()=>{
+    const db=database();const filters={city:cityKey(city),interests:["art","tech"]};
+    audience.getGuardianAudienceWithDatabase.mockResolvedValueOnce({...overview(),audience:[person("two"),person("two")]});
+    const result=await launchTechnicalBroadcastWithDatabase(db,"admin",{...broadcast,...filters,...{recipientIds:["one"],recipientCount:999}});
+    expect(audience.getGuardianAudienceWithDatabase).toHaveBeenCalledWith(expect.anything(),filters);
+    expect(db.sql[0]).toBe("BEGIN"); expect(db.state.notifications).toEqual(["two"]);expect(result.counts.recipients).toBe(1);
+  });
+  it("rejects empty text, no channels, empty audience and invalid submission before fan-out",async()=>{
+    for(const input of [{...broadcast,text:" "},{...broadcast,core:false,telegram:false},{...broadcast,submissionId:"invalid"}]){
+      const db=database();await expect(launchTechnicalBroadcastWithDatabase(db,"admin",input)).rejects.toThrow();expect(db.connect).not.toHaveBeenCalled();
+    }
+    const db=database();audience.getGuardianAudienceWithDatabase.mockResolvedValueOnce({...overview(),audience:[]});
+    await expect(launchTechnicalBroadcastWithDatabase(db,"admin",broadcast)).rejects.toThrow("пуста");expect(db.state.campaigns).toEqual([]);
+  });
+  it("missing, invalid or conflicting Telegram identity skips queueing without losing canonical/inbox messages",async()=>{
+    const db=database({one:"123456",two:"invalid"},null,["one"]);
+    const result=await launchTechnicalBroadcastWithDatabase(db,"admin",{...broadcast,telegram:true});
+    expect(db.state.notifications).toEqual(["one","two"]);expect(db.state.deliveries).toEqual([]);
+    expect(result.counts).toEqual({recipients:2,coreInbox:2,telegramQueued:0,telegramUnavailable:2});
+  });
+  it("double submission is idempotent, changed payload under same key is rejected, new key is repeatable",async()=>{
+    const db=database({one:"123456"});const input={...broadcast,telegram:true};
+    const [first,retry]=await Promise.all([launchTechnicalBroadcastWithDatabase(db,"admin",input),launchTechnicalBroadcastWithDatabase(db,"admin",input)]);
+    expect(first.campaign.id).toBe(retry.campaign.id);expect([first.launched,retry.launched].sort()).toEqual([false,true]);
+    expect(db.state.notifications).toHaveLength(2);expect(db.state.deliveries).toHaveLength(1);expect(db.state.campaigns).toHaveLength(1);
+    await expect(launchTechnicalBroadcastWithDatabase(db,"admin",{...input,text:"Другой текст"})).rejects.toThrow("уже использован");
+    await launchTechnicalBroadcastWithDatabase(db,"admin",{...input,submissionId:"22222222-2222-4222-8222-222222222222"});
+    expect(db.state.campaigns).toHaveLength(2);
+  });
+  it("rolls back immutable batch and all notifications if fan-out fails",async()=>{
+    const db=database({one:"123456"}),connect=db.connect.getMockImplementation()!;
+    db.connect.mockImplementation(async()=>{const client=await connect();const query=client.query.getMockImplementation()!;client.query.mockImplementation(async(sql,values)=>{if(sql.includes("INSERT INTO notification_deliveries"))throw new Error("delivery insert failed");return query(sql,values);});return client;});
+    await expect(launchTechnicalBroadcastWithDatabase(db,"admin",{...broadcast,telegram:true})).rejects.toThrow("delivery insert failed");
+    expect(db.state).toEqual({campaigns:[],notifications:[],deliveries:[]});
   });
 });
