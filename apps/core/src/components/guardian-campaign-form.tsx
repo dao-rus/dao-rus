@@ -11,15 +11,18 @@ export type GuardianCampaignFormScenario = {
   audienceDescription: string;
   recipientCount: number | null;
   residenceOptions: Array<{ key: string; label: string; count: number }>;
+  rewardNote?: string | null;
 };
 
-export function GuardianCampaignPreview({ text, audience, actionLabel, recipientCount }: {
+export function GuardianCampaignPreview({ text, audience, actionLabel, recipientCount, rewardNote }: {
   text: string; audience: string; actionLabel: string | null; recipientCount: number;
+  rewardNote?: string | null;
 }) {
   return <section aria-label="Предпросмотр кампании">
     <p>Получатели сейчас: <strong>{recipientCount}</strong></p>
     <p>Аудитория: {audience}</p>
     <p>{text}</p>
+    {rewardNote ? <p>{rewardNote}</p> : null}
     {actionLabel ? <p>Кнопка действия: {actionLabel}</p> : null}
     <p className="muted">При подтверждении аудитория будет вычислена заново.</p>
     <button className="button primary" type="submit" name="confirm" value="launch">
@@ -29,6 +32,10 @@ export function GuardianCampaignPreview({ text, audience, actionLabel, recipient
 }
 
 export function GuardianCampaignForm({ scenario }: { scenario: GuardianCampaignFormScenario }) {
+  return <ScenarioForm key={scenario.type} scenario={scenario} />;
+}
+
+function ScenarioForm({ scenario }: { scenario: GuardianCampaignFormScenario }) {
   const [text, setText] = useState<string>(scenario.defaultText);
   const [residenceKey, setResidenceKey] = useState("");
   const [preview, setPreview] = useState<string | null>(null);
@@ -73,7 +80,7 @@ export function GuardianCampaignForm({ scenario }: { scenario: GuardianCampaignF
         disabled={recipientCount === null || recipientCount === 0}>Предпросмотр</button>
       {error ? <p className="alert" role="alert">{error}</p> : null}
       {preview !== null && recipientCount !== null
-        ? <GuardianCampaignPreview text={preview} audience={audience} actionLabel={scenario.actionLabel} recipientCount={recipientCount} />
+        ? <GuardianCampaignPreview text={preview} audience={audience} actionLabel={scenario.actionLabel} recipientCount={recipientCount} rewardNote={scenario.rewardNote} />
         : null}
     </form>
   </section>;

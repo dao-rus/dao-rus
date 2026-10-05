@@ -16,7 +16,7 @@ function overview(people = [person("one", city), person("two")]) {
     audience: people, cities: [{ key: cityKey(city), residence: city }], interests: [] };
 }
 
-function database(identities: Record<string, string> = {}) {
+function database(identities: Record<string, string> = {}, reward: { amount: string; active: boolean } | null = null) {
   const state: { campaigns: Array<Record<string, unknown>>; notifications: string[]; deliveries: string[] } = {
     campaigns: [], notifications: [], deliveries: [],
   };
@@ -28,6 +28,7 @@ function database(identities: Record<string, string> = {}) {
     let before: typeof state | null = null;
     const query = vi.fn(async (statement: string, values: unknown[] = []) => {
       sql.push(statement);
+      if (statement.includes("FROM reward_rules")) return { rowCount: reward ? 1 : 0, rows: reward ? [reward] : [] };
       if (statement === "BEGIN") {
         before = { campaigns: [...state.campaigns], notifications: [...state.notifications], deliveries: [...state.deliveries] };
         return { rowCount: null, rows: [] };
@@ -116,6 +117,29 @@ describe("Guardian campaign transaction", () => {
     expect(db.state.deliveries).toEqual([]);
   });
 
+  it.each([
+    ["profile_residence_prompt", "Если вы указываете город впервые, вы получите +2,75 DARUS."],
+    ["profile_interests_prompt", "Если вы добавляете интерес впервые, вы получите +2,75 DARUS."],
+  ] as const)("re-reads the reward inside launch and snapshots the final %s text", async (scenario, sentence) => {
+    const db = database({}, { amount: "2.750000", active: true });
+    const result = await launchGuardianCampaignWithDatabase(db, "admin", {
+      scenario, text: "Свой текст",
+      // Neither preview reward nor client-supplied system text is part of the launch contract.
+      ...{ rewardAmount: "999", rewardSentence: "Подмена" },
+    });
+    expect(result.campaign.text).toBe(`Свой текст\n\n${sentence}`);
+    expect(db.notificationInputs[0][3]).toBe(result.campaign.text);
+    const rewardIndex = db.sql.findIndex((sql) => sql.includes("FROM reward_rules"));
+    expect(rewardIndex).toBeGreaterThan(db.sql.indexOf("BEGIN"));
+    expect(rewardIndex).toBeLessThan(db.sql.findIndex((sql) => sql.includes("INSERT INTO guardian_campaigns")));
+  });
+
+  it("adds no promise for an inactive rule", async () => {
+    const db = database({}, { amount: "9.000000", active: false });
+    const result = await launchGuardianCampaignWithDatabase(db, "admin", { scenario: "profile_interests_prompt", text: "Текст" });
+    expect(result.campaign.text).toBe("Текст");
+  });
+
   it("returns the same immutable one-shot campaign under concurrent launch", async () => {
     const db = database({ one: "123456" });
     const [a, b] = await Promise.all([
@@ -144,6 +168,8 @@ describe("Guardian campaign transaction", () => {
     expect(first.campaign.campaignKey).not.toBe(second.campaign.campaignKey);
     expect(db.state.campaigns).toHaveLength(2);
     expect(first.campaign).toMatchObject({ actionLabel: null, actionUrl: null });
+    expect(db.sql.some((sql) => sql.includes("FROM reward_rules"))).toBe(false);
+    expect(first.campaign.text).not.toContain("DARUS");
     expect(db.notificationInputs[0]?.slice(2, 6)).toEqual([`guardian.${scenario}`, "Текст встречи", null, null]);
     expect(db.state.notifications).toHaveLength(scenario === "town_meeting" ? 2 : 4);
   });

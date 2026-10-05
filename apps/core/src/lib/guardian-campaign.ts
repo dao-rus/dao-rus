@@ -1,4 +1,5 @@
 import { randomUUID } from "node:crypto";
+import { getGuardianCampaignRewardWithDatabase } from "./guardian-campaign-reward";
 import { getGuardianAudienceWithDatabase } from "./guardian-audience";
 import { GuardianCampaignValidationError, parseGuardianCampaignDraft } from "./guardian-campaign-input";
 import { guardianResidenceOptions, guardianScenario, guardianScenarios, resolveGuardianScenarioAudience, type GuardianScenarioType } from "./guardian-campaign-scenarios";
@@ -114,7 +115,7 @@ export async function launchGuardianCampaignWithDatabase(
   input: GuardianCampaignLaunch,
 ): Promise<{ campaign: GuardianCampaignSnapshot; launched: boolean }> {
   const scenario = guardianScenario(input.scenario);
-  const { text } = parseGuardianCampaignDraft({ text: input.text });
+  const draft = parseGuardianCampaignDraft({ text: input.text });
   const campaignKey = scenario.campaignKey ?? `${scenario.type}:${randomUUID()}`;
   const client = await database.connect();
   try {
@@ -134,6 +135,10 @@ export async function launchGuardianCampaignWithDatabase(
     const recipientIds = recipients.map((person) => person.id);
     if (!recipientIds.length) throw new GuardianCampaignValidationError("Campaign audience is empty");
     const telegramIds = await telegramRecipients(client, recipientIds);
+    const reward = await getGuardianCampaignRewardWithDatabase(client, scenario.type);
+    const { text } = parseGuardianCampaignDraft({
+      text: reward ? `${draft.text}\n\n${reward.sentence}` : draft.text,
+    });
     const residence = scenario.type === "town_meeting"
       ? guardianResidenceOptions(overview).find((option) => option.key === input.residenceKey) : undefined;
     const audienceRule = {

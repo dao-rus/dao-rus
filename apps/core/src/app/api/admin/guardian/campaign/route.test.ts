@@ -39,7 +39,8 @@ describe("POST Guardian campaign", () => {
   });
 
   it("launches from edited text and ignores user-supplied CTA or URL", async () => {
-    const response = await POST(request({ confirm: "launch", action_label: "Подмена", action_url: "https://example.org" }));
+    const response = await POST(request({ confirm: "launch", action_label: "Подмена", action_url: "https://example.org",
+      reward_amount: "999", reward_sentence: "Подмена награды" }));
     expect(mocks.launch).toHaveBeenCalledWith("admin", { scenario: "profile_interests_prompt", text: "Отредактированный текст" });
     expect(response.status).toBe(303);
     expect(response.headers.get("location")).toContain("scenario=profile_interests_prompt");

@@ -8,9 +8,11 @@ const mocks = vi.hoisted(() => ({
   getGuardianOneShotCampaigns: vi.fn(),
   getGuardianCampaignById: vi.fn(),
   redirect: vi.fn(),
+  getGuardianCampaignReward: vi.fn(),
 }));
 
 vi.mock("next/navigation", () => ({ redirect: mocks.redirect }));
+vi.mock("../../../lib/guardian-campaign-reward", () => ({ getGuardianCampaignReward: mocks.getGuardianCampaignReward }));
 vi.mock("@/lib/session", () => ({ getCurrentParticipant: mocks.getCurrentParticipant }));
 vi.mock("@/lib/config", () => ({ hasPrototypeAdminAccess: mocks.hasPrototypeAdminAccess }));
 vi.mock("@/lib/guardian-audience", () => ({ getGuardianAudience: mocks.getGuardianAudience }));
@@ -43,6 +45,7 @@ describe("/admin/guardian", () => {
     vi.clearAllMocks();
     mocks.getGuardianOneShotCampaigns.mockResolvedValue([]);
     mocks.getGuardianCampaignById.mockResolvedValue(null);
+    mocks.getGuardianCampaignReward.mockResolvedValue({ note: "Награда: +3 DARUS за первое добавление интереса" });
     mocks.redirect.mockImplementation((destination: string) => { throw new Error(`redirect:${destination}`); });
   });
 
@@ -72,6 +75,8 @@ describe("/admin/guardian", () => {
       expect(text).toContain(title);
     }
     expect(elementProps(page).some(({ type }) => typeof type === "function" && type.name === "GuardianCampaignForm")).toBe(true);
+    expect(elementProps(page).find(({ type }) => typeof type === "function" && type.name === "GuardianCampaignForm")?.props.scenario)
+      .toMatchObject({ rewardNote: "Награда: +3 DARUS за первое добавление интереса" });
     expect(text).toContain("@user");
     expect(text).toContain("Telegram ID не подтверждает возможность отправить личное сообщение");
     const audienceDetails = elementProps(page).find(({ type, props }) => type === "details"

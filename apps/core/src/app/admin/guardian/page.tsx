@@ -9,6 +9,7 @@ import { getGuardianAudience, type GuardianParticipant } from "@/lib/guardian-au
 import { guardianResidenceOptions, guardianScenarios, guardianScenarioTypes, resolveGuardianScenarioAudience, type GuardianScenarioType } from "../../../lib/guardian-campaign-scenarios";
 import { residenceLabel } from "@/lib/profile-about";
 import { getCurrentParticipant } from "@/lib/session";
+import { getGuardianCampaignReward } from "../../../lib/guardian-campaign-reward";
 
 export const dynamic = "force-dynamic";
 export const metadata: Metadata = { title: "Хранитель" };
@@ -47,6 +48,7 @@ export default async function GuardianPage({ searchParams }: { searchParams: Pro
   const previous = selectedType ? oneShotCampaigns.find((campaign) => campaign.campaignType === selectedType) : null;
   const recent = launchedCampaign?.campaignType === selectedType ? launchedCampaign : null;
   const residenceOptions = guardianResidenceOptions(currentOverview);
+  const reward = selectedType ? await getGuardianCampaignReward(selectedType) : null;
 
   return (
     <main className="shell">
@@ -92,6 +94,7 @@ export default async function GuardianPage({ searchParams }: { searchParams: Pro
             audienceDescription: selectedScenario.audienceDescription,
             recipientCount: selectedType === "town_meeting" ? null : resolveGuardianScenarioAudience(selectedScenario.type, currentOverview).length,
             residenceOptions: selectedType === "town_meeting" ? residenceOptions : [],
+            rewardNote: reward?.note ?? null,
           }} /> : null}
         </section> : <p className="muted">Выберите сценарий, чтобы подготовить сообщение.</p>}
 
