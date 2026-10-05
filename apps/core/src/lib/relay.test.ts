@@ -4,7 +4,6 @@ import {
   consentRelayRevealWithDatabase,
   createRelayEncounterWithDatabase,
   getRelayEncounterWithDatabase,
-  listBlindSignalsWithDatabase,
   listExchangeSignalsWithDatabase,
   listRelayMessagesWithDatabase,
   sendRelayMessageWithDatabase,
@@ -40,22 +39,6 @@ describe("Blind Match privacy and Relay access", () => {
     expect(sql).toContain("ORDER BY s.created_at DESC, s.id DESC");
     expect(sql).not.toContain("match_only");
     expect(values).toEqual([responder, "need"]);
-  });
-
-  it("publishes only active network-blind need/have text and own marker, with no author identity", async () => {
-    const database = databaseWith(async () => ({
-      rowCount: 1,
-      rows: [{ id: signal, kind: "need", body: "Нужна помощь", mine: false,
-        participant_id: author, username: "private_name", avatar_url: "private_url" }],
-    }));
-    const signals = await listBlindSignalsWithDatabase(database, responder, "need");
-    expect(signals).toEqual([{ id: signal, kind: "need", body: "Нужна помощь", mine: false }]);
-    const [sql, values] = database.query.mock.calls[0];
-    expect(sql).toContain("s.visibility = 'network_blind'");
-    expect(sql).toContain("s.status = 'active'");
-    expect(sql).toContain("s.kind = $2");
-    expect(values).toEqual([responder, "need"]);
-    expect(sql).not.toContain("match_only");
   });
 
   it("refuses self-response and closed or archived signals at the database boundary", async () => {

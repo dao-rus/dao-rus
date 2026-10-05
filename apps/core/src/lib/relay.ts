@@ -3,7 +3,6 @@ import type { ProfileSignalKind } from "./profile-about";
 
 type QueryResult = { rowCount: number | null; rows: Array<Record<string, unknown>> };
 export type RelayDatabase = { query(text: string, values?: unknown[]): Promise<QueryResult> };
-export type BlindSignal = { id: string; kind: "need" | "have"; body: string; mine: boolean };
 export type ExchangeSignal = {
   id: string; kind: ProfileSignalKind; body: string; mine: boolean; anonymous: boolean;
   author: { id: string; name: string } | null;
@@ -38,7 +37,7 @@ function encounterFromRow(row: Record<string, unknown>): RelayEncounter {
   const status = String(row.status) as RelayEncounter["status"];
   return {
     id: String(row.id),
-    kind: String(row.kind) as BlindSignal["kind"],
+    kind: String(row.kind) as RelayEncounter["kind"],
     body: String(row.body),
     status,
     role: String(row.role) as RelayEncounter["role"],
@@ -48,25 +47,6 @@ function encounterFromRow(row: Record<string, unknown>): RelayEncounter {
           username: row.other_username ? String(row.other_username) : null }
       : null,
   };
-}
-
-export async function listBlindSignalsWithDatabase(
-  database: RelayDatabase, viewerId: string, kind: "need" | "have",
-): Promise<BlindSignal[]> {
-  const result = await database.query(
-    `SELECT s.id, s.kind, s.body, (s.participant_id = $1::uuid) AS mine
-       FROM profile_signals s
-      WHERE s.visibility = 'network_blind'
-        AND s.status = 'active'
-        AND s.kind = $2
-      ORDER BY s.created_at DESC, s.id DESC
-      LIMIT 100`,
-    [viewerId, kind],
-  );
-  return result.rows.map((row) => ({
-    id: String(row.id), kind: String(row.kind) as BlindSignal["kind"],
-    body: String(row.body), mine: Boolean(row.mine),
-  }));
 }
 
 export async function listExchangeSignalsWithDatabase(
@@ -236,8 +216,6 @@ export async function cancelRelayEncounterWithDatabase(
   if (!result.rowCount) throw new RelayAccessError();
 }
 
-export const listBlindSignals = (viewerId: string, kind: "need" | "have") =>
-  listBlindSignalsWithDatabase(pool, viewerId, kind);
 export const listExchangeSignals = (viewerId: string, kind: ProfileSignalKind) =>
   listExchangeSignalsWithDatabase(pool, viewerId, kind);
 export const createRelayEncounter = (responderId: string, signalId: unknown) =>
