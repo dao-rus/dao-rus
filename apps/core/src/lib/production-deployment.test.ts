@@ -43,6 +43,8 @@ describe("production deployment", () => {
     expect(packageJson).toContain('"notifications:worker": "node --import tsx scripts/notification-worker.ts"');
     expect(worker).toContain('command: ["node", "--import", "tsx", "scripts/notification-worker.ts"]');
     expect(worker).toContain("- backend");
+    expect(worker).toContain("- worker-egress");
+    expect(compose).toMatch(/\n  worker-egress:\s*(?:\r?\n|$)/);
     expect(worker).not.toContain("ports:");
     expect(compose).toContain("TELEGRAM_NOTIFICATIONS_ENABLED: ${TELEGRAM_NOTIFICATIONS_ENABLED:-false}");
   });
@@ -56,6 +58,7 @@ describe("production deployment", () => {
     expect(db).not.toContain("ports:");
     expect(web).not.toContain("ports:");
     expect(db).toContain("- backend");
+    expect(db).not.toContain("worker-egress");
     expect(compose).toMatch(/backend:\s*\r?\n\s+internal: true/);
     expect(caddy).toContain('- "80:80"');
     expect(caddy).toContain('- "443:443"');

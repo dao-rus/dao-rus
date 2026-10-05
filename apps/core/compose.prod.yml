@@ -103,6 +103,7 @@ services:
         condition: service_completed_successfully
     networks:
       - backend
+      - worker-egress
     stop_grace_period: 30s
     logging: *default-logging
 
@@ -130,6 +131,7 @@ networks:
   proxy:
   backend:
     internal: true
+  worker-egress:
 
 volumes:
   dao_pgdata:
