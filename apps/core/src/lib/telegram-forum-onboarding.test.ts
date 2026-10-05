@@ -31,11 +31,13 @@ function fakeDatabase(hasIdentity = true) {
   } = {};
   const events: string[] = [];
   const eventPayloads: unknown[] = [];
+  const history: Array<Record<string, unknown>> = [];
   let identityParticipantId: string | null = hasIdentity ? participantId : null;
   let createdParticipants = 0;
   let createdIdentities = 0;
   const client = {
     async query(sql: string, values?: unknown[]) {
+      if (sql.includes("SELECT event_type, payload FROM events")) return { rowCount: history.length, rows: history };
       if (sql.includes("FROM telegram_roster_entries")) return { rowCount: 0, rows: [] };
       if (sql.includes("FROM external_identities")) return identityParticipantId
         ? { rowCount: 1, rows: [{ id: "identity-id", participant_id: identityParticipantId,
@@ -73,6 +75,7 @@ function fakeDatabase(hasIdentity = true) {
       if (sql.includes("INSERT INTO events")) {
         events.push(sql.includes("'participant.created'") ? "participant.created" : String(values?.[0]));
         if (values?.[2]) eventPayloads.push(JSON.parse(String(values[2])));
+        if (values?.[2]) history.push({ event_type: String(values[0]), payload: JSON.parse(String(values[2])) });
       }
       return { rowCount: 1, rows: [] };
     },
@@ -189,7 +192,7 @@ describe("forum onboarding", () => {
     expect(await observeForumMemberUpdate(update, database)).toBe("observed");
     expect(counts()).toEqual({ participants: 1, identities: 1 });
     expect(state.status).toBe("joined");
-    expect(events).toEqual(["participant.created", "onboarding.forum_joined"]);
+    expect(events).toEqual(["participant.created", "forum.joined"]);
   });
 
   it("does not create a Participant for a left event", async () => {
@@ -212,8 +215,38 @@ describe("forum onboarding", () => {
     } }, database);
     expect(result).toBe("observed");
     expect(state.status).toBe("absent");
-    expect(events).toEqual(["onboarding.forum_incomplete"]);
+    expect(events).toEqual(["forum.left"]);
     expect(counts()).toEqual({ participants: 0, identities: 0 });
+  });
+
+  it("preserves joined → left → rejoined → removed history and ignores duplicate updates", async () => {
+    const { database, events, state, eventPayloads } = fakeDatabase();
+    const update = (id: number, old: string, status: string) => ({ update_id: id, chat_member: {
+      chat: { id: -1001234567890 }, date: 1790858400 + id,
+      old_chat_member: { status: old }, new_chat_member: { status, user: { id: 42, first_name: "Private" } },
+    } });
+    await observeForumMemberUpdate(update(1, "left", "member"), database);
+    await observeForumMemberUpdate(update(2, "member", "left"), database);
+    await observeForumMemberUpdate(update(3, "left", "member"), database);
+    await observeForumMemberUpdate(update(4, "member", "kicked"), database);
+    await observeForumMemberUpdate(update(4, "member", "kicked"), database);
+    expect(events).toEqual(["forum.joined", "forum.left", "forum.rejoined", "forum.removed"]);
+    expect(state.status).toBe("absent");
+    expect(eventPayloads).toHaveLength(4);
+    expect(eventPayloads[3]).toEqual({ source: "chat_member", observed_at: new Date(1790858404000).toISOString(), telegram_update_id: 4 });
+    expect(events).not.toContain("membership.excluded");
+  });
+
+  it("generic checks do not invent departure reasons and a later explicit update still records history", async () => {
+    const { database, events } = fakeDatabase();
+    await observeForumMembership(database, "42", true, new Date("2026-10-01T10:00:00Z"), null);
+    await observeForumMembership(database, "42", false, new Date("2026-10-01T10:02:00Z"), null);
+    expect(events).toEqual(["onboarding.forum_joined", "onboarding.forum_incomplete"]);
+    await observeForumMemberUpdate({ update_id: 20, chat_member: {
+      chat: { id: -1001234567890 }, date: Date.parse("2026-10-01T10:01:00Z") / 1000,
+      old_chat_member: { status: "member" }, new_chat_member: { status: "left", user: { id: 42 } },
+    } }, database);
+    expect(events.at(-1)).toBe("forum.left");
   });
 });
 

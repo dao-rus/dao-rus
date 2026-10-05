@@ -10,6 +10,7 @@ import { guardianResidenceOptions, guardianScenarios, guardianScenarioTypes, res
 import { residenceLabel } from "@/lib/profile-about";
 import { getCurrentParticipant } from "@/lib/session";
 import { getGuardianCampaignReward } from "../../../lib/guardian-campaign-reward";
+import { getGuardianDepartures } from "../../../lib/guardian-departures";
 
 export const dynamic = "force-dynamic";
 export const metadata: Metadata = { title: "Хранитель" };
@@ -36,11 +37,12 @@ export default async function GuardianPage({ searchParams }: { searchParams: Pro
     : Array.isArray(params.interest) ? params.interest : [];
   const city = typeof params.city === "string" ? params.city : "";
   const currentOverviewPromise = getGuardianAudience();
-  const [currentOverview, oneShotCampaigns, launchedCampaign, overview] = await Promise.all([
+  const [currentOverview, oneShotCampaigns, launchedCampaign, overview, departures] = await Promise.all([
     currentOverviewPromise,
     getGuardianOneShotCampaigns(),
     params.campaign_id ? getGuardianCampaignById(params.campaign_id) : Promise.resolve(null),
     city || selectedInterests.length ? getGuardianAudience({ city, interests: selectedInterests }) : currentOverviewPromise,
+    getGuardianDepartures(),
   ]);
   const selectedType = guardianScenarioTypes.includes(params.scenario as GuardianScenarioType)
     ? params.scenario as GuardianScenarioType : null;
@@ -58,6 +60,18 @@ export default async function GuardianPage({ searchParams }: { searchParams: Pro
           <div><div className="eyebrow">DAO Core</div><h1>Хранитель</h1></div>
           <Link className="button secondary" href="/admin">К управлению</Link>
         </div>
+
+        <h2>Убытие</h2>
+        <p>За последние 30 дней: <strong>{departures.last30Days}</strong></p>
+        <p>Всего зарегистрировано убытий: <strong>{departures.total}</strong></p>
+        <details>
+          <summary>История убытий: {departures.total}</summary>
+          {departures.events.length ? <ul>{departures.events.map((event) => <li key={event.id}>
+            <time dateTime={event.observedAt.toISOString()}>{event.observedAt.toLocaleString("ru-RU", { timeZone: "Europe/Moscow" })}</time>
+            {" · "}{event.participantId ? <Link href={`/profile/${event.participantId}`}>{event.displayName}</Link> : "Профиль недоступен"}
+            {" · "}{event.type === "forum.left" ? "Вышел из форума" : "Удалён из форума"}
+          </li>)}</ul> : <p className="muted">Зарегистрированных убытий пока нет.</p>}
+        </details>
 
         <h2>Незаполненные данные профиля</h2>
         <details>

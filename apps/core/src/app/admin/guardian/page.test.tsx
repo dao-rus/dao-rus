@@ -9,10 +9,12 @@ const mocks = vi.hoisted(() => ({
   getGuardianCampaignById: vi.fn(),
   redirect: vi.fn(),
   getGuardianCampaignReward: vi.fn(),
+  getGuardianDepartures: vi.fn(),
 }));
 
 vi.mock("next/navigation", () => ({ redirect: mocks.redirect }));
 vi.mock("../../../lib/guardian-campaign-reward", () => ({ getGuardianCampaignReward: mocks.getGuardianCampaignReward }));
+vi.mock("../../../lib/guardian-departures", () => ({ getGuardianDepartures: mocks.getGuardianDepartures }));
 vi.mock("@/lib/session", () => ({ getCurrentParticipant: mocks.getCurrentParticipant }));
 vi.mock("@/lib/config", () => ({ hasPrototypeAdminAccess: mocks.hasPrototypeAdminAccess }));
 vi.mock("@/lib/guardian-audience", () => ({ getGuardianAudience: mocks.getGuardianAudience }));
@@ -46,6 +48,10 @@ describe("/admin/guardian", () => {
     mocks.getGuardianOneShotCampaigns.mockResolvedValue([]);
     mocks.getGuardianCampaignById.mockResolvedValue(null);
     mocks.getGuardianCampaignReward.mockResolvedValue({ note: "Награда: +3 DARUS за первое добавление интереса" });
+    mocks.getGuardianDepartures.mockResolvedValue({ last30Days: 1, total: 2, events: [
+      { id: "2", participantId: "two", displayName: "Второй", type: "forum.removed", observedAt: new Date("2026-10-05T10:00:00Z") },
+      { id: "1", participantId: "one", displayName: "Первый", type: "forum.left", observedAt: new Date("2026-08-01T10:00:00Z") },
+    ] });
     mocks.redirect.mockImplementation((destination: string) => { throw new Error(`redirect:${destination}`); });
   });
 
@@ -69,6 +75,14 @@ describe("/admin/guardian", () => {
     expect(mocks.getGuardianAudience).toHaveBeenCalledWith({ city: "", interests: ["art"] });
     const text = textContent(page).replace(/\s+/gu, " ");
     expect(text).toContain("Не указан город: 1");
+    expect(text).toContain("За последние 30 дней: 1");
+    expect(text).toContain("Всего зарегистрировано убытий: 2");
+    expect(text).toContain("Удалён из форума");
+    expect(text).toContain("Вышел из форума");
+    expect(text.indexOf("Второй")).toBeLessThan(text.indexOf("Первый"));
+    expect(elementProps(page).find(({ type, props }) => type === "details"
+      && textContent(props.children as ReactNode).includes("История убытий"))?.props.open).toBeUndefined();
+    expect(elementProps(page).some(({ props }) => props.href === "/profile/two")).toBe(true);
     expect(text).toContain("Не указаны интересы: 0");
     expect(text).toContain("Найдено участников: 1");
     for (const title of ["Заполнить город", "Заполнить интересы", "Встреча в городе", "Онлайн-встреча"]) {

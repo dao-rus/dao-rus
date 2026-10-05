@@ -83,6 +83,7 @@ export async function observeForumMembership(
   source: "getChatMember" | "chat_member" = "getChatMember",
   updateId?: number,
   createMissingParticipant = false,
+  transition?: { wasJoined: boolean; status: string },
 ): Promise<ForumObservation> {
   const client = await database.connect();
   try {
@@ -124,7 +125,33 @@ export async function observeForumMembership(
         [participantId, status, observedAt],
       );
     }
-    if (changed || Boolean(inserted.rowCount)) {
+    if (source === "chat_member" && transition && transition.wasJoined !== joined) {
+      // The locked onboarding row serializes lifecycle history and duplicate checks.
+      // Late updates still contribute history, without overwriting newer current state.
+      const history = await client.query(
+        `SELECT event_type, payload FROM events WHERE participant_id = $1
+          AND event_type = ANY($2::text[])`,
+        [participantId, ["forum.joined", "forum.rejoined", "forum.left", "forum.removed", "onboarding.forum_joined"]],
+      );
+      const alreadyObserved = history.rows.some((event) => {
+        const payload = record(event.payload);
+        return payload?.source === source && (updateId !== undefined
+          ? payload.telegram_update_id === updateId
+          : payload.observed_at === observedAt.toISOString());
+      });
+      const previouslyJoined = history.rows.some((event) =>
+        ["forum.joined", "forum.rejoined", "forum.left", "forum.removed", "onboarding.forum_joined"].includes(String(event.event_type))
+        && (!record(event.payload)?.observed_at || new Date(String(record(event.payload)?.observed_at)) <= observedAt));
+      const lifecycle = joined ? (previouslyJoined ? "forum.rejoined" : "forum.joined")
+        : transition.status === "left" ? "forum.left"
+        : transition.status === "kicked" ? "forum.removed" : null;
+      if (lifecycle && !alreadyObserved) {
+        await client.query(`INSERT INTO events(event_type, participant_id, payload) VALUES ($1, $2, $3::jsonb)`,
+          [lifecycle, participantId, JSON.stringify({ source, observed_at: observedAt.toISOString(),
+            ...(updateId === undefined ? {} : { telegram_update_id: updateId }) })]);
+      }
+    }
+    if (source !== "chat_member" && (changed || Boolean(inserted.rowCount))) {
       await client.query(
         `INSERT INTO events(event_type, participant_id, payload)
          VALUES ($1, $2, $3::jsonb)`,
@@ -229,6 +256,8 @@ export async function observeForumMemberUpdate(
   const joined = status === "creator" || status === "administrator" || status === "member" ||
     (status === "restricted" && newMember.is_member === true);
   const oldStatus = oldMember.status;
+  const wasJoined = oldStatus === "creator" || oldStatus === "administrator" || oldStatus === "member" ||
+    (oldStatus === "restricted" && oldMember.is_member === true);
   const wasAbsent = oldStatus === "left" || oldStatus === "kicked" ||
     (oldStatus === "restricted" && oldMember.is_member === false);
   if (!joined && status !== "left" && status !== "kicked" && status !== "restricted") return "ignored";
@@ -236,6 +265,7 @@ export async function observeForumMemberUpdate(
   const result = await observeForumMembership(database, String(userId), joined,
     new Date(Number(timestamp) * 1000), null, "chat_member",
     Number.isSafeInteger(updateId) ? Number(updateId) : undefined,
-    joined && wasAbsent && user?.is_bot !== true);
+    joined && wasAbsent && user?.is_bot !== true,
+    { wasJoined, status: String(status) });
   return result ? "observed" : "ignored";
 }
