@@ -902,6 +902,40 @@ Angel v1 выполняет две основные функции:
 
 Остальные функции — refine, explain-match, proactive matching — могут добавляться позже.
 
+### Реализация Angel v1
+
+Angel v1 ограничен двумя capability: `compose_signal` и `search_exchange`.
+Его operational provider — OpenAI через серверный адаптер; текущая конфигурация
+адаптера использует Responses API, Structured Outputs со strict JSON Schema,
+`gpt-5.6-terra` и reasoning `low`. Это рабочая конфигурация, а не неизменяемый
+архитектурный выбор модели.
+
+`Compose` получает только свободный текст автора и каталог включённых типов
+Signals (`key`, название, пояснение, пример). Ответ строго ограничен полями
+`operation`, `typeKey`, `label`, `description`. Core повторно проверяет тип в
+каталоге и обычные ограничения Signal. Предложение лишь заполняет форму:
+создание Signal выполняется только её обычным подтверждённым submit.
+
+`Search` получает только текст вопроса и тот же каталог, а возвращает только
+`operation`, `typeKeys`, `terms`. Core применяет intent к собственному
+PostgreSQL-поиску после обычного сетевого visibility predicate. Поэтому модель
+не видит базу и не получает тексты чужих Signals; private, match_only, circle,
+closed и archived не становятся доступными через Angel. Network-blind результат
+передаётся без owner identity и ведёт на canonical Signal URL.
+
+Пользовательский текст, а также текст Signal — недоверенные данные. Они не
+становятся developer-инструкциями модели. Узкий scope gate отклоняет очевидные
+запросы вне Exchange и подозрительные попытки получить скрытые данные или
+исполнить инструкции. Angel не имеет SQL, tools, DB credentials, Telegram,
+административных или write-прав.
+
+Ключ OpenAI существует только в `OPENAI_API_KEY` на сервере. Ошибка провайдера,
+timeout, refusal или невалидный результат не создают и не изменяют Signal;
+ручной Exchange остаётся доступен. Серверный лимит по участнику использует
+существующие events без сохранения текста запроса. События фиксируют только
+категорию (`out_of_scope`, `suspicious_prompt`, `invalid_model_output`,
+`provider_failure`, `rate_limit`) и operation.
+
 ## 21. Два слоя вознаграждения: onboarding и utility
 
 Не следует смешивать награду за освоение поведения в системе с наградой за реально созданную полезность.
