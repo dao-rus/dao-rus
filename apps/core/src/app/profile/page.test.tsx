@@ -2,6 +2,8 @@ import { isValidElement, type ReactNode } from "react";
 import { describe, expect, it, vi } from "vitest";
 
 const mocks = vi.hoisted(() => ({
+  signals: vi.fn(),
+  types: vi.fn(),
   getCurrentParticipant: vi.fn(),
   getActivitySummary: vi.fn(),
   getMembershipHistory: vi.fn(),
@@ -32,11 +34,14 @@ vi.mock("@/components/local-date-time", () => ({ LocalDateTime: () => null }));
 vi.mock("@/components/telegram-avatar", () => ({ TelegramAvatar: () => null }));
 
 import ProfilePage from "./page";
+import { ProfileSignals } from "../../components/profile-signals";
+vi.mock("../../lib/signals", () => ({ listParticipantSignals: mocks.signals, listSignalTypes: mocks.types }));
 
 function textContent(node: ReactNode): string {
   if (typeof node === "string" || typeof node === "number") return String(node);
   if (Array.isArray(node)) return node.map(textContent).join(" ");
   if (!isValidElement(node)) return "";
+  if (node.type === ProfileSignals) return textContent(ProfileSignals(node.props as Parameters<typeof ProfileSignals>[0]));
   return textContent((node.props as { children?: ReactNode }).children);
 }
 
@@ -54,6 +59,8 @@ function findProps(node: ReactNode, matches: (props: Record<string, unknown>) =>
 
 describe("/profile copy", () => {
   it("shows the editable eyebrow, about section and navigation labels", async () => {
+    mocks.signals.mockResolvedValue([]);
+    mocks.types.mockResolvedValue([]);
     mocks.getCurrentParticipant.mockResolvedValue({
       id: "10000000-0000-4000-8000-000000000001",
       displayName: "Анна",
@@ -75,7 +82,7 @@ describe("/profile copy", () => {
       signals: [],
     });
     mocks.readInterfaceTexts.mockResolvedValue({ values: {
-      "profile.eyebrow": "О себе", "participants.title": "Моя сеть", "exchange.title": "Обмен",
+      "signal.create": "Добавить сигнал", "profile.eyebrow": "О себе", "participants.title": "Моя сеть", "exchange.title": "Обмен",
     } });
     mocks.getDarusBalance.mockResolvedValue("0.100000");
     mocks.getReputationSummary.mockResolvedValue({ positiveCount: 2, viewerSignal: null });
@@ -85,10 +92,11 @@ describe("/profile copy", () => {
 
     expect(text).toContain("О себе");
     expect(text).toContain("Интересы");
-    expect(text).toContain("Я хочу");
-    expect(text).toContain("Мне нужно");
-    expect(text).toContain("Я могу");
-    expect(text).toContain("У меня есть");
+    expect(text).toContain("Добавить сигнал");
+    expect(text).not.toContain("Я хочу");
+    expect(text).not.toContain("Мне нужно");
+    expect(text).not.toContain("Я могу");
+    expect(text).not.toContain("У меня есть");
     expect(text).toContain("Кому видно");
     expect(text).not.toContain("Кто видит");
     expect(findProps(page, (props) => props.current === "profile")?.texts).toMatchObject({

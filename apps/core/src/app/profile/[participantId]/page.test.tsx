@@ -2,6 +2,9 @@ import { isValidElement, type ReactNode } from "react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 const mocks = vi.hoisted(() => ({
+  signals: vi.fn(),
+  types: vi.fn(),
+  texts: vi.fn(),
   getCurrentParticipant: vi.fn(),
   getVerificationProfile: vi.fn(),
   getVisibleProfileAbout: vi.fn(),
@@ -35,6 +38,9 @@ vi.mock("@/lib/config", () => ({ hasPrototypeAdminAccess: mocks.hasPrototypeAdmi
 vi.mock("@/components/telegram-avatar", () => ({ TelegramAvatar: () => null }));
 
 import SubjectProfilePage from "./page";
+import { ProfileSignals } from "../../../components/profile-signals";
+vi.mock("../../../lib/signals", () => ({ listParticipantSignals: mocks.signals, listSignalTypes: mocks.types }));
+vi.mock("../../../lib/interface-texts", () => ({ readInterfaceTexts: mocks.texts }));
 
 const rosterProfile = {
   subjectId: "20000000-0000-4000-8000-000000000002",
@@ -51,12 +57,14 @@ function textContent(node: ReactNode): string {
   if (typeof node === "string" || typeof node === "number") return String(node);
   if (Array.isArray(node)) return node.map(textContent).join(" ");
   if (!isValidElement(node)) return "";
+  if (node.type === ProfileSignals) return textContent(ProfileSignals(node.props as Parameters<typeof ProfileSignals>[0]));
   return textContent((node.props as { children?: ReactNode }).children);
 }
 
 function hrefs(node: ReactNode): string[] {
   if (Array.isArray(node)) return node.flatMap(hrefs);
   if (!isValidElement(node)) return [];
+  if (node.type === ProfileSignals) return hrefs(ProfileSignals(node.props as Parameters<typeof ProfileSignals>[0]));
   const props = node.props as { children?: ReactNode; href?: string };
   return [...(props.href ? [props.href] : []), ...hrefs(props.children)];
 }
@@ -64,6 +72,7 @@ function hrefs(node: ReactNode): string[] {
 function ids(node: ReactNode): string[] {
   if (Array.isArray(node)) return node.flatMap(ids);
   if (!isValidElement(node)) return [];
+  if (node.type === ProfileSignals) return ids(ProfileSignals(node.props as Parameters<typeof ProfileSignals>[0]));
   const props = node.props as { children?: ReactNode; id?: string };
   return [...(props.id ? [props.id] : []), ...ids(props.children)];
 }
@@ -85,6 +94,9 @@ function hasPositiveFeedback(node: ReactNode): boolean {
 describe("public subject profile name", () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    mocks.signals.mockResolvedValue([]);
+    mocks.types.mockResolvedValue([]);
+    mocks.texts.mockResolvedValue({ values: {} });
     mocks.getCurrentParticipant.mockResolvedValue({ id: "10000000-0000-4000-8000-000000000001" });
     mocks.hasPrototypeAdminAccess.mockReturnValue(false);
     mocks.getVerificationProfile.mockResolvedValue(rosterProfile);
@@ -135,6 +147,10 @@ describe("public subject profile name", () => {
       ],
     });
 
+    mocks.signals.mockResolvedValue(["need", "can", "want", "have"].map((typeKey) => ({
+      id: typeKey, typeKey, label: typeKey === "can" ? "Могу редактировать тексты" : typeKey,
+      description: null, visibility: "members", status: "active", legacyBody: false,
+    })));
     const page = await SubjectProfilePage({
       params: Promise.resolve({ participantId: "20000000-0000-4000-8000-000000000002" }),
       searchParams: Promise.resolve({}),

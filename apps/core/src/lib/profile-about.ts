@@ -130,6 +130,7 @@ function aboutFromRows(
 export async function getProfileAboutWithDatabase(
   database: Pick<ProfileAboutDatabase, "query">,
   participantId: string,
+  includeSignals = true,
 ): Promise<ProfileAbout | null> {
   const [participant, interests, signals] = await Promise.all([
     database.query(
@@ -146,7 +147,7 @@ export async function getProfileAboutWithDatabase(
         ORDER BY created_at, id`,
       [participantId],
     ),
-    listParticipantSignalsWithDatabase(database, participantId, participantId),
+    includeSignals ? listParticipantSignalsWithDatabase(database, participantId, participantId) : Promise.resolve([]),
   ]);
   if (!participant.rowCount) return null;
   return aboutFromRows(participant.rows[0], interests.rows, signals);
@@ -156,9 +157,10 @@ export async function getVisibleProfileAboutWithDatabase(
   database: Pick<ProfileAboutDatabase, "query">,
   participantId: string,
   viewerParticipantId: string,
+  includeSignals = true,
 ): Promise<ProfileAbout | null> {
   if (participantId === viewerParticipantId) {
-    return getProfileAboutWithDatabase(database, participantId);
+    return getProfileAboutWithDatabase(database, participantId, includeSignals);
   }
 
   const [participant, interests, signals] = await Promise.all([
@@ -182,7 +184,7 @@ export async function getVisibleProfileAboutWithDatabase(
         ORDER BY created_at, id`,
       [participantId],
     ),
-    listParticipantSignalsWithDatabase(database, participantId, viewerParticipantId),
+    includeSignals ? listParticipantSignalsWithDatabase(database, participantId, viewerParticipantId) : Promise.resolve([]),
   ]);
   if (!participant.rowCount) return null;
   return aboutFromRows(participant.rows[0], interests.rows, signals);
@@ -387,17 +389,18 @@ export async function createProfileSignalWithDatabase(
   return reward ? { id: signal.id, reward } : { id: signal.id };
 }
 
-export async function getProfileAbout(participantId: string) {
+export async function getProfileAbout(participantId: string, includeSignals = true) {
   const { pool } = await import("./db");
-  return getProfileAboutWithDatabase(pool, participantId);
+  return getProfileAboutWithDatabase(pool, participantId, includeSignals);
 }
 
 export async function getVisibleProfileAbout(
   participantId: string,
   viewerParticipantId: string,
+  includeSignals = true,
 ) {
   const { pool } = await import("./db");
-  return getVisibleProfileAboutWithDatabase(pool, participantId, viewerParticipantId);
+  return getVisibleProfileAboutWithDatabase(pool, participantId, viewerParticipantId, includeSignals);
 }
 
 export async function updateProfileBio(

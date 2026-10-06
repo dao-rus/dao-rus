@@ -13,15 +13,12 @@ import { getCurrentParticipant } from "@/lib/session";
 import { formatDarusAmount, getVerificationRewardForFeedback } from "@/lib/tokenization";
 import { getVerificationProfile } from "@/lib/verification";
 
+import { listParticipantSignals, listSignalTypes } from "../../../lib/signals";
+import { readInterfaceTexts } from "../../../lib/interface-texts";
+import { ProfileSignals } from "../../../components/profile-signals";
+
 export const dynamic = "force-dynamic";
 export const metadata: Metadata = { title: "Профиль участника" };
-
-const signalLabels: Record<string, string> = {
-  want: "Я хочу",
-  need: "Мне нужно",
-  can: "Я могу",
-  have: "У меня есть",
-};
 
 type SubjectProfilePageProps = {
   params: Promise<{ participantId: string }>;
@@ -50,9 +47,12 @@ export default async function SubjectProfilePage({ params, searchParams }: Subje
   if (!viewer) redirect("/");
 
   const [{ participantId }, query] = await Promise.all([params, searchParams]);
-  const [profile, about] = await Promise.all([
+  const [profile, about, signals, signalTypes, { values: texts }] = await Promise.all([
     getVerificationProfile(participantId, viewer.id),
-    getVisibleProfileAbout(participantId, viewer.id),
+    getVisibleProfileAbout(participantId, viewer.id, false),
+    listParticipantSignals(participantId, viewer.id),
+    listSignalTypes(),
+    readInterfaceTexts(),
   ]);
   if (!profile) notFound();
 
@@ -85,7 +85,7 @@ export default async function SubjectProfilePage({ params, searchParams }: Subje
   return (
     <main className="shell">
       <section className="card profile">
-        <CoreNavigation current="participants" />
+        <CoreNavigation current="participants" texts={texts} />
         <div className="profileHeader">
           <div className="profileIdentity">
             {profile.hasLoggedIn ? (
@@ -105,7 +105,7 @@ export default async function SubjectProfilePage({ params, searchParams }: Subje
           </div>
         </div>
 
-        {profile.hasLoggedIn && about && (about.bio || about.residence || about.interests.length || about.signals.length) ? (
+        {profile.hasLoggedIn && about && (about.bio || about.residence || about.interests.length || signals.length) ? (
           <section className="profileAbout publicAbout">
             {about.bio ? <div className="aboutBlock"><h2>О себе</h2><p className="profileBio">{about.bio}</p></div> : null}
             {about.residence ? (
@@ -125,22 +125,7 @@ export default async function SubjectProfilePage({ params, searchParams }: Subje
                 ))}</div>
               </div>
             ) : null}
-            {about.signals.length ? (
-              <div className="aboutBlock">
-                <h3>Сигналы</h3>
-                <ul className="profileItems signalItems">
-                  {about.signals.map((signal, index) => (
-                    <li key={signal.id} id={about.signals.findIndex((entry) => entry.kind === signal.kind) === index
-                      ? `signal-${signal.kind}` : undefined}>
-                      <div>
-                        <span className="signalKind">{signalLabels[signal.kind] ?? signal.kind}</span>
-                        <strong>{signal.body}</strong>
-                      </div>
-                    </li>
-                  ))}
-                </ul>
-              </div>
-            ) : null}
+            <ProfileSignals signals={signals} types={signalTypes} texts={texts} />
           </section>
         ) : null}
 

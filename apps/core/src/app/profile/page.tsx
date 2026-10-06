@@ -18,6 +18,9 @@ import { getDarusBalance } from "@/lib/tokenization";
 import { getVerificationProfile } from "@/lib/verification";
 import { getOnboardingRewardFeedback } from "../../lib/onboarding-quests";
 
+import { listParticipantSignals, listSignalTypes } from "../../lib/signals";
+import { ProfileSignals } from "../../components/profile-signals";
+
 export const dynamic = "force-dynamic";
 export const metadata: Metadata = { title: "Мой профиль" };
 
@@ -27,22 +30,6 @@ const statusLabels: Record<string, string> = {
   excluded: "исключён",
   left: "вышел",
 };
-
-const signalLabels: Record<string, string> = {
-  want: "Я хочу",
-  need: "Мне нужно",
-  can: "Я могу",
-  have: "У меня есть",
-};
-
-const signalPrompts = {
-  want: "Хочу…",
-  need: "Мне нужно…",
-  can: "Я могу…",
-  have: "У меня есть…",
-} as const;
-
-const signalKinds = ["want", "need", "can", "have"] as const;
 
 const visibilityLabels: Record<string, string> = {
   public: "Всем",
@@ -79,14 +66,16 @@ export default async function ProfilePage({ searchParams }: ProfilePageProps) {
 
   const params = await searchParams;
   const onboardingReward = await getOnboardingRewardFeedback(participant.id, params.onboarding_reward);
-  const [activity, membershipHistory, verification, about, { values: texts }, darusBalance, reputation] = await Promise.all([
+  const [activity, membershipHistory, verification, about, { values: texts }, darusBalance, reputation, signals, signalTypes] = await Promise.all([
     getActivitySummary(participant.id),
     getMembershipHistory(participant.id),
     getVerificationProfile(participant.id, participant.id),
-    getProfileAbout(participant.id),
+    getProfileAbout(participant.id, false),
     readInterfaceTexts(),
     getDarusBalance(participant.id),
     getReputationSummary(participant.id, participant.id),
+    listParticipantSignals(participant.id, participant.id),
+    listSignalTypes(),
   ]);
   const hasAdminAccess = hasPrototypeAdminAccess(participant.id);
   const receptionConfig = telegramReceptionConfig();
@@ -208,67 +197,7 @@ export default async function ProfilePage({ searchParams }: ProfilePageProps) {
             </form>
           </div>
 
-          <div className="aboutBlock">
-            <h3>Что вы хотите, можете, ищете или готовы предложить</h3>
-            <p className="muted">
-              Заполните только то, что актуально. Каждый пункт можно скрыть и использовать только для будущего поиска совпадений.
-            </p>
-            <div className="signalEntryGrid">
-              {signalKinds.map((kind) => {
-                const signals = about?.signals.filter((signal) => signal.kind === kind) ?? [];
-                return (
-                  <section className="signalEntryCard" key={kind} id={`signal-${kind}`}>
-                    <h4>{signalLabels[kind]}</h4>
-                    {signals.length ? (
-                      <ul className="profileItems signalItems">
-                        {signals.map((signal) => (
-                          <li key={signal.id}>
-                            <div>
-                              <strong>{signal.body}</strong>
-                              <small>{visibilityLabels[signal.visibility] ?? signal.visibility}</small>
-                            </div>
-                            <form action="/api/profile/about" method="post">
-                              <input type="hidden" name="action" value="archive_signal" />
-                              <input type="hidden" name="signal_id" value={signal.id} />
-                              <button className="button secondary compact" type="submit">Убрать</button>
-                            </form>
-                          </li>
-                        ))}
-                      </ul>
-                    ) : null}
-                    <form className="aboutForm signalForm" action="/api/profile/about" method="post">
-                      <input type="hidden" name="action" value="add_signal" />
-                      <input type="hidden" name="kind" value={kind} />
-                      <textarea
-                        name="body"
-                        maxLength={500}
-                        placeholder={signalPrompts[kind]}
-                        aria-label={signalLabels[kind]}
-                        required
-                      />
-                      <label>
-                        Кому видно
-                        <select name="visibility" defaultValue="members">
-                          {(kind === "need" || kind === "have"
-                            ? [...matchableVisibilityOptions, "network_blind"] : matchableVisibilityOptions
-                          ).map((value) => (
-                            <option key={value} value={value}>{visibilityLabels[value]}</option>
-                          ))}
-                        </select>
-                      </label>
-                      {(kind === "need" || kind === "have") ? (
-                        <p className="muted privacyHint">При анонимной публикации не указывайте в тексте данные, по которым вас можно легко узнать.</p>
-                      ) : null}
-                      <button className="button secondary" type="submit">Добавить</button>
-                    </form>
-                  </section>
-                );
-              })}
-            </div>
-            <p className="muted privacyHint">
-              «Только при совпадении» не публикует исходный сигнал в чужих профилях. Механизм сопоставления будет подключён отдельным этапом.
-            </p>
-          </div>
+          <ProfileSignals signals={signals} types={signalTypes} texts={texts} owner />
           {aboutMessage ? <p className={params.about_update === "invalid" ? "formError" : "formNotice"}>{aboutMessage}</p> : null}
         </section>
 

@@ -1,7 +1,7 @@
 import { describe, expect, it, vi } from "vitest";
 import {
   listNetworkSignalsWithDatabase, listParticipantSignalsWithDatabase,
-  requireEnabledSignalTypeWithDatabase, createSignalWithDatabase, SignalValidationError, type SignalReader,
+  updateSignalWithDatabase, requireEnabledSignalTypeWithDatabase, createSignalWithDatabase, SignalValidationError, type SignalReader,
 } from "./signals";
 import { signalBodyProjection } from "./signal-compat";
 
@@ -98,4 +98,33 @@ describe("universal Signal types and reads", () => {
     expect(sql).toContain("s.status = 'active'");
     expect(sql).toContain("ORDER BY s.created_at DESC, s.id DESC LIMIT 100");
   });
+  it("updates canonical content under owner and active locks without mint or enabled-type restriction", async () => {
+    const query = vi.fn(async (sql: string) => {
+      if (sql.startsWith("SELECT kind")) return { rowCount: 1, rows: [{ kind: "later_disabled" }] };
+      if (sql.startsWith("UPDATE")) return { rowCount: 1, rows: [{ ...row, kind: "later_disabled", legacy_body: false, description: null }] };
+      return { rowCount: 0, rows: [] };
+    });
+    const client = { query, release: vi.fn() };
+    const db = { query, connect: vi.fn(async () => client) };
+    const updated = await updateSignalWithDatabase(db, "owner", "signal", { label: "Ядро", visibility: "members" });
+    expect(updated.legacyBody).toBe(false);
+    const lock = query.mock.calls[1][0];
+    expect(lock).toContain("participant_id = $2::uuid AND status = 'active' FOR UPDATE");
+    const sql = query.mock.calls.find(([sql]) => sql.startsWith("UPDATE"))![0];
+    expect(sql).toContain("legacy_body = false");
+    expect(sql).not.toContain("SET body");
+    expect(query.mock.calls.some(([sql]) => sql.includes("reward") || sql.includes("signal_types"))).toBe(false);
+    expect(query.mock.calls.at(-1)![0]).toBe("COMMIT");
+  });
+  it("refuses unavailable owner records and invalid labels before any update", async () => {
+    const query = vi.fn(async () => ({ rowCount: 0, rows: [] }));
+    const client = { query, release: vi.fn() };
+    const db = { query, connect: vi.fn(async () => client) };
+    await expect(updateSignalWithDatabase(db, "viewer", "signal", { label: "Ядро", visibility: "members" })).rejects.toThrow("Signal unavailable");
+    expect(query.mock.calls.flat().join(" ")).not.toContain("UPDATE profile_signals");
+    db.connect.mockClear();
+    await expect(updateSignalWithDatabase(db, "owner", "signal", { label: "я".repeat(121), visibility: "private" })).rejects.toThrow("too long");
+    expect(db.connect).not.toHaveBeenCalled();
+  });
+
 });
