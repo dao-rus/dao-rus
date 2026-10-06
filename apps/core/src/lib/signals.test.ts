@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from "vitest";
 import {
-  listNetworkSignalsWithDatabase, listParticipantSignalsWithDatabase,
+  getSignalWithDatabase, listNetworkSignalsWithDatabase, listParticipantSignalsWithDatabase,
   updateSignalWithDatabase, requireEnabledSignalTypeWithDatabase, createSignalWithDatabase, SignalValidationError, type SignalReader,
 } from "./signals";
 import { signalBodyProjection } from "./signal-compat";
@@ -125,6 +125,37 @@ describe("universal Signal types and reads", () => {
     db.connect.mockClear();
     await expect(updateSignalWithDatabase(db, "owner", "signal", { label: "я".repeat(121), visibility: "private" })).rejects.toThrow("too long");
     expect(db.connect).not.toHaveBeenCalled();
+  });
+
+  it("reads a permalink with shared network access and canonical fields", async () => {
+    const id = "10000000-0000-4000-8000-000000000001";
+    const db = database([{ ...row, id, mine: false, author_id: "owner", author_name: "Автор", body: "Obsolete" }]);
+    expect(await getSignalWithDatabase(db, "viewer", id)).toMatchObject({ id, label: "Ядро", description: "Условия", author: { id: "owner", name: "Автор" } });
+    const [sql, values] = db.query.mock.calls[0];
+    expect(values).toEqual(["viewer", id]);
+    expect(sql).toContain("s.id = $2::uuid");
+    expect(sql).toContain("s.participant_id = $1::uuid OR (s.status = 'active' AND s.visibility IN ('public', 'members', 'network_blind'))");
+    expect(sql).not.toContain("s.body");
+    expect(sql).not.toContain("username");
+  });
+  it("returns the same null for unavailable/nonexistent IDs and rejects malformed IDs before SQL", async () => {
+    const db = database([]);
+    const id = "10000000-0000-4000-8000-000000000001";
+    expect(await getSignalWithDatabase(db, "viewer", id)).toBeNull();
+    db.query.mockClear();
+    for (const value of ["../private", "not-a-uuid", "", null, undefined]) {
+      expect(await getSignalWithDatabase(db, "viewer", value)).toBeNull();
+    }
+    expect(db.query).not.toHaveBeenCalled();
+  });
+  it.each([false, true])("masks blind permalink identity, including for owner=%s", async (mine) => {
+    const id = "10000000-0000-4000-8000-000000000001";
+    const db = database([{ ...row, id, kind: "need", visibility: "network_blind", mine,
+      author_id: "hidden-owner", owner_id: "hidden-owner", author_name: "Hidden name", username: "@hidden" }]);
+    const signal = await getSignalWithDatabase(db, "viewer", id);
+    expect(signal).toMatchObject({ ownerId: null, author: null, mine });
+    expect(JSON.stringify(signal)).not.toContain("hidden");
+    expect(JSON.stringify(signal)).not.toContain("Hidden name");
   });
 
 });

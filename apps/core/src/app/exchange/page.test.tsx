@@ -59,6 +59,7 @@ describe("network exchange catalog", () => {
     expect(textContent(page)).toContain("Мой запрос");
     expect(textContent(page)).toContain("Ваш сигнал");
     expect(textContent(page)).toContain("Чужой запрос");
+    expect(collectProps(page, (props) => props.href === "/exchange/other")).toHaveLength(1);
     const responses = collectProps(page, (props) => props.action === "/api/relay");
     expect(responses).toHaveLength(1);
     expect(collectProps(responses[0].children as ReactNode, (props) => props.name === "signal_id")?.[0]?.value)

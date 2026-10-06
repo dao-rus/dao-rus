@@ -1,6 +1,10 @@
 import type { Signal, SignalType, SignalVisibility } from "./signals";
 import type { InterfaceTextKey, InterfaceTextValues } from "./interface-texts";
 
+export function signalHref(signalId: Signal["id"]): string {
+  return `/exchange/${encodeURIComponent(signalId)}`;
+}
+
 // Presentation hints only. Catalogue keys, enablement and catalogue order stay authoritative.
 export const signalPresentationDefaults = [
   { key: "need", name: "? Нужно", group: "needs", description: "То, чего вам сейчас не хватает и с чем могла бы помочь сеть.", example: "фотограф" },

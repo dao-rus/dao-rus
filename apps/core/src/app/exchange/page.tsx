@@ -6,7 +6,7 @@ import { getCurrentParticipant } from "@/lib/session";
 import { readInterfaceTexts } from "@/lib/interface-texts";
 import { listRelayEncounters } from "@/lib/relay";
 import { listNetworkSignals, listSignalTypes } from "../../lib/signals";
-import { groupSignalTypes, selectSignalType, signalTypePresentation } from "../../lib/signal-presentation";
+import { groupSignalTypes, selectSignalType, signalHref, signalTypePresentation } from "../../lib/signal-presentation";
 
 export const dynamic = "force-dynamic";
 export const metadata: Metadata = { title: "Обмен" };
@@ -50,7 +50,7 @@ export default async function ExchangePage({
         <div className="exchangeCards">
           {signals.length ? signals.map((signal) => (
             <article className="exchangeCard" key={signal.id}>
-              <strong>{signal.label}</strong>
+              <strong><Link href={signalHref(signal.id)}>{signal.label}</Link></strong>
               {signal.description ? <p className="profileBio">{signal.description}</p> : null}
               {signal.author ? <Link href={`/profile/${signal.author.id}`}>{signal.author.name}</Link> : null}
               {signal.mine ? (

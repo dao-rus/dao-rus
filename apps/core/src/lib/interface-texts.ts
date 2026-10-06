@@ -1,6 +1,12 @@
 import { signalPresentationDefaults, signalGroupDefaults } from "./signal-presentation";
 
 export const interfaceTextFields = [
+  { section: "Сигналы", key: "signal.card_title", label: "Название страницы сигнала", defaultValue: "Сигнал", multiline: false },
+  { section: "Сигналы", key: "signal.owner_profile", label: "Переход к автору", defaultValue: "Перейти к профилю", multiline: false },
+  { section: "Сигналы", key: "signal.back_exchange", label: "Вернуться к обмену", defaultValue: "К обмену", multiline: false },
+  { section: "Сигналы", key: "signal.status_active", label: "Состояние active", defaultValue: "Активный", multiline: false },
+  { section: "Сигналы", key: "signal.status_closed", label: "Состояние closed", defaultValue: "Закрыт", multiline: false },
+  { section: "Сигналы", key: "signal.status_archived", label: "Состояние archived", defaultValue: "В архиве", multiline: false },
   { section: "Сигналы", key: "signal.new_title", label: "Новый сигнал", defaultValue: "Новый сигнал", multiline: false },
   { section: "Сигналы", key: "signal.edit_title", label: "Уточнить сигнал", defaultValue: "Уточнить сигнал", multiline: false },
   { section: "Сигналы", key: "signal.type", label: "Тип сигнала", defaultValue: "Тип сигнала", multiline: false },
