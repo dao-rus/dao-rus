@@ -168,5 +168,12 @@ describe("universal Signal types and reads", () => {
     expect(sql).toContain("s.label NOT ILIKE");
     expect(sql).not.toContain("private"); expect(sql).not.toContain("match_only"); expect(sql).not.toContain("circle");
   });
+  it("escapes LIKE metacharacters literally including the chosen escape character", async () => {
+    const db = database([]);
+    await searchNetworkSignalsWithDatabase(db, "viewer", { typeKeys: [], terms: ["%", "_", "!", "100% SQL_admin!", "normal phrase"] });
+    const [sql, values] = db.query.mock.calls[0];
+    expect(values).toEqual(["viewer", [], ["!%", "!_", "!!", "100!% SQL!_admin!!", "normal phrase"]]);
+    expect(sql.match(/ESCAPE '!'/g)).toHaveLength(2);
+  });
 
 });

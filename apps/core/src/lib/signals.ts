@@ -157,7 +157,7 @@ export async function searchNetworkSignalsWithDatabase(
   database: SignalReader, viewerId: string, search: NetworkSignalSearch,
 ): Promise<NetworkSignal[]> {
   const typeKeys = search.typeKeys.map(normalizeSignalTypeKey);
-  const terms = search.terms.map((term) => normalizeBoundedText(term, "Search term", 120));
+  const terms = search.terms.map((term) => normalizeBoundedText(term, "Search term", 120).replace(/[!%_]/g, "!$&"));
   const result = await database.query(
     `SELECT ${contentColumns}, ${networkIdentityColumns}
        FROM profile_signals s
@@ -166,8 +166,8 @@ export async function searchNetworkSignalsWithDatabase(
         AND (cardinality($2::text[]) = 0 OR s.kind = ANY($2::text[]))
         AND (cardinality($3::text[]) = 0 OR NOT EXISTS (
           SELECT 1 FROM unnest($3::text[]) AS term
-           WHERE s.label NOT ILIKE '%' || term || '%'
-             AND COALESCE(s.description, '') NOT ILIKE '%' || term || '%'
+           WHERE s.label NOT ILIKE '%' || term || '%' ESCAPE '!'
+             AND COALESCE(s.description, '') NOT ILIKE '%' || term || '%' ESCAPE '!'
         ))
       ORDER BY s.created_at DESC, s.id DESC LIMIT 100`,
     [viewerId, typeKeys, terms],

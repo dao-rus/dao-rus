@@ -65,13 +65,13 @@ export async function getActivitySummary(
              AND created_at >= now() - interval '30 days'
          )::int AS logins_30d
        FROM events
-       WHERE participant_id = $1`,
+       WHERE participant_id = $1 AND event_type NOT LIKE 'angel.%'`,
       [participantId],
     ),
     pool.query(
       `SELECT id, event_type, payload, created_at
        FROM events
-       WHERE participant_id = $1
+       WHERE participant_id = $1 AND event_type NOT LIKE 'angel.%'
        ORDER BY created_at DESC, id DESC
        LIMIT $2`,
       [participantId, recentLimit],
