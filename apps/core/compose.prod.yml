@@ -70,7 +70,9 @@ services:
   web:
     <<: *core-image
     restart: unless-stopped
-    environment: *core-environment
+    environment:
+      <<: *core-environment
+      OPENAI_API_KEY: ${OPENAI_API_KEY:-}
     depends_on:
       migrate:
         condition: service_completed_successfully
