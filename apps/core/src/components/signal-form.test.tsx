@@ -12,7 +12,7 @@ const types = [
   { key: "dating", displayName: "Знакомства", enabled: true },
 ];
 const signal: Signal = { id: "s", ownerId: "owner", typeKey: "future_type", label: "  " + "я".repeat(900) + "\n ",
-  description: null, legacyBody: true, status: "active", visibility: "private", createdAt: new Date(), updatedAt: new Date() };
+  description: null, legacyBody: true, externalShareEnabled: false, status: "active", visibility: "private", createdAt: new Date(), updatedAt: new Date() };
 
 describe("universal Signal UX", () => {
   it("renders arbitrary enabled types, separate content fields and optional details", () => {
