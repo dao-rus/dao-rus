@@ -77,6 +77,7 @@ describe.skipIf(!databaseUrl)("Exchange A1 on real PostgreSQL", () => {
     originalEncounter = await createRelayEncounterWithDatabase(pool, responder, oldBlindNeed);
     originalSignals = await signalRows();
     await migrate(migration);
+    for (const file of files.filter((file) => file.name > migration.name)) await migrate(file);
   }, 60000);
 
   afterAll(async () => {
@@ -327,7 +328,7 @@ describe.skipIf(!databaseUrl)("Exchange A1 on real PostgreSQL", () => {
     const ledger = (await pool.query("SELECT * FROM darus_ledger ORDER BY id")).rows;
     await pool.query("UPDATE signal_types SET enabled=false,display_name='Авторское название' WHERE key='dating'");
     const applied = (await pool.query("SELECT name,checksum FROM schema_migrations ORDER BY name")).rows;
-    expect(createMigrationPlan(files.filter((file) => file.name <= migration.name), applied).pending).toEqual([]);
+    expect(createMigrationPlan(files, applied).pending).toEqual([]);
     await pool.query("BEGIN;" + migration.sql + ";COMMIT;");
     expect(await signalRows()).toEqual(before);
     expect((await pool.query("SELECT * FROM darus_ledger ORDER BY id")).rows).toEqual(ledger);
@@ -338,7 +339,7 @@ describe.skipIf(!databaseUrl)("Exchange A1 on real PostgreSQL", () => {
     const refinement = files.find((file) => file.name === "033_signal_explicit_refinement.sql")!;
     const before = await signalRows();
     const rewards = Number((await pool.query("SELECT count(*) FROM darus_ledger")).rows[0].count);
-    await migrate(refinement);
+    await pool.query("BEGIN;" + refinement.sql + ";COMMIT;");
     expect(await signalRows()).toEqual(before);
     const owner = await participant();
     await addProfileSignalWithDatabase(pool, owner, "need", "Короткий текст", "private");
