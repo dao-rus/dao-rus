@@ -5,7 +5,7 @@ import { CoreNavigation } from "../../components/core-navigation";
 import { getCurrentParticipant } from "@/lib/session";
 import { readInterfaceTexts } from "@/lib/interface-texts";
 import { listExchangeSignals, listRelayEncounters } from "@/lib/relay";
-import { PROFILE_SIGNAL_KINDS, type ProfileSignalKind } from "@/lib/profile-about";
+import { PROFILE_SIGNAL_KINDS, type LegacyProfileSignalKind } from "@/lib/profile-about";
 
 export const dynamic = "force-dynamic";
 export const metadata: Metadata = { title: "Обмен" };
@@ -18,8 +18,8 @@ export default async function ExchangePage({
   const participant = await getCurrentParticipant();
   if (!participant) redirect("/");
   const params = await searchParams;
-  const kind: ProfileSignalKind = PROFILE_SIGNAL_KINDS.includes(params.tab as ProfileSignalKind)
-    ? params.tab as ProfileSignalKind : "need";
+  const kind: LegacyProfileSignalKind = PROFILE_SIGNAL_KINDS.includes(params.tab as LegacyProfileSignalKind)
+    ? params.tab as LegacyProfileSignalKind : "need";
   const [signals, dialogs, { values: texts }] = await Promise.all([
     listExchangeSignals(participant.id, kind),
     listRelayEncounters(participant.id, false),
