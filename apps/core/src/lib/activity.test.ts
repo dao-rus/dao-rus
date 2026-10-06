@@ -1,5 +1,7 @@
-import { describe, expect, it } from "vitest";
-import { activityEventLabel } from "./activity";
+import { describe, expect, it, vi } from "vitest";
+const query = vi.hoisted(() => vi.fn());
+vi.mock("./db", () => ({ pool: { query } }));
+import { activityEventLabel, getActivitySummary } from "./activity";
 
 describe("activityEventLabel", () => {
   it("returns a human-readable label for known events", () => {
@@ -34,5 +36,14 @@ describe("activityEventLabel", () => {
 
   it("falls back to the raw event type for unknown events", () => {
     expect(activityEventLabel("proposal.updated")).toBe("proposal.updated");
+  });
+  it("excludes Angel technical events in both activity queries without deleting audit data", async () => {
+    query.mockResolvedValue({ rows: [] });
+    expect(await getActivitySummary("participant")).toMatchObject({ events7d: 0, events30d: 0, recentEvents: [] });
+    expect(query).toHaveBeenCalledTimes(2);
+    for (const [sql] of query.mock.calls) {
+      expect(sql).toContain("event_type NOT LIKE 'angel.%'");
+      expect(sql).not.toMatch(/DELETE|UPDATE|INSERT/);
+    }
   });
 });

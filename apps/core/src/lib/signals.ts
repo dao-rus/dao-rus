@@ -148,6 +148,33 @@ export async function listNetworkSignalsWithDatabase(
   return result.rows.map(networkSignalFromRow);
 }
 
+export type NetworkSignalSearch = { typeKeys: string[]; terms: string[] };
+
+// This is deliberately a small, explainable PostgreSQL search. It starts from the
+// same network visibility predicate as browse, so search cannot become a direct-URL
+// or AI-assisted bypass for private, closed, circle, or match-only Signals.
+export async function searchNetworkSignalsWithDatabase(
+  database: SignalReader, viewerId: string, search: NetworkSignalSearch,
+): Promise<NetworkSignal[]> {
+  const typeKeys = search.typeKeys.map(normalizeSignalTypeKey);
+  const terms = search.terms.map((term) => normalizeBoundedText(term, "Search term", 120).replace(/[!%_]/g, "!$&"));
+  const result = await database.query(
+    `SELECT ${contentColumns}, ${networkIdentityColumns}
+       FROM profile_signals s
+       JOIN participants author ON author.id = s.participant_id
+      WHERE ${visibleActiveSignalSql("network")}
+        AND (cardinality($2::text[]) = 0 OR s.kind = ANY($2::text[]))
+        AND (cardinality($3::text[]) = 0 OR NOT EXISTS (
+          SELECT 1 FROM unnest($3::text[]) AS term
+           WHERE s.label NOT ILIKE '%' || term || '%' ESCAPE '!'
+             AND COALESCE(s.description, '') NOT ILIKE '%' || term || '%' ESCAPE '!'
+        ))
+      ORDER BY s.created_at DESC, s.id DESC LIMIT 100`,
+    [viewerId, typeKeys, terms],
+  );
+  return result.rows.map(networkSignalFromRow);
+}
+
 // Same viewer permissions as network browsing plus the owner's existing profile access.
 // Unavailable and nonexistent IDs have the same null result; no unfiltered lookup is exposed.
 export async function getSignalWithDatabase(
@@ -289,6 +316,10 @@ export async function listParticipantSignals(ownerId: string, viewerId: string, 
 export async function listNetworkSignals(viewerId: string, typeKey: unknown) {
   const { pool } = await import("./db");
   return listNetworkSignalsWithDatabase(pool, viewerId, typeKey);
+}
+export async function searchNetworkSignals(viewerId: string, search: NetworkSignalSearch) {
+  const { pool } = await import("./db");
+  return searchNetworkSignalsWithDatabase(pool, viewerId, search);
 }
 export async function listSignalTypes() {
   const { pool } = await import("./db");

@@ -7,6 +7,7 @@ import { readInterfaceTexts } from "@/lib/interface-texts";
 import { listRelayEncounters } from "@/lib/relay";
 import { listNetworkSignals, listSignalTypes } from "../../lib/signals";
 import { groupSignalTypes, selectSignalType, signalHref, signalTypePresentation } from "../../lib/signal-presentation";
+import { AngelSearch } from "../../components/angel-search";
 
 export const dynamic = "force-dynamic";
 export const metadata: Metadata = { title: "Обмен" };
@@ -35,6 +36,7 @@ export default async function ExchangePage({
         <h1>{texts["exchange.title"]}</h1>
         <p className="lead">{texts["exchange.lead"]}</p>
         <p className="muted">{texts["exchange.privacy_hint"]}</p>
+        <AngelSearch texts={texts} />
         <nav className="actions" aria-label="Разделы">
           {groupSignalTypes(types, texts).map((group) => <div key={group.key}>
             <h3>{group.name}</h3><div className="actions">{group.types.map((type) => (

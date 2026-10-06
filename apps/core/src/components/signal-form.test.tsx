@@ -23,6 +23,8 @@ describe("universal Signal UX", () => {
     expect(html).toContain('name="description" maxLength="10000"');
     expect(html).not.toMatch(/name="description"[^>]*required/);
     expect(html).not.toContain('name="body"');
+    expect(html).toContain("Помочь сформулировать с Ангелом");
+    expect(html).toContain("Предложить формулировку");
   });
   it("leaves semantic normalization to the owner and preserves the complete original", () => {
     const html = renderToStaticMarkup(<SignalForm types={types} initialType="future_type" signal={signal} texts={texts} />);

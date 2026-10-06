@@ -1,7 +1,7 @@
 import { describe, expect, it, vi } from "vitest";
 import {
   getSignalWithDatabase, listNetworkSignalsWithDatabase, listParticipantSignalsWithDatabase,
-  updateSignalWithDatabase, requireEnabledSignalTypeWithDatabase, createSignalWithDatabase, SignalValidationError, type SignalReader,
+  updateSignalWithDatabase, requireEnabledSignalTypeWithDatabase, createSignalWithDatabase, searchNetworkSignalsWithDatabase, SignalValidationError, type SignalReader,
 } from "./signals";
 import { signalBodyProjection } from "./signal-compat";
 
@@ -156,6 +156,24 @@ describe("universal Signal types and reads", () => {
     expect(signal).toMatchObject({ ownerId: null, author: null, mine });
     expect(JSON.stringify(signal)).not.toContain("hidden");
     expect(JSON.stringify(signal)).not.toContain("Hidden name");
+  });
+  it("uses the same active network privacy predicate for Angel Search", async () => {
+    const db = database([{ ...row, mine: false, author_id: "owner", author_name: "Автор" }]);
+    await searchNetworkSignalsWithDatabase(db, "viewer", { typeKeys: ["future_type"], terms: ["Ядро", "Условия"] });
+    const [sql, values] = db.query.mock.calls[0];
+    expect(values).toEqual(["viewer", ["future_type"], ["Ядро", "Условия"]]);
+    expect(sql).toContain("s.status = 'active'");
+    expect(sql).toContain("s.visibility IN ('public', 'members', 'network_blind')");
+    expect(sql).toContain("s.kind = ANY($2::text[])");
+    expect(sql).toContain("s.label NOT ILIKE");
+    expect(sql).not.toContain("private"); expect(sql).not.toContain("match_only"); expect(sql).not.toContain("circle");
+  });
+  it("escapes LIKE metacharacters literally including the chosen escape character", async () => {
+    const db = database([]);
+    await searchNetworkSignalsWithDatabase(db, "viewer", { typeKeys: [], terms: ["%", "_", "!", "100% SQL_admin!", "normal phrase"] });
+    const [sql, values] = db.query.mock.calls[0];
+    expect(values).toEqual(["viewer", [], ["!%", "!_", "!!", "100!% SQL!_admin!!", "normal phrase"]]);
+    expect(sql.match(/ESCAPE '!'/g)).toHaveLength(2);
   });
 
 });
