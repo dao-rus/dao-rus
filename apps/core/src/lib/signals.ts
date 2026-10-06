@@ -214,6 +214,39 @@ export async function archiveSignalWithDatabase(database: SignalDatabase, ownerI
   });
 }
 
+export async function updateSignalWithDatabase(
+  database: SignalDatabase, ownerId: string, signalId: string,
+  input: Omit<CreateSignalInput, "typeKey">,
+): Promise<Signal> {
+  const label = normalizeSignalLabel(input.label);
+  const description = normalizeSignalDescription(input.description);
+  return withSignalTransaction(database, async (client) => {
+    const previous = await client.query(
+      `SELECT kind FROM profile_signals WHERE id = $1::uuid
+        AND participant_id = $2::uuid AND status = 'active' FOR UPDATE`, [signalId, ownerId],
+    );
+    if (!previous.rowCount) throw new SignalValidationError("Signal unavailable");
+    const visibility = normalizeSignalVisibility(input.visibility, String(previous.rows[0].kind));
+    const result = await client.query(
+      `UPDATE profile_signals AS s SET label = $3, description = $4, visibility = $5,
+              legacy_body = false, updated_at = now()
+        WHERE s.id = $1::uuid AND s.participant_id = $2::uuid AND s.status = 'active'
+        RETURNING ${contentColumns}, s.participant_id AS owner_id`,
+      [signalId, ownerId, label, description, visibility],
+    );
+    const signal = signalFromRow(result.rows[0]);
+    await client.query(`INSERT INTO events(event_type, participant_id, payload) VALUES ($1, $2::uuid, $3::jsonb)`,
+      ["participant.signal_updated", ownerId, JSON.stringify({ signal_id: signal.id,
+        type_key: signal.typeKey, visibility: signal.visibility, content_source: "label_description" })]);
+    return signal;
+  });
+}
+
+export async function updateSignal(ownerId: string, signalId: string, input: Omit<CreateSignalInput, "typeKey">) {
+  const { pool } = await import("./db");
+  return updateSignalWithDatabase(pool, ownerId, signalId, input);
+}
+
 export async function createSignal(ownerId: string, input: CreateSignalInput) {
   const { pool } = await import("./db");
   return createSignalWithDatabase(pool, ownerId, input);

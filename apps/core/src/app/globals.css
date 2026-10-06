@@ -458,6 +458,7 @@ dd { margin: 6px 0 0; }
   letter-spacing: .08em;
 }
 .aboutForm textarea,
+.aboutForm input:not([type="hidden"]),
 .aboutForm select,
 .residenceFields input,
 .residenceFields select,
@@ -491,6 +492,7 @@ dd { margin: 6px 0 0; }
 }
 .profileItems li > div { display: grid; gap: 5px; min-width: 0; }
 .profileItems strong { overflow-wrap: anywhere; }
+.signalItems strong, .exchangeCard > strong { white-space: pre-wrap; overflow-wrap: anywhere; }
 .profileItems small { color: var(--muted); font-size: 12px; }
 .signalKind {
   color: var(--accent);

@@ -13,7 +13,7 @@ import {
 } from "./relay";
 import {
   createSignalWithDatabase, listParticipantSignalsWithDatabase, listNetworkSignalsWithDatabase,
-  requireEnabledSignalTypeWithDatabase, archiveSignalWithDatabase,
+  requireEnabledSignalTypeWithDatabase, archiveSignalWithDatabase, updateSignalWithDatabase,
 } from "./signals";
 import { signalBodyProjection } from "./signal-compat";
 
@@ -327,11 +327,48 @@ describe.skipIf(!databaseUrl)("Exchange A1 on real PostgreSQL", () => {
     const ledger = (await pool.query("SELECT * FROM darus_ledger ORDER BY id")).rows;
     await pool.query("UPDATE signal_types SET enabled=false,display_name='Авторское название' WHERE key='dating'");
     const applied = (await pool.query("SELECT name,checksum FROM schema_migrations ORDER BY name")).rows;
-    expect(createMigrationPlan(files, applied).pending).toEqual([]);
+    expect(createMigrationPlan(files.filter((file) => file.name <= migration.name), applied).pending).toEqual([]);
     await pool.query("BEGIN;" + migration.sql + ";COMMIT;");
     expect(await signalRows()).toEqual(before);
     expect((await pool.query("SELECT * FROM darus_ledger ORDER BY id")).rows).toEqual(ledger);
     expect((await pool.query("SELECT display_name,enabled FROM signal_types WHERE key='dating'")).rows[0])
       .toEqual({ display_name: "Авторское название", enabled: false });
   });
+  it("A3 refinement preserves source data, clears unchanged legacy markers and enforces ownership", async () => {
+    const refinement = files.find((file) => file.name === "033_signal_explicit_refinement.sql")!;
+    const before = await signalRows();
+    const rewards = Number((await pool.query("SELECT count(*) FROM darus_ledger")).rows[0].count);
+    await migrate(refinement);
+    expect(await signalRows()).toEqual(before);
+    const owner = await participant();
+    await addProfileSignalWithDatabase(pool, owner, "need", "Короткий текст", "private");
+    const [legacy] = await listParticipantSignalsWithDatabase(pool, owner, owner);
+    const updated = await updateSignalWithDatabase(pool, owner, legacy.id, {
+      label: legacy.label, visibility: "private",
+    });
+    expect(updated.legacyBody).toBe(false);
+    expect(updated.description).toBeNull();
+    expect(updated.label).toBe(legacy.label);
+    await expect(updateSignalWithDatabase(pool, outsider, legacy.id, { label: "Чужая правка", visibility: "public" }))
+      .rejects.toThrow("Signal unavailable");
+    const original = "Подробности ".repeat(35);
+    await addProfileSignalWithDatabase(pool, owner, "can", original, "members");
+    const old = (await listParticipantSignalsWithDatabase(pool, owner, owner)).find((entry) => entry.typeKey === "can")!;
+    const normalized = await updateSignalWithDatabase(pool, owner, old.id, {
+      label: "Ремонт", description: original, visibility: "members",
+    });
+    expect(normalized).toMatchObject({ label: "Ремонт", description: original.trim(), legacyBody: false });
+    expect((await pool.query("SELECT body FROM profile_signals WHERE id=$1", [old.id])).rows[0].body)
+      .toBe("Ремонт\n\n" + original.trim());
+    // Refinement never mints again, and cannot modify another author's inactive record.
+    const ownerRewards = await rewardCount(owner);
+    await updateSignalWithDatabase(pool, owner, legacy.id, { label: "Другой текст", visibility: "private" });
+    expect(await rewardCount(owner)).toBe(ownerRewards);
+    await archiveSignalWithDatabase(pool, owner, legacy.id);
+    await expect(updateSignalWithDatabase(pool, owner, legacy.id, { label: "Правка архива", visibility: "private" }))
+      .rejects.toThrow("Signal unavailable");
+    await pool.query("BEGIN;" + refinement.sql + ";COMMIT;");
+    expect(Number((await pool.query("SELECT count(*) FROM darus_ledger")).rows[0].count)).toBe(rewards + ownerRewards);
+  });
+
 });

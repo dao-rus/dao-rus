@@ -43,6 +43,10 @@ vi.mock("@/lib/profile-about", () => ({
   getProfileAbout: vi.fn().mockResolvedValue(null),
   getVisibleProfileAbout: vi.fn().mockResolvedValue(null),
 }));
+vi.mock("./../lib/signals", () => ({
+  listParticipantSignals: vi.fn().mockResolvedValue([]),
+  listSignalTypes: vi.fn().mockResolvedValue([]),
+}));
 
 vi.mock("@/lib/verification", () => ({
   getVerificationProfile: mocks.getVerificationProfile,
@@ -51,6 +55,7 @@ vi.mock("@/lib/verification", () => ({
 vi.mock("@/lib/interface-texts", () => ({
   readInterfaceTexts: mocks.readInterfaceTexts,
 }));
+vi.mock("../lib/interface-texts", () => ({ readInterfaceTexts: mocks.readInterfaceTexts }));
 vi.mock("@/lib/tokenization", () => ({
   getDarusBalance: mocks.getDarusBalance,
   getCurrentRewardRule: mocks.getCurrentRewardRule,
