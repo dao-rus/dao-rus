@@ -3,19 +3,20 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import type { NetworkSignal } from "../../../lib/signals";
 
 const mocks = vi.hoisted(() => ({ participant: vi.fn(), signal: vi.fn(), guest: vi.fn(),
-  types: vi.fn(), texts: vi.fn(), reaction: vi.fn() }));
+  types: vi.fn(), texts: vi.fn(), reaction: vi.fn(), publicLikes: vi.fn() }));
 vi.mock("../../../lib/session", () => ({ getCurrentParticipant: mocks.participant }));
 vi.mock("../../../lib/signals", () => ({ getSignal: mocks.signal,
   getGuestShareableSignal: mocks.guest, listSignalTypes: mocks.types }));
-vi.mock("../../../lib/signal-reactions", () => ({ readSignalReactionState: mocks.reaction }));
+vi.mock("../../../lib/signal-reactions", () => ({ readSignalReactionState: mocks.reaction,
+  readPublicSignalReactionCount: mocks.publicLikes }));
 vi.mock("../../../lib/interface-texts", async (original) => ({
   ...await original<typeof import("../../../lib/interface-texts")>(), readInterfaceTexts: mocks.texts,
 }));
 vi.mock("../../../components/core-navigation", () => ({ CoreNavigation: () => <nav>Core menu</nav> }));
 vi.mock("../../../components/signal-share-action", () => ({ SignalShareAction: ({ payload, labels }: {
-  payload: { title: string; text: string; url: string }; labels: { share: string };
-}) => <button data-share-url={payload.url} data-share-title={payload.title}
-  data-share-text={payload.text}>{labels.share}</button> }));
+  payload: { label: string; description: string | null; url: string }; labels: { share: string };
+}) => <button data-share-url={payload.url} data-share-label={payload.label}
+  data-share-description={payload.description ?? ""}>{labels.share}</button> }));
 vi.mock("next/navigation", () => ({ notFound: () => { throw new Error("notFound"); } }));
 
 import Page, { generateMetadata } from "./page";
@@ -39,6 +40,7 @@ beforeEach(() => {
   mocks.types.mockResolvedValue([{ key: "need", displayName: "Нужно", enabled: true }]);
   mocks.texts.mockResolvedValue({ values: Object.fromEntries(interfaceTextFields.map((field) => [field.key, field.defaultValue])) });
   mocks.reaction.mockResolvedValue({ count: 2, reacted: false });
+  mocks.publicLikes.mockResolvedValue(3);
 });
 
 describe("canonical Signal card", () => {
@@ -94,24 +96,36 @@ describe("canonical Signal card", () => {
     expect(output).not.toContain("Надежда К");
   });
 
-  it("renders a self-contained guest card with Share and no member actions", async () => {
+  it("renders a minimal guest card: brand, label, description, author, like, then Share", async () => {
     mocks.participant.mockResolvedValue(null);
     mocks.guest.mockResolvedValue(guestSignal);
     const output = await html();
+    expect(output.match(/ДАО Русь/g)).toHaveLength(1);
     expect(output).toContain('class="signalGuestHeader"');
     expect(output).toContain('href="/">ДАО Русь</a>');
-    expect(output).toContain("Этот сигнал опубликован в сети ДАО Русь.");
-    expect(output).toContain("Ищу работу в СПб");
-    expect(output).toContain("Надежда К");
-    expect(output).toContain("Поделиться");
+    const order = ["ДАО Русь", "Ищу работу в СПб", "Нужен уважительный коллектив.", "Надежда К", "♥ 3", "Поделиться"]
+      .map((text) => output.indexOf(text));
+    expect(order).toEqual([...order].sort((a, b) => a - b));
+    expect(order.every((index) => index >= 0)).toBe(true);
+    expect(output).toContain('class="signalGuestLike"');
+    expect(output).toContain('class="signalGuestShare"');
     expect(output).toContain(`data-share-url="http://localhost:3000/exchange/${id}"`);
-    expect(output).not.toContain("К обмену");
-    expect(output).not.toContain("♥");
-    expect(output).not.toContain("Core menu");
+    expect(output).toContain('data-share-label="Ищу работу в СПб"');
+    for (const hidden of ["Нужно", "Могу", "Ищу</", "К обмену", "Core menu", "Перейти к автору", "опубликован", "войдите",
+      "Этот сигнал", "Активн", "hidden-owner-id", "private", "members"]) expect(output).not.toContain(hidden);
     expect(output).not.toContain('action="/api/signals/card"');
     expect(output).not.toContain('href="/profile/');
-    expect(output).not.toContain("hidden-owner-id");
     expect(mocks.signal).not.toHaveBeenCalled();
+  });
+
+  it("sends a guest like click to standard Telegram auth and back to the canonical card, never to a reaction API", async () => {
+    mocks.participant.mockResolvedValue(null);
+    mocks.guest.mockResolvedValue(guestSignal);
+    const output = await html();
+    expect(output).toContain(`href="/api/auth/telegram/start?next=%2Fexchange%2F${id}"`);
+    expect(output).not.toContain("<form");
+    expect(output).not.toContain("react_add");
+    expect(mocks.reaction).not.toHaveBeenCalled();
   });
 
   it.each(["members", "private", "circle", "match_only", "network_blind", "archived", "closed"])(
@@ -128,6 +142,7 @@ describe("canonical Signal card", () => {
     mocks.guest.mockResolvedValue(guestSignal);
     await html();
     expect(mocks.reaction).not.toHaveBeenCalled();
+    expect(mocks.publicLikes).toHaveBeenCalledWith(id);
     expect(mocks.signal).not.toHaveBeenCalled();
   });
 
@@ -154,10 +169,11 @@ describe("canonical Signal card", () => {
     const shared = await generateMetadata(props);
     expect(shared.robots).toEqual({ index: false, follow: false });
     expect(shared.openGraph).toMatchObject({
-      title: "? Нужно: Ищу работу в СПб", description: "Этот сигнал опубликован в сети ДАО Русь.",
-      url: `http://localhost:3000/exchange/${id}`,
+      title: "Ищу работу в СПб", url: `http://localhost:3000/exchange/${id}`,
     });
     expect(JSON.stringify(shared)).not.toContain("Надежда К");
     expect(JSON.stringify(shared)).not.toContain("hidden-owner-id");
+    expect(JSON.stringify(shared)).not.toContain("опубликован");
+    expect(JSON.stringify(shared)).not.toContain("Нужен уважительный");
   });
 });

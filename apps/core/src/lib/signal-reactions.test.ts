@@ -1,10 +1,21 @@
 import { describe, expect, it, vi } from "vitest";
-import { readSignalReactionStateWithDatabase, setSignalReactionWithDatabase,
+import { readPublicSignalReactionCountWithDatabase, readSignalReactionStateWithDatabase, setSignalReactionWithDatabase,
   SignalReactionUnavailableError } from "./signal-reactions";
 
 const id = "10000000-0000-4000-8000-000000000001";
 
 describe("Signal reactions", () => {
+  it("counts likes for guests only on active public Signals and never creates reactions", async () => {
+    const query = vi.fn(async () => ({ rowCount: 1, rows: [{ count: 4 }] }));
+    expect(await readPublicSignalReactionCountWithDatabase({ query }, id)).toBe(4);
+    const [sql] = query.mock.calls[0] as unknown as [string];
+    expect(sql).toContain("signal.status = 'active' AND signal.visibility = 'public'");
+    expect(sql.startsWith("SELECT")).toBe(true);
+    query.mockClear();
+    expect(await readPublicSignalReactionCountWithDatabase({ query }, "invalid")).toBe(0);
+    expect(query).not.toHaveBeenCalled();
+  });
+
   it("adds once, removes once, counts active reactions and audits only Signal IDs", async () => {
     let active = false;
     const sql: string[] = [];

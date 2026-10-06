@@ -5,6 +5,7 @@ import { authenticateTelegramCode } from "@/lib/telegram-oidc";
 import { enrichTelegramProfile } from "@/lib/telegram-bot-profile";
 import { checkForumAndInvite } from "@/lib/telegram-forum-onboarding";
 import { createSession, SESSION_COOKIE } from "@/lib/session";
+import { safeAuthReturnPath } from "../../../../../lib/auth-return";
 import {
   appBaseUrl,
   secureCookies,
@@ -64,8 +65,7 @@ export async function GET(request: NextRequest) {
     // Forum onboarding is optional and must not affect a verified Core login.
     await checkForumAndInvite(profile.telegramUserId, "login").catch(() => undefined);
 
-    const returnTo = request.cookies.get("dao_tg_return_to")?.value === "/need"
-      ? "/need" : "/profile";
+    const returnTo = safeAuthReturnPath(request.cookies.get("dao_tg_return_to")?.value) ?? "/profile";
     const response = NextResponse.redirect(
       new URL(returnTo, appBaseUrl()),
       303

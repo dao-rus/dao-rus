@@ -70,3 +70,22 @@ export async function setSignalReaction(actorId: string, signalId: string, activ
   const { pool } = await import("./db");
   return setSignalReactionWithDatabase(pool, actorId, signalId, active);
 }
+
+// Guests only see the like count of a publicly readable Signal; they never have a reaction of their own.
+export async function readPublicSignalReactionCountWithDatabase(database: SignalReader, signalId: string): Promise<number> {
+  if (!uuidPattern.test(signalId)) return 0;
+  const result = await database.query(
+    `SELECT count(reaction.id)::integer AS count
+       FROM profile_signals signal
+       LEFT JOIN signal_reactions reaction ON reaction.signal_id = signal.id AND reaction.revoked_at IS NULL
+      WHERE signal.id = $1::uuid AND signal.status = 'active' AND signal.visibility = 'public'
+      GROUP BY signal.id`,
+    [signalId],
+  );
+  return Number(result.rows[0]?.count ?? 0);
+}
+
+export async function readPublicSignalReactionCount(signalId: string) {
+  const { pool } = await import("./db");
+  return readPublicSignalReactionCountWithDatabase(pool, signalId);
+}

@@ -105,6 +105,21 @@ describe("GET /api/auth/telegram/callback", () => {
     expect(response.cookies.get("dao_tg_return_to")?.value).toBe("");
   });
 
+  it("returns to a canonical Signal card and ignores any other return cookie", async () => {
+    mocks.authenticateTelegramCode.mockResolvedValue({ subject: "telegram-subject", telegramUserId: "42" });
+    mocks.resolveTelegramParticipant.mockResolvedValue({ participant: { id: "participant-id" } });
+    mocks.createSession.mockResolvedValue("session-for-test");
+    const card = "/exchange/10000000-0000-4000-8000-000000000001";
+    const back = await GET(callbackRequest(
+      `dao_tg_state=state-for-test; dao_tg_verifier=verifier-for-test; dao_tg_return_to=${encodeURIComponent(card)}`,
+    ));
+    expect(back.headers.get("location")).toBe(`https://dao-lab.trycloudflare.com${card}`);
+    const other = await GET(callbackRequest(
+      "dao_tg_state=state-for-test; dao_tg_verifier=verifier-for-test; dao_tg_return_to=%2F%2Fevil.example",
+    ));
+    expect(other.headers.get("location")).toBe("https://dao-lab.trycloudflare.com/profile");
+  });
+
   it("completes OIDC login when Bot API enrichment fails", async () => {
     mocks.authenticateTelegramCode.mockResolvedValue({ subject: "telegram-subject", telegramUserId: "42" });
     mocks.enrichTelegramProfile.mockRejectedValue(new Error("Bot API timeout"));

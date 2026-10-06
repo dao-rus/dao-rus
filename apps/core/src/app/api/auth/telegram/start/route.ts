@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { safeAuthReturnPath } from "../../../../../lib/auth-return";
 import { isTelegramConfigured, secureCookies } from "@/lib/config";
 import {
   buildTelegramAuthorizationUrl,
@@ -29,7 +30,7 @@ export async function GET(request: NextRequest) {
 
   response.cookies.set("dao_tg_state", state, options);
   response.cookies.set("dao_tg_verifier", verifier, options);
-  const returnTo = request.nextUrl.searchParams.get("next") === "/need" ? "/need" : "";
+  const returnTo = safeAuthReturnPath(request.nextUrl.searchParams.get("next")) ?? "";
   response.cookies.set("dao_tg_return_to", returnTo, {
     ...options,
     maxAge: returnTo ? FLOW_TTL_SECONDS : 0,

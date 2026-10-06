@@ -6,7 +6,7 @@ import { CoreNavigation } from "../../../components/core-navigation";
 import { SignalShareAction } from "../../../components/signal-share-action";
 import { appBaseUrl } from "../../../lib/config";
 import { readInterfaceTexts, type InterfaceTextValues } from "../../../lib/interface-texts";
-import { readSignalReactionState } from "../../../lib/signal-reactions";
+import { readPublicSignalReactionCount, readSignalReactionState } from "../../../lib/signal-reactions";
 import { getCurrentParticipant } from "../../../lib/session";
 import { getGuestShareableSignal, getSignal, listSignalTypes } from "../../../lib/signals";
 import { signalHref, signalTypePresentation } from "../../../lib/signal-presentation";
@@ -26,9 +26,11 @@ function CardBody({ type, label, description, author }: {
   </div>;
 }
 
-function Share({ id, label, texts }: { id: string; label: string; texts: InterfaceTextValues }) {
+function Share({ id, label, description, texts }: {
+  id: string; label: string; description: string | null; texts: InterfaceTextValues;
+}) {
   return <SignalShareAction
-    payload={{ title: label, text: texts["signal.share_text"], url: new URL(signalHref(id), appBaseUrl()).toString() }}
+    payload={{ label, description, url: new URL(signalHref(id), appBaseUrl()).toString() }}
     labels={{ share: texts["signal.share"], telegram: texts["signal.share_telegram"],
       vk: texts["signal.share_vk"], ok: texts["signal.share_ok"],
       whatsapp: texts["signal.share_whatsapp"], more: texts["signal.share_more"], email: texts["signal.share_email"], copy: texts["signal.share_copy"],
@@ -41,13 +43,9 @@ export async function generateMetadata({ params }: CardProps): Promise<Metadata>
   const { values: texts } = await readInterfaceTexts();
   const robots = { index: false, follow: false };
   if (!guestSignal) return { title: texts["signal.card_title"], robots };
-  const types = await listSignalTypes();
-  const type = types.find((entry) => entry.key === guestSignal.typeKey);
-  const typeName = type ? signalTypePresentation(type, texts).name : texts["signal.card_title"];
-  const title = `${typeName}: ${guestSignal.label.slice(0, 120)}`;
+  const title = guestSignal.label.slice(0, 120);
   return { title, robots, openGraph: {
-    title, description: texts["signal.external_context"],
-    url: new URL(signalHref(guestSignal.id), appBaseUrl()).toString(), type: "article",
+    title, url: new URL(signalHref(guestSignal.id), appBaseUrl()).toString(), type: "article",
   } };
 }
 
@@ -57,18 +55,16 @@ export default async function SignalPage({ params }: CardProps) {
   if (!viewer) {
     const guest = await getGuestShareableSignal(signalId);
     if (!guest) notFound();
-    const [types, { values: texts }] = await Promise.all([listSignalTypes(), readInterfaceTexts()]);
-    const type = types.find((entry) => entry.key === guest.typeKey);
-    if (!type) notFound();
-    const typeName = signalTypePresentation(type, texts).name;
-    return <main className="shell"><article className="card signalCard signalGuestCard">
+    const [{ values: texts }, likes] = await Promise.all([readInterfaceTexts(), readPublicSignalReactionCount(guest.id)]);
+    // A like click is the sign-in moment: standard Telegram auth, back to this canonical card.
+    const likeHref = `/api/auth/telegram/start?next=${encodeURIComponent(signalHref(guest.id))}`;
+    return <main className="shell"><article className="signalGuestCard">
       <header className="signalGuestHeader"><Link href="/">{texts["signal.external_brand"]}</Link></header>
-      <CardBody type={typeName} label={guest.label} description={guest.description}
-        author={<p className="signalCardAuthor">{guest.authorName}</p>} />
-      <p className="signalCardContext">{texts["signal.external_context"]}</p>
-      <p className="signalCardGuestHint">{texts["signal.auth_required"]}</p>
-      <div className="signalActionBar"><Share id={guest.id} label={guest.label} texts={texts} />
-        <Link className="button secondary" href="/">{texts["signal.open_core"]}</Link></div>
+      <h1 className="signalCardLabel">{guest.label}</h1>
+      {guest.description ? <p className="signalCardDescription">{guest.description}</p> : null}
+      <p className="signalCardAuthor">{guest.authorName}</p>
+      <a className="signalGuestLike" href={likeHref} aria-label={texts["signal.reaction_like"]}>♥ {likes}</a>
+      <div className="signalGuestShare"><Share id={guest.id} label={guest.label} description={guest.description} texts={texts} /></div>
     </article></main>;
   }
 
@@ -119,7 +115,7 @@ export default async function SignalPage({ params }: CardProps) {
           title={reaction.reacted ? texts["signal.reaction_remove"] : texts["signal.reaction_like"]}>
           ♥ {reaction.count}</button>
       </form> : null}
-      {shareable ? <Share id={signal.id} label={signal.label} texts={texts} /> : null}
+      {shareable ? <Share id={signal.id} label={signal.label} description={signal.description} texts={texts} /> : null}
     </div> : null}
     <Link className="signalBackLink" href="/exchange">{texts["signal.back_exchange"]}</Link>
   </article></main>;

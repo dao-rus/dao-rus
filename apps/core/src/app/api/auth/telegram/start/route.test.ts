@@ -56,5 +56,11 @@ describe("GET /api/auth/telegram/start", () => {
 
     const external = await GET(new NextRequest("https://core.daorus.org/api/auth/telegram/start?next=https%3A%2F%2Fevil.example"));
     expect(external.cookies.get("dao_tg_return_to")?.value).toBe("");
+
+    const card = "/exchange/10000000-0000-4000-8000-000000000001";
+    const signal = await GET(new NextRequest(`https://core.daorus.org/api/auth/telegram/start?next=${encodeURIComponent(card)}`));
+    expect(signal.cookies.get("dao_tg_return_to")?.value).toBe(card);
+    const traversal = await GET(new NextRequest(`https://core.daorus.org/api/auth/telegram/start?next=${encodeURIComponent(card + "/../../profile")}`));
+    expect(traversal.cookies.get("dao_tg_return_to")?.value).toBe("");
   });
 });
