@@ -8,8 +8,15 @@ export function signalShareLinks({ title, text, url }: SignalSharePayload) {
   vk.searchParams.set("url", url);
   vk.searchParams.set("title", title);
   vk.searchParams.set("comment", text);
+  const ok = new URL("https://connect.ok.ru/offer");
+  ok.searchParams.set("url", url);
+  ok.searchParams.set("title", title);
+  const whatsapp = new URL("https://wa.me/");
+  whatsapp.searchParams.set("text", `${text}
+${url}`);
   const email = `mailto:?subject=${encodeURIComponent(title)}&body=${encodeURIComponent(`${text}\n${url}`)}`;
-  return { telegram: telegram.toString(), vk: vk.toString(), email };
+  return { telegram: telegram.toString(), vk: vk.toString(), ok: ok.toString(),
+    whatsapp: whatsapp.toString(), email };
 }
 
 export async function tryNativeSignalShare(

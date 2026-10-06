@@ -30,7 +30,8 @@ function Share({ id, label, texts }: { id: string; label: string; texts: Interfa
   return <SignalShareAction
     payload={{ title: label, text: texts["signal.share_text"], url: new URL(signalHref(id), appBaseUrl()).toString() }}
     labels={{ share: texts["signal.share"], telegram: texts["signal.share_telegram"],
-      vk: texts["signal.share_vk"], email: texts["signal.share_email"], copy: texts["signal.share_copy"],
+      vk: texts["signal.share_vk"], ok: texts["signal.share_ok"],
+      whatsapp: texts["signal.share_whatsapp"], more: texts["signal.share_more"], email: texts["signal.share_email"], copy: texts["signal.share_copy"],
       copied: texts["signal.share_copied"], failed: texts["signal.share_failed"] }} />;
 }
 

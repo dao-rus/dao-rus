@@ -16,7 +16,7 @@ describe("Signal share", () => {
     const abort = new Error("cancelled"); abort.name = "AbortError";
     expect(await tryNativeSignalShare(async () => { throw abort; }, payload)).toBe("cancelled");
   });
-  it("builds Telegram, VK and email links with encoded content", () => {
+  it("builds Telegram, VK, OK, WhatsApp and email links from the canonical URL", () => {
     const links = signalShareLinks(payload);
     const telegram = new URL(links.telegram);
     expect(telegram.origin + telegram.pathname).toBe("https://t.me/share/url");
@@ -27,6 +27,14 @@ describe("Signal share", () => {
     expect(vk.searchParams.get("url")).toBe(payload.url);
     expect(vk.searchParams.get("title")).toBe(payload.title);
     expect(vk.searchParams.get("comment")).toBe(payload.text);
+    const ok = new URL(links.ok);
+    expect(ok.origin + ok.pathname).toBe("https://connect.ok.ru/offer");
+    expect(ok.searchParams.get("url")).toBe(payload.url);
+    expect(ok.searchParams.get("title")).toBe(payload.title);
+    const whatsapp = new URL(links.whatsapp);
+    expect(whatsapp.origin + whatsapp.pathname).toBe("https://wa.me/");
+    expect(whatsapp.searchParams.get("text")).toBe(`${payload.text}
+${payload.url}`);
     expect(links.email).toContain("subject=%D0%98%D1%89%D1%83");
     expect(decodeURIComponent(links.email)).toContain(payload.url);
   });
