@@ -4,6 +4,7 @@ import { useState, type FormEvent } from "react";
 import type { Signal, SignalType, SignalVisibility } from "../lib/signals";
 import type { InterfaceTextValues } from "../lib/interface-texts";
 import { groupSignalTypes, signalTypePresentation, signalVisibilityOptions } from "../lib/signal-presentation";
+import { UserText } from "./user-text";
 
 export function SignalForm({ types, initialType, signal, texts }: {
   types: SignalType[]; initialType: string; signal?: Signal; texts: InterfaceTextValues;
@@ -52,7 +53,7 @@ export function SignalForm({ types, initialType, signal, texts }: {
       <button className="button secondary" type="button" disabled={angelPending} onClick={askAngel}>{texts["angel.compose_submit"]}</button>
       {angelError ? <p className="formError" role="alert">{angelError}</p> : null}
       {proposal ? <div><h3>{texts["angel.proposal_title"]}</h3><p><strong>{proposal.label}</strong></p>
-        {proposal.description ? <p className="profileBio">{proposal.description}</p> : null}
+        {proposal.description ? <UserText className="profileBio" text={proposal.description} /> : null}
         <button className="button secondary" type="button" onClick={() => {
           setTypeKey(proposal.typeKey); setLabel(proposal.label); setDescription(proposal.description ?? "");
           if (!signalVisibilityOptions(proposal.typeKey).includes(visibility)) setVisibility(proposal.typeKey === "dating" ? "private" : "members");
@@ -74,7 +75,7 @@ export function SignalForm({ types, initialType, signal, texts }: {
         </select></>}
     <p className="muted">{presentation.description}</p>
     {signal?.legacyBody ? <><p className="muted">{texts["signal.legacy_hint"]}</p>
-      <details><summary>{texts["signal.original"]}</summary><p className="profileBio">{signal.label}</p></details></> : null}
+      <details><summary>{texts["signal.original"]}</summary><UserText className="profileBio" text={signal.label} /></details></> : null}
     <label htmlFor="signal-label">{texts["signal.label"]}</label>
     <p id="signal-label-hint" className="muted">{texts["signal.label_hint"]}</p>
     <input id="signal-label" name="label" required maxLength={120} aria-describedby="signal-label-hint"

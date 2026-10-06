@@ -10,6 +10,7 @@ import { normalizeResidence, residenceLabel, type Residence } from "@/lib/profil
 import { getCurrentParticipant } from "@/lib/session";
 import { communityFromParams, communityHref, listCommunityPosts, listCommunitySignals } from "@/lib/communities";
 import { LocalDateTime } from "@/components/local-date-time";
+import { UserText } from "../../components/user-text";
 
 export const dynamic = "force-dynamic";
 export const metadata: Metadata = { title: "Сеть" };
@@ -168,7 +169,7 @@ export default async function ParticipantsPage({ searchParams }: ParticipantsPag
                     {(["want", "need", "can", "have"] as const).map((kind) => {
                       const entries = signals.filter((signal) => signal.participantId === participant.participantId && signal.kind === kind);
                       return <div key={kind}><strong>{signalLabels[kind]}</strong>
-                        {entries.length ? <ul>{entries.map((entry, index) => <li key={index}>{entry.body}</li>)}</ul>
+                        {entries.length ? <ul>{entries.map((entry, index) => <li key={index}><UserText inline text={entry.body} /></li>)}</ul>
                           : <span className="muted">Пока не указано.</span>}</div>;
                     })}
                   </div>
@@ -198,7 +199,7 @@ export default async function ParticipantsPage({ searchParams }: ParticipantsPag
           <button className="button primary" type="submit">Опубликовать</button>
         </form> : <p className="muted">Публиковать объявления могут участники сообщества.</p>}
         {posts.length ? <ol className="communityPosts">{posts.map((post) => <li key={post.id}>
-          <p>{post.body}</p>
+          <UserText text={post.body} />
           <div className="muted"><Link href={`/profile/${post.authorId}`}>{post.authorName}</Link> · <LocalDateTime value={post.createdAt.toISOString()} /></div>
           {post.authorId === viewer.id ? <form action="/api/community/posts" method="post">
             <input type="hidden" name="community" value={communityUrl} />

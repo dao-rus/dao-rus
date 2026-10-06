@@ -10,6 +10,7 @@ import { readPublicSignalReactionCount, readSignalReactionState } from "../../..
 import { getCurrentParticipant } from "../../../lib/session";
 import { getGuestShareableSignal, getSignal, listSignalTypes } from "../../../lib/signals";
 import { signalHref, signalTypePresentation } from "../../../lib/signal-presentation";
+import { UserText } from "../../../components/user-text";
 
 export const dynamic = "force-dynamic";
 
@@ -20,8 +21,8 @@ function CardBody({ type, label, description, author }: {
 }) {
   return <div className="signalCardBody">
     <div className="signalCardType">{type}</div>
-    <h1 className="signalCardLabel">{label}</h1>
-    {description ? <p className="signalCardDescription">{description}</p> : null}
+    <h1 className="signalCardLabel"><UserText inline text={label} /></h1>
+    {description ? <UserText className="signalCardDescription" text={description} /> : null}
     {author}
   </div>;
 }
@@ -60,8 +61,8 @@ export default async function SignalPage({ params }: CardProps) {
     const likeHref = `/api/auth/telegram/start?next=${encodeURIComponent(signalHref(guest.id))}`;
     return <main className="shell"><article className="signalGuestCard">
       <header className="signalGuestHeader"><Link href="/">{texts["signal.external_brand"]}</Link></header>
-      <h1 className="signalCardLabel">{guest.label}</h1>
-      {guest.description ? <p className="signalCardDescription">{guest.description}</p> : null}
+      <h1 className="signalCardLabel"><UserText inline text={guest.label} /></h1>
+      {guest.description ? <UserText className="signalCardDescription" text={guest.description} /> : null}
       <p className="signalCardAuthor">{guest.authorName}</p>
       <a className="signalGuestLike" href={likeHref} aria-label={texts["signal.reaction_like"]}>♥ {likes}</a>
       <div className="signalGuestShare"><Share id={guest.id} label={guest.label} description={guest.description} texts={texts} /></div>

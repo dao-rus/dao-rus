@@ -5,6 +5,7 @@ import { getCurrentParticipant } from "@/lib/session";
 import { readInterfaceTexts } from "@/lib/interface-texts";
 import { getRelayEncounter, listRelayMessages, RelayValidationError } from "@/lib/relay";
 import { CoreNavigation } from "../../../components/core-navigation";
+import { UserText } from "../../../components/user-text";
 
 export const dynamic = "force-dynamic";
 export const metadata: Metadata = { title: "Диалог" };
@@ -37,7 +38,7 @@ export default async function RelayDetailPage({
         <CoreNavigation current="exchange" texts={texts} />
         <div className="eyebrow">DAO Rus · Анонимный диалог</div>
         <h1>{texts["relay.dialog_title"]}</h1>
-        <p className="relaySignal">{encounter.body}</p>
+        <UserText className="relaySignal" text={encounter.body} />
         <p className="muted">Вы: {encounter.role === "author" ? "Автор сигнала" : "Откликнувшийся"}</p>
         {encounter.other ? (
           <div className="relayReveal">
@@ -56,7 +57,7 @@ export default async function RelayDetailPage({
           {messages.length ? messages.map((message) => (
             <article className={message.mine ? "relayMessage mine" : "relayMessage"} key={message.id}>
               <strong>{message.mine ? "Вы" : encounter.other?.name ?? otherRole}</strong>
-              <p>{message.body}</p>
+              <UserText text={message.body} />
             </article>
           )) : <p className="muted">{texts["relay.messages_empty"]}</p>}
         </div>

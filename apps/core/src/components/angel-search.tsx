@@ -3,6 +3,7 @@
 import { useState, type FormEvent } from "react";
 import Link from "next/link";
 import type { InterfaceTextValues } from "../lib/interface-texts";
+import { UserText } from "./user-text";
 
 type Result = { signalId: string; typeTitle: string; label: string; description: string | null; owner: { id: string; displayName: string } | null; href: string };
 function message(texts: InterfaceTextValues, code?: string) {
@@ -34,7 +35,7 @@ export function AngelSearch({ texts }: { texts: InterfaceTextValues }) {
     {results ? <div className="exchangeCards"><h2>{texts["angel.search_results"]}</h2>
       {results.length ? results.map((result) => <article className="exchangeCard" key={result.signalId}>
         <p className="muted">{result.typeTitle}</p><strong className="exchangeCardTitle"><Link href={result.href}>{result.label}</Link></strong>
-        {result.description ? <p className="profileBio">{result.description}</p> : null}
+        {result.description ? <UserText className="profileBio" text={result.description} /> : null}
         {result.owner ? <div className="exchangeCardAuthor"><Link href={`/profile/${result.owner.id}`}>{result.owner.displayName}</Link></div> : null}
       </article>) : <p className="muted">{texts["angel.no_results"]}</p>}
     </div> : null}

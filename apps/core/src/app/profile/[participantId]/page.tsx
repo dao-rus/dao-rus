@@ -16,6 +16,7 @@ import { getVerificationProfile } from "@/lib/verification";
 import { listParticipantSignals, listSignalTypes } from "../../../lib/signals";
 import { readInterfaceTexts } from "../../../lib/interface-texts";
 import { ProfileSignals } from "../../../components/profile-signals";
+import { UserText } from "../../../components/user-text";
 
 export const dynamic = "force-dynamic";
 export const metadata: Metadata = { title: "Профиль участника" };
@@ -107,7 +108,7 @@ export default async function SubjectProfilePage({ params, searchParams }: Subje
 
         {profile.hasLoggedIn && about && (about.bio || about.residence || about.interests.length || signals.length) ? (
           <section className="profileAbout publicAbout">
-            {about.bio ? <div className="aboutBlock"><h2>О себе</h2><p className="profileBio">{about.bio}</p></div> : null}
+            {about.bio ? <div className="aboutBlock"><h2>О себе</h2><UserText className="profileBio" text={about.bio} /></div> : null}
             {about.residence ? (
               <div className="aboutBlock">
                 <h3>Место жительства</h3>

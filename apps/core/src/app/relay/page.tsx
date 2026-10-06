@@ -5,6 +5,7 @@ import { getCurrentParticipant } from "@/lib/session";
 import { readInterfaceTexts } from "@/lib/interface-texts";
 import { listRelayEncounters } from "@/lib/relay";
 import { CoreNavigation } from "../../components/core-navigation";
+import { UserText } from "../../components/user-text";
 
 export const dynamic = "force-dynamic";
 export const metadata: Metadata = { title: "Диалоги" };
@@ -36,7 +37,7 @@ export default async function RelayListPage({
         <div className="exchangeCards">
           {encounters.length ? encounters.map((encounter) => (
             <article className="exchangeCard" key={encounter.id}>
-              <p>{encounter.body}</p>
+              <UserText text={encounter.body} />
               <p className="muted">
                 {encounter.role === "author" ? "Автор сигнала" : "Откликнувшийся"}
                 {" · "}

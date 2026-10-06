@@ -8,6 +8,7 @@ import { canCreateProposal } from "@/lib/eligibility";
 import { listProposals } from "@/lib/proposals";
 import { getParticipantIndicators } from "../../lib/participant-indicators";
 import { getCurrentParticipant } from "@/lib/session";
+import { UserText } from "../../components/user-text";
 
 export const dynamic = "force-dynamic";
 export const metadata: Metadata = { title: "Вече" };
@@ -90,7 +91,7 @@ export default async function ProposalsPage({ searchParams }: ProposalsPageProps
                     <span>Статус: открыто</span>
                   </div>
                   <h3>{proposal.title}</h3>
-                  <p>{proposal.body}</p>
+                  <UserText text={proposal.body} />
                 </li>
               ))}
             </ol>

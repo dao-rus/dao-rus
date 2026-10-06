@@ -17,11 +17,13 @@ vi.mock("@/lib/relay", () => ({
 }));
 
 import ExchangePage from "./page";
+import { UserText } from "../../components/user-text";
 
 function textContent(node: ReactNode): string {
   if (typeof node === "string" || typeof node === "number") return String(node);
   if (Array.isArray(node)) return node.map(textContent).join(" ");
   if (!isValidElement(node)) return "";
+  if (node.type === UserText) return textContent(UserText(node.props as Parameters<typeof UserText>[0]));
   return textContent((node.props as { children?: ReactNode }).children);
 }
 

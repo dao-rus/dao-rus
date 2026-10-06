@@ -2,6 +2,7 @@ import Link from "next/link";
 import type { Signal, SignalType } from "../lib/signals";
 import type { InterfaceTextValues } from "../lib/interface-texts";
 import { groupProfileSignals, signalHref, signalTypePresentation } from "../lib/signal-presentation";
+import { UserText } from "./user-text";
 
 export function ProfileSignals({ signals, types, texts, owner = false }: {
   signals: Signal[]; types: SignalType[]; texts: InterfaceTextValues; owner?: boolean;
@@ -12,7 +13,7 @@ export function ProfileSignals({ signals, types, texts, owner = false }: {
       <h4>{signalTypePresentation(type, texts).name}</h4>
       <ul className="profileItems signalItems">{entries.map((signal) => <li key={signal.id}>
         <div><strong><Link href={signalHref(signal.id)}>{signal.label}</Link></strong>
-          {signal.description ? <p className="profileBio">{signal.description}</p> : null}
+          {signal.description ? <UserText className="profileBio" text={signal.description} /> : null}
           {owner ? <small>{texts[`signal.visibility_${signal.visibility}`]}</small> : null}
         </div>
         {owner ? <div className="actions">

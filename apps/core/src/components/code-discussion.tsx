@@ -2,6 +2,7 @@ import Link from "next/link";
 import { LocalDateTime } from "./local-date-time";
 import { ParticipantName } from "./participant-name";
 import { sortCodeCommentReplies, sortCodeCommentRoots, type CodeComment, type CodeSection, type CodeSort } from "../lib/code-comments";
+import { UserText } from "./user-text";
 
 type DiscussionProps = {
   section: CodeSection;
@@ -29,7 +30,7 @@ function CommentCard({ comment, replies, section, viewerId, isAdmin }: {
       </div>
       {comment.deleted ? <p className="muted">Комментарий удалён автором.</p>
         : comment.hidden ? <p className="muted">Комментарий скрыт администратором. Причина: {comment.hiddenReason}</p>
-          : <p className="codeCommentBody">{comment.body}</p>}
+          : <UserText className="codeCommentBody" text={comment.body ?? ""} />}
       {active ? (
         <div className="codeCommentActions">
           <span>Полезно: {comment.helpfulCount}</span>

@@ -8,6 +8,7 @@ import { listRelayEncounters } from "@/lib/relay";
 import { listNetworkSignals, listSignalTypes } from "../../lib/signals";
 import { selectSignalType, signalHref, signalTypePresentation } from "../../lib/signal-presentation";
 import { AngelSearch } from "../../components/angel-search";
+import { UserText } from "../../components/user-text";
 
 export const dynamic = "force-dynamic";
 export const metadata: Metadata = { title: "Обмен" };
@@ -53,7 +54,7 @@ export default async function ExchangePage({
           {signals.length ? signals.map((signal) => (
             <article className="exchangeCard" key={signal.id}>
               <strong className="exchangeCardTitle"><Link href={signalHref(signal.id)}>{signal.label}</Link></strong>
-              {signal.description ? <p className="profileBio">{signal.description}</p> : null}
+              {signal.description ? <UserText className="profileBio" text={signal.description} /> : null}
               {signal.author && signal.visibility !== "network_blind" ? <div className="exchangeCardAuthor"><Link href={`/profile/${signal.author.id}`}>{signal.author.name}</Link></div> : null}
               {signal.mine ? (
                 <span className="muted">{texts["signal.mine"]}</span>

@@ -49,7 +49,7 @@ describe("canonical Signal card", () => {
     expect(mocks.signal).toHaveBeenCalledWith("viewer", id);
     expect(output).toContain('class="signalCardLabel"');
     expect(output).toContain("Ищу работу в СПб");
-    expect(output).toContain('class="signalCardDescription"');
+    expect(output).toContain('class="userText signalCardDescription"');
     expect(output).toContain("Нужен уважительный коллектив.");
     expect(output).toContain('class="signalCardAuthor"');
     expect(output).toContain('href="/profile/hidden-owner-id"');

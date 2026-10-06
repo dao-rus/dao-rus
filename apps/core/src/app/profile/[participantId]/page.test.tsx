@@ -39,6 +39,7 @@ vi.mock("@/components/telegram-avatar", () => ({ TelegramAvatar: () => null }));
 
 import SubjectProfilePage from "./page";
 import { ProfileSignals } from "../../../components/profile-signals";
+import { UserText } from "../../../components/user-text";
 vi.mock("../../../lib/signals", () => ({ listParticipantSignals: mocks.signals, listSignalTypes: mocks.types }));
 vi.mock("../../../lib/interface-texts", () => ({ readInterfaceTexts: mocks.texts }));
 
@@ -58,6 +59,7 @@ function textContent(node: ReactNode): string {
   if (Array.isArray(node)) return node.map(textContent).join(" ");
   if (!isValidElement(node)) return "";
   if (node.type === ProfileSignals) return textContent(ProfileSignals(node.props as Parameters<typeof ProfileSignals>[0]));
+  if (node.type === UserText) return textContent(UserText(node.props as Parameters<typeof UserText>[0]));
   return textContent((node.props as { children?: ReactNode }).children);
 }
 
