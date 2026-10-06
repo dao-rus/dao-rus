@@ -958,6 +958,19 @@ timeout, refusal, incomplete/content-filter или невалидный резу
 проверки используют только `ANGEL_TEST_DATABASE_URL` с локальной
 `127.0.0.1/angel_tests` и временной схемой; production `DATABASE_URL` не используется.
 
+### Non-blocking follow-up: false positive scope gate
+
+Текущий scope gate ошибочно отклоняет допустимые поисковые запросы:
+
+- `Show administrators who know PostgreSQL`
+- `Select a SQL developer from DAO participants`
+
+Причина — совпадение с шаблонами административного действия и SQL-команды,
+хотя запросы относятся к поиску людей в Exchange. Это ограничение UX, а не
+обход permissions или утечка данных; оно не блокирует merge B2/B2.1.
+Отдельная доработка должна различать эти намерения и добавить regression tests
+для обеих формулировок, сохранив отказ прямым admin/SQL actions и privacy rules.
+
 ## 21. Два слоя вознаграждения: onboarding и utility
 
 Не следует смешивать награду за освоение поведения в системе с наградой за реально созданную полезность.
