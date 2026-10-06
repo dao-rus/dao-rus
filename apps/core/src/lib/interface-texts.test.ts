@@ -220,7 +220,7 @@ describe("interface texts", () => {
     const restored = await readInterfaceTextsWithDatabase(database);
     expect(restored.values["exchange.title"]).toBe("Обмен");
     expect(restored.values["exchange.lead"])
-      .toBe("Потребности, возможности, желания и ресурсы участников сети.");
+      .toBe("Здесь люди находят друг друга через потребности, возможности, знания, навыки, идеи и дела.");
     expect(restored.values["exchange.empty"]).toBe("Сигналов пока нет.");
   });
 });

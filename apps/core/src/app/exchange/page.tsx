@@ -6,7 +6,7 @@ import { getCurrentParticipant } from "@/lib/session";
 import { readInterfaceTexts } from "@/lib/interface-texts";
 import { listRelayEncounters } from "@/lib/relay";
 import { listNetworkSignals, listSignalTypes } from "../../lib/signals";
-import { groupSignalTypes, selectSignalType, signalHref, signalTypePresentation } from "../../lib/signal-presentation";
+import { selectSignalType, signalHref, signalTypePresentation } from "../../lib/signal-presentation";
 import { AngelSearch } from "../../components/angel-search";
 
 export const dynamic = "force-dynamic";
@@ -35,26 +35,26 @@ export default async function ExchangePage({
         <div className="eyebrow">DAO Rus · Сеть</div>
         <h1>{texts["exchange.title"]}</h1>
         <p className="lead">{texts["exchange.lead"]}</p>
-        <p className="muted">{texts["exchange.privacy_hint"]}</p>
         <AngelSearch texts={texts} />
-        <nav className="actions" aria-label="Разделы">
-          {groupSignalTypes(types, texts).map((group) => <div key={group.key}>
-            <h3>{group.name}</h3><div className="actions">{group.types.map((type) => (
-              <Link key={type.key} className={selected?.key === type.key ? "button primary" : "button secondary"}
-                href={`/exchange?type=${type.key}`} aria-current={selected?.key === type.key ? "page" : undefined}>
-                {signalTypePresentation(type, texts).name}
-              </Link>
-            ))}</div></div>)}
-          <Link className="button secondary" href="/relay">{texts["relay.list_title"]}{dialogs.length ? " (" + dialogs.length + ")" : ""}</Link>
+        <nav className="exchangeTypeNav" aria-label="Типы сигналов">
+          {types.map((type) => {
+            const item = signalTypePresentation(type, texts);
+            return <Link key={type.key} className={selected?.key === type.key ? "button primary" : "button secondary"}
+              href={`/exchange?type=${type.key}`} aria-current={selected?.key === type.key ? "page" : undefined}>
+              <span className="exchangeTypeSymbol" aria-hidden="true">{item.symbol}</span>{item.navigationName}
+            </Link>;
+          })}
         </nav>
-        {presentation ? <><h2>{presentation.name}</h2><p className="muted">{presentation.description}</p>
-          {presentation.example ? <p className="muted">{presentation.example}</p> : null}</> : null}
+        <div className="exchangeUtility"><Link href="/relay">{texts["relay.list_title"]}{dialogs.length ? ` (${dialogs.length})` : ""}</Link></div>
+        {presentation ? <div className="exchangeSelection"><h2>{presentation.navigationName}</h2><p className="muted">{presentation.description}</p>
+          {presentation.example ? <p className="muted">{presentation.example}</p> : null}</div> : null}
+        {signals.some((signal) => signal.visibility === "network_blind") ? <p className="muted exchangeBlindHint">{texts["exchange.privacy_hint"]}</p> : null}
         <div className="exchangeCards">
           {signals.length ? signals.map((signal) => (
             <article className="exchangeCard" key={signal.id}>
-              <strong><Link href={signalHref(signal.id)}>{signal.label}</Link></strong>
+              <strong className="exchangeCardTitle"><Link href={signalHref(signal.id)}>{signal.label}</Link></strong>
               {signal.description ? <p className="profileBio">{signal.description}</p> : null}
-              {signal.author ? <Link href={`/profile/${signal.author.id}`}>{signal.author.name}</Link> : null}
+              {signal.author && signal.visibility !== "network_blind" ? <div className="exchangeCardAuthor"><Link href={`/profile/${signal.author.id}`}>{signal.author.name}</Link></div> : null}
               {signal.mine ? (
                 <span className="muted">{texts["signal.mine"]}</span>
               ) : signal.visibility === "network_blind" && (selected?.key === "need" || selected?.key === "have") ? (

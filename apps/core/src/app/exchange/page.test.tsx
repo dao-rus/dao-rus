@@ -1,5 +1,6 @@
 import { isValidElement, type ReactNode } from "react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
+import { signalPresentationDefaults } from "../../lib/signal-presentation";
 
 const mocks = vi.hoisted(() => ({
   participant: vi.fn(),
@@ -39,7 +40,7 @@ describe("network exchange catalog", () => {
     mocks.types.mockResolvedValue(["need", "can", "want", "have"].map((key) => ({ key, displayName: key, enabled: true })));
     mocks.texts.mockResolvedValue({ values: {
       "exchange.title": "Обмен",
-      "exchange.lead": "Сначала — дело, потом — знакомство. Контакты открываются только по взаимному согласию.",
+      "exchange.lead": "Здесь люди находят друг друга через потребности, возможности, знания, навыки, идеи и дела.",
       "exchange.privacy_hint": "Анонимные сигналы опубликованы без имени автора.",
       "exchange.empty": "Сигналов пока нет.",
       "exchange.tab_need": "? Нужно", "exchange.tab_can": "! Могу",
@@ -65,6 +66,7 @@ describe("network exchange catalog", () => {
     expect(collectProps(responses[0].children as ReactNode, (props) => props.name === "signal_id")?.[0]?.value)
       .toBe("other");
     expect(collectProps(page, (props) => String(props.href ?? "").startsWith("/profile/"))).toHaveLength(0);
+    expect(textContent(page)).toContain("Анонимные сигналы опубликованы без имени автора.");
   });
 
   it("opens Need by default and offers catalogue categories", async () => {
@@ -77,6 +79,30 @@ describe("network exchange catalog", () => {
       expect(textContent(link.children as ReactNode)).toBe(label);
       expect(link["aria-current"]).toBe(kind === "need" ? "page" : undefined);
     }
+  });
+
+  it("shows every enabled type with a symbol, without group headings or Relay inside the taxonomy", async () => {
+    mocks.types.mockResolvedValue(signalPresentationDefaults.map((type) => ({
+      key: type.key, displayName: type.name, enabled: true,
+    })));
+    mocks.signals.mockResolvedValue([]);
+    const page = await ExchangePage({ searchParams: Promise.resolve({}) });
+    const nav = collectProps(page, (props) => props["aria-label"] === "Типы сигналов")[0];
+    expect(nav).toBeDefined();
+    const links = collectProps(nav.children as ReactNode, (props) => typeof props.href === "string");
+    expect(links).toHaveLength(10);
+    for (const type of signalPresentationDefaults) {
+      const link = links.find((item) => item.href === `/exchange?type=${type.key}`);
+      expect(link, type.key).toBeDefined();
+      expect(textContent(link!.children as ReactNode), type.key).toContain(type.symbol);
+    }
+    expect(links.some((link) => link.href === "/relay")).toBe(false);
+    expect(collectProps(page, (props) => props.href === "/relay")).toHaveLength(1);
+    const text = textContent(page);
+    for (const heading of ["Потребности и поиск", "Возможности и ресурсы", "Компетенции", "Намерения и деятельность", "Человеческие связи"]) {
+      expect(text).not.toContain(heading);
+    }
+    expect(text).not.toContain("Анонимные сигналы опубликованы без имени автора.");
   });
 
   it.each(["need", "can", "want", "have"])("requests %s signals when selected", async (kind) => {
@@ -92,6 +118,19 @@ describe("network exchange catalog", () => {
     expect(textContent(page)).toContain("Могу помочь");
     expect(collectProps(page, (props) => props.href === "/profile/author")).toHaveLength(1);
     expect(collectProps(page, (props) => props.action === "/api/relay")).toHaveLength(0);
+    const card = collectProps(page, (props) => props.className === "exchangeCard")[0];
+    expect(collectProps(card.children as ReactNode, (props) => props.className === "exchangeCardTitle")).toHaveLength(1);
+    expect(collectProps(card.children as ReactNode, (props) => props.className === "exchangeCardAuthor")).toHaveLength(1);
+    expect(collectProps(card.children as ReactNode, (props) => props.href === "/exchange/public")).toHaveLength(1);
+  });
+
+  it("keeps the canonical link but suppresses a blind author's identity even if supplied", async () => {
+    mocks.signals.mockResolvedValue([{ id: "blind", kind: "need", label: "Домик в деревне", mine: false,
+      visibility: "network_blind", author: { id: "hidden", name: "Надежда К" } }]);
+    const page = await ExchangePage({ searchParams: Promise.resolve({ type: "need" }) });
+    expect(collectProps(page, (props) => props.href === "/exchange/blind")).toHaveLength(1);
+    expect(collectProps(page, (props) => props.href === "/profile/hidden")).toHaveLength(0);
+    expect(textContent(page)).not.toContain("Надежда К");
   });
 
   it("uses editable texts for the empty Have tab", async () => {
@@ -128,6 +167,8 @@ describe("network exchange catalog", () => {
     expect(textContent(page)).toContain("Контекст");
     expect(textContent(page)).not.toContain("Скрытый тип");
     expect(collectProps(page, (props) => props.href === "/exchange/new?type=future_type")).toHaveLength(1);
+    const futureLink = collectProps(page, (props) => props.href === "/exchange?type=future_type")[0];
+    expect(textContent(futureLink.children as ReactNode)).toContain("• Будущий тип");
   });
   it.each(["unknown", "../../private", "disabled"])("falls back safely for %s type queries", async (type) => {
     mocks.signals.mockResolvedValue([]);

@@ -7,16 +7,16 @@ export function signalHref(signalId: Signal["id"]): string {
 
 // Presentation hints only. Catalogue keys, enablement and catalogue order stay authoritative.
 export const signalPresentationDefaults = [
-  { key: "need", name: "? Нужно", group: "needs", description: "То, чего вам сейчас не хватает и с чем могла бы помочь сеть.", example: "фотограф" },
-  { key: "search", name: "Ищу", group: "needs", description: "Конкретный человек, вещь, информация, возможность или контакт, которые вы пытаетесь найти.", example: "налоговый юрист" },
-  { key: "can", name: "! Могу", group: "resources", description: "То, что вы сейчас готовы сделать или предложить другим.", example: "ремонт электроники" },
-  { key: "have", name: "+ Есть", group: "resources", description: "Ресурсы, вещи, доступы, время или возможности, которыми вы располагаете.", example: "помещение" },
-  { key: "know", name: "Знаю", group: "skills", description: "Области, в которых у вас есть знания, опыт или понимание.", example: "история Византии" },
-  { key: "skill", name: "Умею", group: "skills", description: "Навыки и действия, которые вы умеете выполнять.", example: "ремонт электроники" },
-  { key: "want", name: "♥ Хочу", group: "intentions", description: "То, к чему вы стремитесь, даже если пока ещё не начали это делать.", example: "фотография" },
-  { key: "doing", name: "▶ Делаю", group: "intentions", description: "Проекты, дела и направления, которыми вы реально занимаетесь сейчас.", example: "образовательный проект" },
-  { key: "idea", name: "Идея", group: "intentions", description: "Мысли и замыслы, которые вам кажутся интересными, даже если вы пока не знаете, как их воплотить.", example: "домашняя мастерская" },
-  { key: "dating", name: "Знакомства", group: "connections", description: "Люди и формы общения, которые вы хотели бы найти: дружба, компания, совместные занятия, отношения.", example: "компания для прогулок" },
+  { key: "need", symbol: "?", name: "? Нужно", group: "needs", description: "То, чего вам сейчас не хватает и с чем могла бы помочь сеть.", example: "фотограф" },
+  { key: "search", symbol: "⌕", name: "Ищу", group: "needs", description: "Конкретный человек, вещь, информация, возможность или контакт, которые вы пытаетесь найти.", example: "налоговый юрист" },
+  { key: "can", symbol: "!", name: "! Могу", group: "resources", description: "То, что вы сейчас готовы сделать или предложить другим.", example: "ремонт электроники" },
+  { key: "have", symbol: "+", name: "+ Есть", group: "resources", description: "Ресурсы, вещи, доступы, время или возможности, которыми вы располагаете.", example: "помещение" },
+  { key: "know", symbol: "i", name: "Знаю", group: "skills", description: "Области, в которых у вас есть знания, опыт или понимание.", example: "история Византии" },
+  { key: "skill", symbol: "✓", name: "Умею", group: "skills", description: "Навыки и действия, которые вы умеете выполнять.", example: "ремонт электроники" },
+  { key: "want", symbol: "♥", name: "♥ Хочу", group: "intentions", description: "То, к чему вы стремитесь, даже если пока ещё не начали это делать.", example: "фотография" },
+  { key: "doing", symbol: "▶", name: "▶ Делаю", group: "intentions", description: "Проекты, дела и направления, которыми вы реально занимаетесь сейчас.", example: "образовательный проект" },
+  { key: "idea", symbol: "✦", name: "Идея", group: "intentions", description: "Мысли и замыслы, которые вам кажутся интересными, даже если вы пока не знаете, как их воплотить.", example: "домашняя мастерская" },
+  { key: "dating", symbol: "⚭", name: "Знакомства", group: "connections", description: "Люди и формы общения, которые вы хотели бы найти: дружба, компания, совместные занятия, отношения.", example: "компания для прогулок" },
 ] as const;
 export const signalGroupDefaults = [
   ["needs", "Потребности и поиск"], ["resources", "Возможности и ресурсы"],
@@ -29,7 +29,9 @@ export function signalTypePresentation(type: SignalType, texts: InterfaceTextVal
   const read = (key: string) => texts[key as InterfaceTextKey];
   // Keep the four existing editable names and CTAs compatible with admin overrides.
   const name = read(`exchange.tab_${type.key}`) || read(`signal.${type.key}.name`) || type.displayName;
-  return { name, group: hint?.group ?? "other",
+  const symbol = hint?.symbol ?? "•";
+  const navigationName = name.startsWith(`${symbol} `) ? name.slice(symbol.length + 1) : name;
+  return { name, navigationName, symbol, group: hint?.group ?? "other",
     description: read(`signal.${type.key}.description`) || texts["signal.description_generic"],
     example: read(`signal.${type.key}.example`),
     placeholder: read(`signal.${type.key}.placeholder`) || texts["signal.label_placeholder"],

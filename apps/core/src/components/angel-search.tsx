@@ -25,17 +25,17 @@ export function AngelSearch({ texts }: { texts: InterfaceTextValues }) {
     } catch { setError(texts["angel.unavailable"]); } finally { setPending(false); }
   }
   return <section className="angelPanel">
-    <form className="actions" onSubmit={submit}>
-      <label className="srOnly" htmlFor="angel-search">{texts["angel.search_placeholder"]}</label>
+    <form className="angelSearchForm" onSubmit={submit}>
+      <label htmlFor="angel-search">{texts["angel.search_lead"]}</label>
       <input id="angel-search" value={text} onChange={(event) => setText(event.target.value)} maxLength={4000} placeholder={texts["angel.search_placeholder"]} />
       <button className="button secondary" disabled={pending}>{texts["angel.search_submit"]}</button>
     </form>
     {error ? <p className="formError" role="alert">{error}</p> : null}
     {results ? <div className="exchangeCards"><h2>{texts["angel.search_results"]}</h2>
       {results.length ? results.map((result) => <article className="exchangeCard" key={result.signalId}>
-        <p className="muted">{result.typeTitle}</p><strong><Link href={result.href}>{result.label}</Link></strong>
+        <p className="muted">{result.typeTitle}</p><strong className="exchangeCardTitle"><Link href={result.href}>{result.label}</Link></strong>
         {result.description ? <p className="profileBio">{result.description}</p> : null}
-        {result.owner ? <Link href={`/profile/${result.owner.id}`}>{result.owner.displayName}</Link> : null}
+        {result.owner ? <div className="exchangeCardAuthor"><Link href={`/profile/${result.owner.id}`}>{result.owner.displayName}</Link></div> : null}
       </article>) : <p className="muted">{texts["angel.no_results"]}</p>}
     </div> : null}
   </section>;
