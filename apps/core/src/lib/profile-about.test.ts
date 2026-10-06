@@ -84,7 +84,15 @@ describe("extensible structured signals", () => {
       async query(text, values) {
         queries.push({ text, values });
         if (text.includes("FROM signal_types")) return { rowCount: enabled ? 1 : 0, rows: enabled ? [{ key: values?.[0] }] : [] };
-        if (text.includes("INSERT INTO profile_signals")) return { rowCount: 1, rows: [{ id: "signal-id" }] };
+        if (text.includes("INSERT INTO profile_signals")) {
+          const structured = text.includes("kind, label, description");
+          return { rowCount: 1, rows: [{
+            id: "signal-id", owner_id: values?.[0], kind: values?.[1], label: values?.[2],
+            description: structured ? values?.[3] : null,
+            visibility: values?.[structured ? 4 : 3], legacy_body: !structured, status: "active",
+            created_at: new Date("2026-10-06"), updated_at: new Date("2026-10-06"),
+          }] };
+        }
         if (failAudit && text.includes("INSERT INTO events")) throw new Error("audit failed");
         return { rowCount: 0, rows: [] };
       },
@@ -102,8 +110,12 @@ describe("extensible structured signals", () => {
     })).toEqual({ id: "signal-id" });
     expect(test.queries.find(({ text }) => text.includes("INSERT INTO profile_signals"))?.values)
       .toEqual(["author", "future_type", "Мастерская", "По выходным", "private"]);
-    expect(test.queries.filter(({ text }) => text.includes("INSERT INTO events"))[0].values?.[2])
-      .toBe(JSON.stringify({ signal_id: "signal-id", kind: "future_type", visibility: "private" }));
+    const payload = JSON.parse(String(test.queries.filter(({ text }) => text.includes("INSERT INTO events"))[0].values?.[2]));
+    expect(payload).toMatchObject({ signal_id: "signal-id", kind: "future_type", visibility: "private",
+      type_key: "future_type", status: "active", legacy_body: false, content_source: "label_description" });
+    expect(payload).not.toHaveProperty("body");
+    expect(payload).not.toHaveProperty("label");
+    expect(payload).not.toHaveProperty("description");
     expect(test.queries.some(({ text }) => text.includes("darus_ledger"))).toBe(false);
     expect(test.queries.at(-1)?.text).toBe("COMMIT");
     expect(test.released()).toBe(true);

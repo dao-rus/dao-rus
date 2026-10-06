@@ -23,9 +23,9 @@ function databaseWith(query: RelayDatabase["query"]) {
 describe("Blind Match privacy and Relay access", () => {
   it("lists active visible network signals without serializing blind authors", async () => {
     const database = databaseWith(async () => ({ rowCount: 2, rows: [
-      { id: signal, kind: "need", body: "Нужна помощь", mine: false, anonymous: true,
+      { id: signal, kind: "need", label: "Нужна помощь", description: null, visibility: "network_blind", mine: false,
         author_id: author, author_name: "Скрытое имя" },
-      { id: encounter, kind: "need", body: "Нужны материалы", mine: false, anonymous: false,
+      { id: encounter, kind: "need", label: "Нужны материалы", description: null, visibility: "members", mine: false,
         author_id: author, author_name: "Анна" },
     ] }));
     const signals = await listExchangeSignalsWithDatabase(database, responder, "need");
