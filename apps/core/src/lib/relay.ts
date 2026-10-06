@@ -1,10 +1,11 @@
 import { pool } from "./db";
-import type { ProfileSignalKind } from "./profile-about";
+import { listNetworkSignalsWithDatabase, type SignalTypeKey } from "./signals";
+import { signalBodyProjection } from "./signal-compat";
 
 type QueryResult = { rowCount: number | null; rows: Array<Record<string, unknown>> };
 export type RelayDatabase = { query(text: string, values?: unknown[]): Promise<QueryResult> };
 export type ExchangeSignal = {
-  id: string; kind: ProfileSignalKind; body: string; mine: boolean; anonymous: boolean;
+  id: string; kind: SignalTypeKey; body: string; mine: boolean; anonymous: boolean;
   author: { id: string; name: string } | null;
 };
 export type RelayEncounter = {
@@ -50,27 +51,12 @@ function encounterFromRow(row: Record<string, unknown>): RelayEncounter {
 }
 
 export async function listExchangeSignalsWithDatabase(
-  database: RelayDatabase, viewerId: string, kind: ProfileSignalKind,
+  database: RelayDatabase, viewerId: string, kind: SignalTypeKey,
 ): Promise<ExchangeSignal[]> {
-  const result = await database.query(
-    `SELECT s.id, s.kind, s.body, (s.participant_id = $1::uuid) AS mine,
-            (s.visibility = 'network_blind') AS anonymous,
-            CASE WHEN s.visibility <> 'network_blind' THEN author.id END AS author_id,
-            CASE WHEN s.visibility <> 'network_blind' THEN author.display_name END AS author_name
-       FROM profile_signals s
-       JOIN participants author ON author.id = s.participant_id
-      WHERE s.status = 'active'
-        AND s.kind = $2
-        AND s.visibility IN ('public', 'members', 'network_blind')
-      ORDER BY s.created_at DESC, s.id DESC
-      LIMIT 100`,
-    [viewerId, kind],
-  );
-  return result.rows.map((row) => ({
-    id: String(row.id), kind: String(row.kind) as ProfileSignalKind,
-    body: String(row.body), mine: Boolean(row.mine), anonymous: Boolean(row.anonymous),
-    author: row.anonymous || !row.author_id ? null
-      : { id: String(row.author_id), name: String(row.author_name) },
+  const signals = await listNetworkSignalsWithDatabase(database, viewerId, kind);
+  return signals.map((signal) => ({
+    id: signal.id, kind: signal.typeKey, body: signalBodyProjection(signal),
+    mine: signal.mine, anonymous: signal.visibility === "network_blind", author: signal.author,
   }));
 }
 
@@ -216,7 +202,7 @@ export async function cancelRelayEncounterWithDatabase(
   if (!result.rowCount) throw new RelayAccessError();
 }
 
-export const listExchangeSignals = (viewerId: string, kind: ProfileSignalKind) =>
+export const listExchangeSignals = (viewerId: string, kind: SignalTypeKey) =>
   listExchangeSignalsWithDatabase(pool, viewerId, kind);
 export const createRelayEncounter = (responderId: string, signalId: unknown) =>
   createRelayEncounterWithDatabase(pool, responderId, signalId);

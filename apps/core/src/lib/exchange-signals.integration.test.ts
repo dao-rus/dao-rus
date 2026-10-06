@@ -11,6 +11,11 @@ import {
   consentRelayRevealWithDatabase, createRelayEncounterWithDatabase, getRelayEncounterWithDatabase,
   listExchangeSignalsWithDatabase, sendRelayMessageWithDatabase, listRelayMessagesWithDatabase,
 } from "./relay";
+import {
+  createSignalWithDatabase, listParticipantSignalsWithDatabase, listNetworkSignalsWithDatabase,
+  requireEnabledSignalTypeWithDatabase, archiveSignalWithDatabase,
+} from "./signals";
+import { signalBodyProjection } from "./signal-compat";
 
 const databaseUrl = process.env.SIGNAL_TEST_DATABASE_URL;
 const schema = `signal_test_${randomUUID().replaceAll("-", "")}`;
@@ -92,6 +97,10 @@ describe.skipIf(!databaseUrl)("Exchange A1 on real PostgreSQL", () => {
       .toBe(originalSignals.find((row) => row.id === oldBlindNeed)?.body);
     expect((await pool.query("SELECT signal_id FROM relay_encounters WHERE id=$1", [originalEncounter])).rows[0].signal_id)
       .toBe(oldBlindNeed);
+    const canonical = await listParticipantSignalsWithDatabase(pool, author, author, "closed");
+    expect(canonical).toHaveLength(originalSignals.filter((row) => row.status === "closed").length);
+    expect(canonical.every((signal) => signal.legacyBody && signal.label === "я".repeat(900))).toBe(true);
+    expect(canonical.every((signal) => !Object.hasOwn(signal, "body"))).toBe(true);
   });
 
   it("seeds ten types and accepts future catalogue entries without SQL or TS enum changes", async () => {
@@ -221,6 +230,16 @@ describe.skipIf(!databaseUrl)("Exchange A1 on real PostgreSQL", () => {
       created.push(await createProfileSignalWithDatabase(pool, id, { kind: "need", label: visibility, visibility }));
     }
     expect((await getProfileAboutWithDatabase(pool, id))?.signals).toHaveLength(6);
+    const ownCanonical = await listParticipantSignalsWithDatabase(pool, id, id);
+    expect(ownCanonical).toHaveLength(6);
+    expect(ownCanonical.every((signal) => signal.ownerId === id)).toBe(true);
+    expect((await listParticipantSignalsWithDatabase(pool, id, responder)).map((signal) => signal.visibility).sort())
+      .toEqual(["members", "public"]);
+    const canonicalNetwork = (await listNetworkSignalsWithDatabase(pool, responder, "need"))
+      .filter((signal) => created.some((entry) => entry.id === signal.id));
+    expect(canonicalNetwork).toHaveLength(3);
+    expect(canonicalNetwork.find((signal) => signal.visibility === "network_blind"))
+      .toMatchObject({ ownerId: null, author: null });
     expect((await getVisibleProfileAboutWithDatabase(pool, id, responder))?.signals.map((signal) => signal.visibility).sort())
       .toEqual(["members", "public"]);
     const exchange = (await listExchangeSignalsWithDatabase(pool, responder, "need"))
@@ -266,6 +285,41 @@ describe.skipIf(!databaseUrl)("Exchange A1 on real PostgreSQL", () => {
     }
     const publicSignal = await createProfileSignalWithDatabase(pool, id, { kind: "need", label: "Тест", visibility: "public" });
     await expect(createRelayEncounterWithDatabase(pool, responder, publicSignal.id)).rejects.toThrow("unavailable");
+  });
+
+  it("creates universal signals with label or label/description and preserves compatible event metadata", async () => {
+    await pool.query("INSERT INTO signal_types(key,display_name) VALUES ('a2_type','Расширение A2')");
+    expect(await requireEnabledSignalTypeWithDatabase(pool, "a2_type"))
+      .toEqual({ key: "a2_type", displayName: "Расширение A2", enabled: true });
+    const id = await participant();
+    const first = await createSignalWithDatabase(pool, id, { typeKey: "a2_type", label: " Мастерская ", visibility: "private" });
+    const second = await createSignalWithDatabase(pool, id, {
+      typeKey: "a2_type", label: "Ремонт", description: " По выходным ", visibility: "members",
+    });
+    expect(first.signal).toMatchObject({ ownerId: id, typeKey: "a2_type", label: "Мастерская", description: null,
+      visibility: "private", status: "active", legacyBody: false });
+    expect(second.signal.description).toBe("По выходным");
+    expect(second.signal.createdAt).toBeInstanceOf(Date);
+    expect(first.signal).not.toHaveProperty("body");
+    expect(signalBodyProjection(second.signal)).toBe("Ремонт\n\nПо выходным");
+    const events = (await pool.query("SELECT payload FROM events WHERE participant_id=$1 AND event_type='participant.signal_created'", [id])).rows;
+    expect(events).toHaveLength(2);
+    expect(events.every(({ payload }) => payload.kind === "a2_type" && payload.type_key === "a2_type"
+      && payload.content_source === "label_description" && payload.status === "active" && payload.legacy_body === false)).toBe(true);
+    expect(events.every(({ payload }) => !Object.hasOwn(payload, "body") && !Object.hasOwn(payload, "label") && !Object.hasOwn(payload, "description")))
+      .toBe(true);
+    expect((await listNetworkSignalsWithDatabase(pool, responder, "a2_type")).map((signal) => signal.id)).toEqual([second.signal.id]);
+    expect(await rewardCount(id)).toBe(0);
+    await archiveSignalWithDatabase(pool, id, first.signal.id);
+    expect((await listParticipantSignalsWithDatabase(pool, id, id, "archived"))[0])
+      .toMatchObject({ id: first.signal.id, ownerId: id, status: "archived", visibility: "private" });
+    expect(await listParticipantSignalsWithDatabase(pool, id, responder, "archived")).toEqual([]);
+    await pool.query("UPDATE signal_types SET enabled=false WHERE key='a2_type'");
+    await expect(requireEnabledSignalTypeWithDatabase(pool, "a2_type")).rejects.toThrow("Unknown or disabled");
+    await expect(requireEnabledSignalTypeWithDatabase(pool, "unknown")).rejects.toThrow("Unknown or disabled");
+    await expect(createSignalWithDatabase(pool, id, { typeKey: "a2_type", label: "Тест", visibility: "members" }))
+      .rejects.toThrow("Unknown or disabled");
+    expect((await listParticipantSignalsWithDatabase(pool, id, id))[0].id).toBe(second.signal.id);
   });
 
   it("does not reapply a recorded migration; even explicit SQL replay preserves records, types and rewards", async () => {

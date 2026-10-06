@@ -1,22 +1,23 @@
 import { normalizeDisplayName } from "./profile";
 import { getOnboardingActionReward, type OnboardingReward } from "./onboarding-quests";
+import { ProfileAboutValidationError, normalizeBoundedText } from "./profile-validation";
+import {
+  normalizeProfileVisibility, listParticipantSignalsWithDatabase, createSignalWithDatabase,
+  archiveSignalWithDatabase, type Signal, type SignalTypeKey, type SignalVisibility, type ProfileVisibility,
+} from "./signals";
+import { addLegacyProfileSignalWithDatabase, signalBodyProjection } from "./signal-compat";
 
-export const PROFILE_VISIBILITIES = [
-  "public",
-  "members",
-  "circle",
-  "match_only",
-  "private",
-] as const;
-
-export type ProfileVisibility = (typeof PROFILE_VISIBILITIES)[number];
-export type ProfileSignalVisibility = ProfileVisibility | "network_blind";
-
-export const PROFILE_SIGNAL_KINDS = ["want", "need", "can", "have"] as const;
-// This list describes the current four-category UI, not the domain catalogue.
-export type LegacyProfileSignalKind = (typeof PROFILE_SIGNAL_KINDS)[number];
-export type ProfileSignalKind = string;
-export type SignalType = { key: ProfileSignalKind; displayName: string; enabled: boolean };
+export { ProfileAboutValidationError } from "./profile-validation";
+export {
+  PROFILE_VISIBILITIES, normalizeProfileVisibility, normalizeSignalVisibility,
+  normalizeSignalLabel, normalizeSignalDescription, normalizeSignalTypeKey as normalizeSignalKind,
+  listSignalTypesWithDatabase, listSignalTypes,
+} from "./signals";
+export { PROFILE_SIGNAL_KINDS, normalizeSignalBody } from "./signal-compat";
+export type { ProfileVisibility, SignalType } from "./signals";
+export type { LegacyProfileSignalKind } from "./signal-compat";
+export type ProfileSignalKind = SignalTypeKey;
+export type ProfileSignalVisibility = SignalVisibility;
 
 export type ProfileInterest = {
   id: string;
@@ -24,14 +25,9 @@ export type ProfileInterest = {
   visibility: ProfileVisibility;
 };
 
-export type ProfileSignal = {
-  id: string;
-  kind: ProfileSignalKind;
-  label: string;
-  description: string | null;
-  legacyBody: boolean;
+export type ProfileSignal = Pick<Signal, "id" | "label" | "description" | "visibility" | "legacyBody"> & {
+  kind: SignalTypeKey;
   body: string;
-  visibility: ProfileSignalVisibility;
 };
 
 export type Residence = {
@@ -62,27 +58,6 @@ export type ProfileAboutDatabase = {
   connect(): Promise<ProfileAboutDatabaseClient>;
   query(text: string, values?: unknown[]): Promise<QueryResult>;
 };
-
-export class ProfileAboutValidationError extends Error {
-  constructor(message: string) {
-    super(message);
-    this.name = "ProfileAboutValidationError";
-  }
-}
-
-function normalizeBoundedText(value: unknown, field: string, maxLength: number): string {
-  if (typeof value !== "string") {
-    throw new ProfileAboutValidationError(`${field} must be text`);
-  }
-  const normalized = value.trim();
-  if (!normalized) {
-    throw new ProfileAboutValidationError(`${field} must not be empty`);
-  }
-  if (normalized.length > maxLength) {
-    throw new ProfileAboutValidationError(`${field} is too long`);
-  }
-  return normalized;
-}
 
 export function normalizeProfileBio(value: unknown): string {
   if (typeof value !== "string") {
@@ -125,61 +100,10 @@ export function normalizeInterest(value: unknown): string {
   return normalizeBoundedText(value, "Interest", 80);
 }
 
-export function normalizeSignalBody(value: unknown): string {
-  return normalizeBoundedText(value, "Signal", 500);
-}
-
-export function normalizeSignalLabel(value: unknown): string {
-  return normalizeBoundedText(value, "Signal label", 120);
-}
-
-export function normalizeSignalDescription(value: unknown): string | null {
-  if (value === undefined || value === null || value === "") return null;
-  if (typeof value !== "string") throw new ProfileAboutValidationError("Signal description must be text");
-  if (!value.trim()) return null;
-  return normalizeBoundedText(value, "Signal description", 10000);
-}
-
-export function normalizeProfileVisibility(value: unknown): ProfileVisibility {
-  if (
-    typeof value !== "string" ||
-    !PROFILE_VISIBILITIES.includes(value as ProfileVisibility)
-  ) {
-    throw new ProfileAboutValidationError("Invalid visibility");
-  }
-  return value as ProfileVisibility;
-}
-
-export function normalizeSignalVisibility(value: unknown, kind: ProfileSignalKind): ProfileSignalVisibility {
-  if (value === "network_blind" && (kind === "need" || kind === "have")) {
-    return value;
-  }
-  return normalizeProfileVisibility(value);
-}
-
-export function normalizeSignalKind(value: unknown): ProfileSignalKind {
-  if (
-    typeof value !== "string" ||
-    !/^[a-z][a-z0-9_]{0,63}$/.test(value)
-  ) {
-    throw new ProfileAboutValidationError("Invalid signal kind");
-  }
-  return value as ProfileSignalKind;
-}
-
-export async function listSignalTypesWithDatabase(
-  database: Pick<ProfileAboutDatabase, "query">,
-): Promise<SignalType[]> {
-  const result = await database.query("SELECT key, display_name, enabled FROM signal_types ORDER BY key");
-  return result.rows.map((row) => ({
-    key: String(row.key), displayName: String(row.display_name), enabled: Boolean(row.enabled),
-  }));
-}
-
 function aboutFromRows(
   participantRow: Record<string, unknown>,
   interestRows: Array<Record<string, unknown>>,
-  signalRows: Array<Record<string, unknown>>,
+  signals: Signal[],
 ): ProfileAbout {
   return {
     bio: String(participantRow.profile_bio ?? ""),
@@ -196,14 +120,9 @@ function aboutFromRows(
       label: String(row.label),
       visibility: String(row.visibility) as ProfileVisibility,
     })),
-    signals: signalRows.map((row) => ({
-      id: String(row.id),
-      kind: String(row.kind) as ProfileSignalKind,
-      label: String(row.label),
-      description: row.description == null ? null : String(row.description),
-      legacyBody: Boolean(row.legacy_body),
-      body: String(row.body),
-      visibility: String(row.visibility) as ProfileSignalVisibility,
+    signals: signals.map((signal) => ({
+      id: signal.id, kind: signal.typeKey, label: signal.label, description: signal.description,
+      legacyBody: signal.legacyBody, body: signalBodyProjection(signal), visibility: signal.visibility,
     })),
   };
 }
@@ -227,17 +146,10 @@ export async function getProfileAboutWithDatabase(
         ORDER BY created_at, id`,
       [participantId],
     ),
-    database.query(
-      `SELECT id, kind, label, description, legacy_body, body, visibility
-         FROM profile_signals
-        WHERE participant_id = $1::uuid
-          AND status = 'active'
-        ORDER BY created_at DESC, id DESC`,
-      [participantId],
-    ),
+    listParticipantSignalsWithDatabase(database, participantId, participantId),
   ]);
   if (!participant.rowCount) return null;
-  return aboutFromRows(participant.rows[0], interests.rows, signals.rows);
+  return aboutFromRows(participant.rows[0], interests.rows, signals);
 }
 
 export async function getVisibleProfileAboutWithDatabase(
@@ -270,18 +182,10 @@ export async function getVisibleProfileAboutWithDatabase(
         ORDER BY created_at, id`,
       [participantId],
     ),
-    database.query(
-      `SELECT id, kind, label, description, legacy_body, body, visibility
-         FROM profile_signals
-        WHERE participant_id = $1::uuid
-          AND status = 'active'
-          AND visibility IN ('public', 'members')
-        ORDER BY created_at DESC, id DESC`,
-      [participantId],
-    ),
+    listParticipantSignalsWithDatabase(database, participantId, viewerParticipantId),
   ]);
   if (!participant.rowCount) return null;
-  return aboutFromRows(participant.rows[0], interests.rows, signals.rows);
+  return aboutFromRows(participant.rows[0], interests.rows, signals);
 }
 
 async function withProfileTransaction<T>(
@@ -470,101 +374,17 @@ export async function removeProfileInterestWithDatabase(
   });
 }
 
-export async function addProfileSignalWithDatabase(
-  database: ProfileAboutDatabase,
-  participantId: string,
-  kindValue: unknown,
-  bodyValue: unknown,
-  visibilityValue: unknown,
-): Promise<OnboardingReward | undefined> {
-  const kind = normalizeSignalKind(kindValue);
-  if (!PROFILE_SIGNAL_KINDS.includes(kind as LegacyProfileSignalKind)) {
-    throw new ProfileAboutValidationError("Structured content required for this signal type");
-  }
-  const body = normalizeSignalBody(bodyValue);
-  const visibility = normalizeSignalVisibility(visibilityValue, kind);
-
-  return (await insertProfileSignal(database, participantId, kind, visibility, { body })).reward;
-}
-
-export type CreateProfileSignalInput = {
-  kind: unknown;
-  label: unknown;
-  description?: unknown;
-  visibility: unknown;
-};
-
+// Compatibility facade for existing routes and A1 callers.
+export const addProfileSignalWithDatabase = addLegacyProfileSignalWithDatabase;
+export const archiveProfileSignalWithDatabase = archiveSignalWithDatabase;
+export type CreateProfileSignalInput = { kind: unknown; label: unknown; description?: unknown; visibility: unknown };
 export async function createProfileSignalWithDatabase(
-  database: ProfileAboutDatabase,
-  participantId: string,
-  input: CreateProfileSignalInput,
+  database: ProfileAboutDatabase, participantId: string, input: CreateProfileSignalInput,
 ): Promise<{ id: string; reward?: OnboardingReward }> {
-  const kind = normalizeSignalKind(input.kind);
-  const label = normalizeSignalLabel(input.label);
-  const description = normalizeSignalDescription(input.description);
-  const visibility = normalizeSignalVisibility(input.visibility, kind);
-  return insertProfileSignal(database, participantId, kind, visibility, { label, description });
-}
-
-async function insertProfileSignal(
-  database: ProfileAboutDatabase,
-  participantId: string,
-  kind: ProfileSignalKind,
-  visibility: ProfileSignalVisibility,
-  content: { body: string } | { label: string; description: string | null },
-): Promise<{ id: string; reward?: OnboardingReward }> {
-  return withProfileTransaction(database, async (client) => {
-    // Lock the catalogue row so disabling a type cannot race with creation.
-    const type = await client.query(
-      "SELECT key FROM signal_types WHERE key = $1 AND enabled = true FOR SHARE", [kind],
-    );
-    if (!type.rowCount) throw new ProfileAboutValidationError("Unknown or disabled signal type");
-    const result = "body" in content
-      ? await client.query(
-          `INSERT INTO profile_signals(participant_id, kind, body, visibility)
-           VALUES ($1::uuid, $2, $3, $4) RETURNING id`,
-          [participantId, kind, content.body, visibility],
-        )
-      : await client.query(
-          `INSERT INTO profile_signals(participant_id, kind, label, description, visibility)
-           VALUES ($1::uuid, $2, $3, $4, $5) RETURNING id`,
-          [participantId, kind, content.label, content.description, visibility],
-        );
-    const id = String(result.rows[0].id);
-    await recordEvent(client, participantId, "participant.signal_created", {
-      signal_id: id,
-      kind,
-      visibility,
-    });
-    const reward = kind === "need" || kind === "have"
-      ? getOnboardingActionReward(client, participantId, `${kind}_first_created`) : undefined;
-    const resolvedReward = await reward;
-    return resolvedReward ? { id, reward: resolvedReward } : { id };
+  const { signal, reward } = await createSignalWithDatabase(database, participantId, {
+    typeKey: input.kind, label: input.label, description: input.description, visibility: input.visibility,
   });
-}
-
-export async function archiveProfileSignalWithDatabase(
-  database: ProfileAboutDatabase,
-  participantId: string,
-  signalId: string,
-): Promise<void> {
-  await withProfileTransaction(database, async (client) => {
-    const result = await client.query(
-      `UPDATE profile_signals
-          SET status = 'archived',
-              updated_at = now()
-        WHERE id = $1::uuid
-          AND participant_id = $2::uuid
-          AND status = 'active'
-       RETURNING id`,
-      [signalId, participantId],
-    );
-    if (result.rowCount) {
-      await recordEvent(client, participantId, "participant.signal_archived", {
-        signal_id: signalId,
-      });
-    }
-  });
+  return reward ? { id: signal.id, reward } : { id: signal.id };
 }
 
 export async function getProfileAbout(participantId: string) {
@@ -627,11 +447,6 @@ export async function addProfileSignal(
 export async function createProfileSignal(participantId: string, input: CreateProfileSignalInput) {
   const { pool } = await import("./db");
   return createProfileSignalWithDatabase(pool, participantId, input);
-}
-
-export async function listSignalTypes() {
-  const { pool } = await import("./db");
-  return listSignalTypesWithDatabase(pool);
 }
 
 export async function archiveProfileSignal(participantId: string, signalId: string) {

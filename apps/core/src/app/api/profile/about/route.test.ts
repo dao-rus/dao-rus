@@ -22,3 +22,7 @@ it("does not write or expose quests to a guest",async()=>{
   expect((await POST(request("add_signal"))).headers.get("location")).toBe("http://localhost:3000/");
   expect(mocks.signal).not.toHaveBeenCalled();
 });
+it("preserves the legacy editor's kind, body and visibility contract",async()=>{
+  await POST(request("add_signal"));
+  expect(mocks.signal).toHaveBeenCalledWith("owner","have","Offer","members");
+});
