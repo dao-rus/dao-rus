@@ -52,6 +52,8 @@ describe("canonical Signal card", () => {
     expect(output).toContain('class="signalCardAuthor"');
     expect(output).toContain('href="/profile/hidden-owner-id"');
     expect(output).toContain("Полезно · 2");
+    expect(output).not.toContain("Поддержать сеть");
+    expect(output).not.toContain("Перевод токенов на поддержку сети пока недоступен.");
     expect(output).not.toContain('data-share-url=');
   });
 

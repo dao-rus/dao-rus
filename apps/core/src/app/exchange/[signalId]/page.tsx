@@ -125,11 +125,6 @@ export default async function SignalPage({ params }: CardProps) {
         : <span className="signalUnavailable" title={texts["signal.share_unavailable"]}>
           {texts["signal.share_unavailable"]}</span>}
       </div> : null}
-      <div className="signalActionGroup">
-      <button className="button secondary" type="button" disabled title={texts["signal.support_unavailable"]}>
-        {texts["signal.support_network"]}</button>
-      <small className="muted">{texts["signal.support_unavailable"]}</small>
-      </div>
     </div>
     {signal.mine && signal.status === "active" && signal.visibility === "public" ?
       <details className="signalSharePolicy"><summary>{texts[signal.externalShareEnabled ? "signal.external_disable" : "signal.external_enable"]}</summary>
