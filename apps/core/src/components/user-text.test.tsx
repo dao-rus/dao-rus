@@ -73,7 +73,8 @@ describe("one renderer across surfaces", () => {
       types={[{ key: "need", displayName: "Нужно", enabled: true }]}
       texts={Object.fromEntries(interfaceTextFields.map((field) => [field.key, field.defaultValue])) as never} />);
     expect(html).toContain("<strong>тут</strong>");
-    expect(html).toContain(anchor("https://example.org/p"));
+    expect(html).toContain('<span class="userTextLink">https://example.org/p</span>');
+    expect(html).not.toContain("<a href=\"https://example.org");
   });
 
   it("renders code comments with the shared markup", () => {
@@ -104,9 +105,9 @@ describe("one renderer across surfaces", () => {
       expect(source(join(__dirname, name))).not.toContain("UserText");
     }
     // Every free-text surface uses the shared component.
-    for (const path of ["app/exchange/page.tsx", "app/exchange/[signalId]/page.tsx", "app/participants/page.tsx",
+    for (const path of ["app/exchange/[signalId]/page.tsx", "app/participants/page.tsx",
       "app/profile/[participantId]/page.tsx", "app/relay/page.tsx", "app/relay/[id]/page.tsx", "app/veche/page.tsx",
-      "components/angel-search.tsx", "components/code-discussion.tsx", "components/profile-signals.tsx",
+      "components/signal-preview.tsx", "components/code-discussion.tsx",
       "components/signal-form.tsx"]) {
       expect(source(join(__dirname, "..", path)), path).toContain("<UserText");
     }

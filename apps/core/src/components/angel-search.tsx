@@ -4,6 +4,7 @@ import { useState, type FormEvent } from "react";
 import Link from "next/link";
 import type { InterfaceTextValues } from "../lib/interface-texts";
 import { UserText } from "./user-text";
+import { SignalPreview } from "./signal-preview";
 
 type Result = { signalId: string; typeTitle: string; label: string; description: string | null; owner: { id: string; displayName: string } | null; href: string };
 function message(texts: InterfaceTextValues, code?: string) {
@@ -33,11 +34,9 @@ export function AngelSearch({ texts }: { texts: InterfaceTextValues }) {
     </form>
     {error ? <p className="formError" role="alert">{error}</p> : null}
     {results ? <div className="exchangeCards"><h2>{texts["angel.search_results"]}</h2>
-      {results.length ? results.map((result) => <article className="exchangeCard" key={result.signalId}>
-        <p className="muted">{result.typeTitle}</p><strong className="exchangeCardTitle"><Link href={result.href}>{result.label}</Link></strong>
-        {result.description ? <UserText className="profileBio" text={result.description} /> : null}
-        {result.owner ? <div className="exchangeCardAuthor"><Link href={`/profile/${result.owner.id}`}>{result.owner.displayName}</Link></div> : null}
-      </article>) : <p className="muted">{texts["angel.no_results"]}</p>}
+      {results.length ? results.map((result) => <SignalPreview key={result.signalId} href={result.href}
+        label={result.label} description={result.description} kicker={result.typeTitle}
+        author={result.owner ? result.owner.displayName : null} />) : <p className="muted">{texts["angel.no_results"]}</p>}
     </div> : null}
   </section>;
 }

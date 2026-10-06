@@ -9,6 +9,7 @@ import { listNetworkSignals, listSignalTypes } from "../../lib/signals";
 import { selectSignalType, signalHref, signalTypePresentation } from "../../lib/signal-presentation";
 import { AngelSearch } from "../../components/angel-search";
 import { UserText } from "../../components/user-text";
+import { SignalPreview } from "../../components/signal-preview";
 
 export const dynamic = "force-dynamic";
 export const metadata: Metadata = { title: "Обмен" };
@@ -52,10 +53,9 @@ export default async function ExchangePage({
         {signals.some((signal) => signal.visibility === "network_blind") ? <p className="muted exchangeBlindHint">{texts["exchange.privacy_hint"]}</p> : null}
         <div className="exchangeCards">
           {signals.length ? signals.map((signal) => (
-            <article className="exchangeCard" key={signal.id}>
-              <strong className="exchangeCardTitle"><Link href={signalHref(signal.id)}>{signal.label}</Link></strong>
-              {signal.description ? <UserText className="profileBio" text={signal.description} /> : null}
-              {signal.author && signal.visibility !== "network_blind" ? <div className="exchangeCardAuthor"><Link href={`/profile/${signal.author.id}`}>{signal.author.name}</Link></div> : null}
+            <SignalPreview key={signal.id} href={signalHref(signal.id)} label={signal.label}
+              description={signal.description}
+              author={signal.author && signal.visibility !== "network_blind" ? signal.author.name : null}>
               {signal.mine ? (
                 <span className="muted">{texts["signal.mine"]}</span>
               ) : signal.visibility === "network_blind" && (selected?.key === "need" || selected?.key === "have") ? (
@@ -65,7 +65,7 @@ export default async function ExchangePage({
                   <button className="button primary" type="submit">{texts["signal.respond"]}</button>
                 </form>
               ) : null}
-            </article>
+            </SignalPreview>
           )) : <p className="muted">{texts["exchange.empty"]}</p>}
         </div>
         <div className="actions">

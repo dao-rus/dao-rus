@@ -42,7 +42,7 @@ describe("universal Signal UX", () => {
   it("shows populated types only, legacy text and owner actions, including disabled historical types", () => {
     const html = renderToStaticMarkup(<ProfileSignals signals={[signal, { ...signal, id: "s2", typeKey: "disabled", label: "История" }]}
       types={types} texts={texts} owner />);
-    expect(html).toContain(signal.label);
+    expect(html).toContain(signal.label.trim());
     expect(html).toContain("Уточнить формулировку");
     expect(html).toContain('id="signal-future_type"');
     expect(html).toContain('id="signal-disabled"');

@@ -18,18 +18,21 @@ vi.mock("@/lib/relay", () => ({
 
 import ExchangePage from "./page";
 import { UserText } from "../../components/user-text";
+import { SignalPreview } from "../../components/signal-preview";
 
 function textContent(node: ReactNode): string {
   if (typeof node === "string" || typeof node === "number") return String(node);
   if (Array.isArray(node)) return node.map(textContent).join(" ");
   if (!isValidElement(node)) return "";
   if (node.type === UserText) return textContent(UserText(node.props as Parameters<typeof UserText>[0]));
+  if (node.type === SignalPreview) return textContent(SignalPreview(node.props as Parameters<typeof SignalPreview>[0]));
   return textContent((node.props as { children?: ReactNode }).children);
 }
 
 function collectProps(node: ReactNode, matches: (props: Record<string, unknown>) => boolean): Record<string, unknown>[] {
   if (Array.isArray(node)) return node.flatMap((child) => collectProps(child, matches));
   if (!isValidElement(node)) return [];
+  if (node.type === SignalPreview) return collectProps(SignalPreview(node.props as Parameters<typeof SignalPreview>[0]), matches);
   const props = node.props as Record<string, unknown>;
   return [...(matches(props) ? [props] : []), ...collectProps(props.children as ReactNode, matches)];
 }
@@ -118,12 +121,10 @@ describe("network exchange catalog", () => {
       visibility: "members", author: { id: "author", name: "Анна" } }]);
     const page = await ExchangePage({ searchParams: Promise.resolve({ tab: "can" }) });
     expect(textContent(page)).toContain("Могу помочь");
-    expect(collectProps(page, (props) => props.href === "/profile/author")).toHaveLength(1);
+    expect(textContent(page)).toContain("Анна");
+    expect(collectProps(page, (props) => props.href === "/profile/author")).toHaveLength(0);
     expect(collectProps(page, (props) => props.action === "/api/relay")).toHaveLength(0);
-    const card = collectProps(page, (props) => props.className === "exchangeCard")[0];
-    expect(collectProps(card.children as ReactNode, (props) => props.className === "exchangeCardTitle")).toHaveLength(1);
-    expect(collectProps(card.children as ReactNode, (props) => props.className === "exchangeCardAuthor")).toHaveLength(1);
-    expect(collectProps(card.children as ReactNode, (props) => props.href === "/exchange/public")).toHaveLength(1);
+    expect(collectProps(page, (props) => props.href === "/exchange/public")).toHaveLength(1);
   });
 
   it("keeps the canonical link but suppresses a blind author's identity even if supplied", async () => {

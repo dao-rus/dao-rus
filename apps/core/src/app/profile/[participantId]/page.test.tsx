@@ -40,6 +40,7 @@ vi.mock("@/components/telegram-avatar", () => ({ TelegramAvatar: () => null }));
 import SubjectProfilePage from "./page";
 import { ProfileSignals } from "../../../components/profile-signals";
 import { UserText } from "../../../components/user-text";
+import { SignalPreview } from "../../../components/signal-preview";
 vi.mock("../../../lib/signals", () => ({ listParticipantSignals: mocks.signals, listSignalTypes: mocks.types }));
 vi.mock("../../../lib/interface-texts", () => ({ readInterfaceTexts: mocks.texts }));
 
@@ -59,6 +60,7 @@ function textContent(node: ReactNode): string {
   if (Array.isArray(node)) return node.map(textContent).join(" ");
   if (!isValidElement(node)) return "";
   if (node.type === ProfileSignals) return textContent(ProfileSignals(node.props as Parameters<typeof ProfileSignals>[0]));
+  if (node.type === SignalPreview) return textContent(SignalPreview(node.props as Parameters<typeof SignalPreview>[0]));
   if (node.type === UserText) return textContent(UserText(node.props as Parameters<typeof UserText>[0]));
   return textContent((node.props as { children?: ReactNode }).children);
 }
@@ -67,6 +69,7 @@ function hrefs(node: ReactNode): string[] {
   if (Array.isArray(node)) return node.flatMap(hrefs);
   if (!isValidElement(node)) return [];
   if (node.type === ProfileSignals) return hrefs(ProfileSignals(node.props as Parameters<typeof ProfileSignals>[0]));
+  if (node.type === SignalPreview) return hrefs(SignalPreview(node.props as Parameters<typeof SignalPreview>[0]));
   const props = node.props as { children?: ReactNode; href?: string };
   return [...(props.href ? [props.href] : []), ...hrefs(props.children)];
 }
@@ -75,6 +78,7 @@ function ids(node: ReactNode): string[] {
   if (Array.isArray(node)) return node.flatMap(ids);
   if (!isValidElement(node)) return [];
   if (node.type === ProfileSignals) return ids(ProfileSignals(node.props as Parameters<typeof ProfileSignals>[0]));
+  if (node.type === SignalPreview) return ids(SignalPreview(node.props as Parameters<typeof SignalPreview>[0]));
   const props = node.props as { children?: ReactNode; id?: string };
   return [...(props.id ? [props.id] : []), ...ids(props.children)];
 }
