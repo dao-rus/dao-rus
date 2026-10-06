@@ -1,12 +1,12 @@
 import { signalPresentationDefaults, signalGroupDefaults } from "./signal-presentation";
 
-export const interfaceTextFields = [
-  { section: "Сигналы", key: "signal.card_title", label: "Название страницы сигнала", defaultValue: "Сигнал", multiline: false },
-  { section: "Сигналы", key: "signal.owner_profile", label: "Переход к автору", defaultValue: "Перейти к профилю", multiline: false },
-  { section: "Сигналы", key: "signal.back_exchange", label: "Вернуться к обмену", defaultValue: "К обмену", multiline: false },
-  { section: "Сигналы", key: "signal.status_active", label: "Состояние active", defaultValue: "Активный", multiline: false },
-  { section: "Сигналы", key: "signal.status_closed", label: "Состояние closed", defaultValue: "Закрыт", multiline: false },
-  { section: "Сигналы", key: "signal.status_archived", label: "Состояние archived", defaultValue: "В архиве", multiline: false },
+const interfaceTextFieldDefinitions = [
+  { section: "Сигналы", key: "signal.card_title", label: "Название страницы сигнала", defaultValue: "Сигнал", multiline: false, pageLabel: "Страница сигнала", pageHref: undefined },
+  { section: "Сигналы", key: "signal.owner_profile", label: "Переход к автору", defaultValue: "Перейти к профилю", multiline: false, pageLabel: "Страница сигнала", pageHref: undefined },
+  { section: "Сигналы", key: "signal.back_exchange", label: "Вернуться к обмену", defaultValue: "К обмену", multiline: false, pageLabel: "Страница сигнала", pageHref: undefined },
+  { section: "Сигналы", key: "signal.status_active", label: "Состояние active", defaultValue: "Активный", multiline: false, pageLabel: "Страница сигнала", pageHref: undefined },
+  { section: "Сигналы", key: "signal.status_closed", label: "Состояние closed", defaultValue: "Закрыт", multiline: false, pageLabel: "Страница сигнала", pageHref: undefined },
+  { section: "Сигналы", key: "signal.status_archived", label: "Состояние archived", defaultValue: "В архиве", multiline: false, pageLabel: "Страница сигнала", pageHref: undefined },
   { section: "Сигналы", key: "signal.new_title", label: "Новый сигнал", defaultValue: "Новый сигнал", multiline: false },
   { section: "Сигналы", key: "signal.edit_title", label: "Уточнить сигнал", defaultValue: "Уточнить сигнал", multiline: false },
   { section: "Сигналы", key: "signal.type", label: "Тип сигнала", defaultValue: "Тип сигнала", multiline: false },
@@ -18,19 +18,19 @@ export const interfaceTextFields = [
   { section: "Сигналы", key: "signal.description_generic", label: "Потребность, возможность или мысль, которой вы хотите поделиться.", defaultValue: "Потребность, возможность или мысль, которой вы хотите поделиться.", multiline: false },
   { section: "Сигналы", key: "signal.description_placeholder", label: "Условия, контекст, подробности", defaultValue: "Условия, контекст, подробности", multiline: false },
   { section: "Сигналы", key: "signal.visibility", label: "Кому видно", defaultValue: "Кому видно", multiline: false },
-  { section: "Сигналы", key: "signal.create", label: "Добавить сигнал", defaultValue: "Добавить сигнал", multiline: false },
+  { section: "Сигналы", key: "signal.create", label: "Добавить сигнал", defaultValue: "Добавить сигнал", multiline: false, pageLabel: "Профиль", pageHref: "/profile" },
   { section: "Сигналы", key: "signal.save", label: "Сохранить", defaultValue: "Сохранить", multiline: false },
-  { section: "Сигналы", key: "signal.edit", label: "Редактировать", defaultValue: "Редактировать", multiline: false },
-  { section: "Сигналы", key: "signal.refine", label: "Уточнить формулировку", defaultValue: "Уточнить формулировку", multiline: false },
+  { section: "Сигналы", key: "signal.edit", label: "Редактировать", defaultValue: "Редактировать", multiline: false, pageLabel: "Профиль", pageHref: "/profile" },
+  { section: "Сигналы", key: "signal.refine", label: "Уточнить формулировку", defaultValue: "Уточнить формулировку", multiline: false, pageLabel: "Профиль", pageHref: "/profile" },
   { section: "Сигналы", key: "signal.legacy_hint", label: "Это прежняя запись свободным текстом. При желании выделите краткую формулировку; исходный текст сохранён ниже без сокращения.", defaultValue: "Это прежняя запись свободным текстом. При желании выделите краткую формулировку; исходный текст сохранён ниже без сокращения.", multiline: false },
-  { section: "Сигналы", key: "signal.profile_title", label: "Сигналы", defaultValue: "Сигналы", multiline: false },
+  { section: "Сигналы", key: "signal.profile_title", label: "Сигналы", defaultValue: "Сигналы", multiline: false, pageLabel: "Профиль", pageHref: "/profile" },
   { section: "Сигналы", key: "signal.profile_link", label: "Мой профиль", defaultValue: "Мой профиль", multiline: false },
   { section: "Сигналы", key: "signal.original", label: "Исходная запись", defaultValue: "Исходная запись", multiline: false },
   { section: "Сигналы", key: "signal.invalid", label: "Проверьте тип, видимость и формулировку (до 120 символов). Подробности — до 10000 символов.", defaultValue: "Проверьте тип, видимость и формулировку (до 120 символов). Подробности — до 10000 символов.", multiline: false },
   { section: "Сигналы", key: "signal.empty_types", label: "Сейчас нет доступных типов для создания.", defaultValue: "Сейчас нет доступных типов для создания.", multiline: false },
-  { section: "Сигналы", key: "signal.archive", label: "Убрать", defaultValue: "Убрать", multiline: false },
-  { section: "Сигналы", key: "signal.mine", label: "Ваш сигнал", defaultValue: "Ваш сигнал", multiline: false },
-  { section: "Сигналы", key: "signal.respond", label: "Отозваться", defaultValue: "Отозваться", multiline: false },
+  { section: "Сигналы", key: "signal.archive", label: "Убрать", defaultValue: "Убрать", multiline: false, pageLabel: "Профиль", pageHref: "/profile" },
+  { section: "Сигналы", key: "signal.mine", label: "Ваш сигнал", defaultValue: "Ваш сигнал", multiline: false, pageLabel: "Обмен", pageHref: "/exchange" },
+  { section: "Сигналы", key: "signal.respond", label: "Отозваться", defaultValue: "Отозваться", multiline: false, pageLabel: "Обмен", pageHref: "/exchange" },
   { section: "Сигналы", key: "signal.dating_hint", label: "Знакомства — чувствительный тип. Пока доступны только закрытые варианты; отдельного matching для него нет.", defaultValue: "Знакомства — чувствительный тип. Пока доступны только закрытые варианты; отдельного matching для него нет.", multiline: false },
   { section: "Ангел", key: "angel.compose_title", label: "Заголовок помощи в создании сигнала", defaultValue: "Помочь сформулировать с Ангелом", multiline: false },
   { section: "Ангел", key: "angel.compose_placeholder", label: "Подсказка ввода для Ангела", defaultValue: "Опишите своими словами, что вам нужно, что вы умеете или чем хотите поделиться", multiline: true },
@@ -38,10 +38,10 @@ export const interfaceTextFields = [
   { section: "Ангел", key: "angel.proposal_title", label: "Заголовок предложения Ангела", defaultValue: "Предложение Ангела", multiline: false },
   { section: "Ангел", key: "angel.proposal_accept", label: "Принять предложение Ангела", defaultValue: "Подставить в форму", multiline: false },
   { section: "Ангел", key: "angel.proposal_cancel", label: "Отменить предложение Ангела", defaultValue: "Отменить", multiline: false },
-  { section: "Ангел", key: "angel.search_placeholder", label: "Подсказка поиска Ангелом", defaultValue: "Спросить Ангела, кого или что найти", multiline: false },
-  { section: "Ангел", key: "angel.search_submit", label: "Кнопка поиска Ангелом", defaultValue: "Спросить Ангела", multiline: false },
-  { section: "Ангел", key: "angel.search_results", label: "Заголовок результатов Ангела", defaultValue: "Ангел нашёл", multiline: false },
-  { section: "Ангел", key: "angel.no_results", label: "Нет результатов Ангела", defaultValue: "В доступной вам части Обмена подходящих Signals не найдено.", multiline: false },
+  { section: "Ангел", key: "angel.search_placeholder", label: "Подсказка поиска Ангелом", defaultValue: "Спросить Ангела, кого или что найти", multiline: false, pageLabel: "Обмен", pageHref: "/exchange" },
+  { section: "Ангел", key: "angel.search_submit", label: "Кнопка поиска Ангелом", defaultValue: "Спросить Ангела", multiline: false, pageLabel: "Обмен", pageHref: "/exchange" },
+  { section: "Ангел", key: "angel.search_results", label: "Заголовок результатов Ангела", defaultValue: "Ангел нашёл", multiline: false, pageLabel: "Обмен", pageHref: "/exchange" },
+  { section: "Ангел", key: "angel.no_results", label: "Нет результатов Ангела", defaultValue: "В доступной вам части Обмена подходящих Signals не найдено.", multiline: false, pageLabel: "Обмен", pageHref: "/exchange" },
   { section: "Ангел", key: "angel.out_of_scope", label: "Отказ Ангела вне обмена", defaultValue: "Простите, это не ко мне. Я помогаю только с вопросами обмена: найти людей, знания, навыки, ресурсы, проекты, идеи и возможности в ДАО Русь.", multiline: true },
   { section: "Ангел", key: "angel.suspicious_prompt", label: "Отказ Ангела при подозрительном запросе", defaultValue: "Этот запрос не может быть обработан. Похоже, вы вышли за рамки допустимого. Случайно или намеренно — вот в чём вопрос.", multiline: true },
   { section: "Ангел", key: "angel.unavailable", label: "Ошибка Ангела", defaultValue: "Ангел сейчас не смог обработать запрос. Можно продолжить вручную.", multiline: false },
@@ -91,14 +91,14 @@ export const interfaceTextFields = [
   { section: "Хранитель", key: "guardian.already_sent", label: "Этот системный шаблон уже отправлен.", defaultValue: "Этот системный шаблон уже отправлен.", multiline: false },
   { section: "Хранитель", key: "guardian.no_channels", label: "Выберите хотя бы один канал.", defaultValue: "Выберите хотя бы один канал.", multiline: false },
   { section: "Хранитель", key: "guardian.unknown_count", label: "Количество будет вычислено в предпросмотре.", defaultValue: "Количество будет вычислено в предпросмотре.", multiline: false },
-  { section: "Хранитель", key: "guardian.departures_title", label: "История убытия", defaultValue: "История убытия", multiline: false },
+  { section: "Хранитель", key: "guardian.departures_title", label: "История убытия", defaultValue: "История убытия", multiline: false, pageLabel: "История убытия", pageHref: "/admin/guardian/departures" },
   { section: "Хранитель", key: "guardian.departures_recent", label: "Счётчик за 30 дней", defaultValue: "За последние 30 дней:", multiline: false },
   { section: "Хранитель", key: "guardian.departures_total", label: "Общий счётчик", defaultValue: "Всего зарегистрировано убытий:", multiline: false },
-  { section: "Хранитель", key: "guardian.departures_empty", label: "Пустая история", defaultValue: "Зарегистрированных убытий пока нет.", multiline: false },
-  { section: "Хранитель", key: "guardian.departure_left", label: "Выход из форума", defaultValue: "Вышел из форума", multiline: false },
-  { section: "Хранитель", key: "guardian.departure_removed", label: "Удаление из форума", defaultValue: "Удалён из форума", multiline: false },
-  { section: "Хранитель", key: "guardian.profile_unavailable", label: "Недоступный профиль", defaultValue: "Профиль недоступен", multiline: false },
-  { section: "Хранитель", key: "guardian.back", label: "Вернуться к Хранителю", defaultValue: "К Хранителю", multiline: false },
+  { section: "Хранитель", key: "guardian.departures_empty", label: "Пустая история", defaultValue: "Зарегистрированных убытий пока нет.", multiline: false, pageLabel: "История убытия", pageHref: "/admin/guardian/departures" },
+  { section: "Хранитель", key: "guardian.departure_left", label: "Выход из форума", defaultValue: "Вышел из форума", multiline: false, pageLabel: "История убытия", pageHref: "/admin/guardian/departures" },
+  { section: "Хранитель", key: "guardian.departure_removed", label: "Удаление из форума", defaultValue: "Удалён из форума", multiline: false, pageLabel: "История убытия", pageHref: "/admin/guardian/departures" },
+  { section: "Хранитель", key: "guardian.profile_unavailable", label: "Недоступный профиль", defaultValue: "Профиль недоступен", multiline: false, pageLabel: "История убытия", pageHref: "/admin/guardian/departures" },
+  { section: "Хранитель", key: "guardian.back", label: "Вернуться к Хранителю", defaultValue: "К Хранителю", multiline: false, pageLabel: "История убытия", pageHref: "/admin/guardian/departures" },
   { section: "Хранитель", key: "guardian.broadcast_lead", label: "Аудитория сообщения", defaultValue: "Получатели будут проверены заново перед отправкой.", multiline: false },
   { section: "Хранитель", key: "guardian.message", label: "Поле сообщения", defaultValue: "Сообщение", multiline: false },
   { section: "Хранитель", key: "guardian.channel_core", label: "Канал Ядра", defaultValue: "Ядро", multiline: false },
@@ -157,14 +157,36 @@ export const interfaceTextFields = [
   { section: "Мне нужно", key: "need.title", label: "Заголовок", defaultValue: "Что вам нужно?", multiline: false },
   { section: "Мне нужно", key: "need.lead", label: "Вводный текст", defaultValue: "Опишите потребность своими словами. Запись появится в вашем профиле.", multiline: true },
   { section: "Диалоги", key: "relay.list_title", label: "Заголовок списка", defaultValue: "Диалоги", multiline: false },
-  { section: "Диалоги", key: "relay.archive_title", label: "Заголовок архива", defaultValue: "Архив диалогов", multiline: false },
-  { section: "Диалоги", key: "relay.dialog_title", label: "Заголовок диалога", defaultValue: "Диалог", multiline: false },
+  { section: "Диалоги", key: "relay.archive_title", label: "Заголовок архива", defaultValue: "Архив диалогов", multiline: false, pageLabel: "Архив диалогов", pageHref: "/relay?archive=1" },
+  { section: "Диалоги", key: "relay.dialog_title", label: "Заголовок диалога", defaultValue: "Диалог", multiline: false, pageLabel: "Диалог", pageHref: undefined },
   { section: "Диалоги", key: "relay.list_empty", label: "Пустой список диалогов", defaultValue: "Активных диалогов пока нет.", multiline: false },
-  { section: "Диалоги", key: "relay.archive_empty", label: "Пустой архив", defaultValue: "Архив пуст.", multiline: false },
-  { section: "Диалоги", key: "relay.messages_empty", label: "Пустая переписка", defaultValue: "Сообщений пока нет.", multiline: false },
+  { section: "Диалоги", key: "relay.archive_empty", label: "Пустой архив", defaultValue: "Архив пуст.", multiline: false, pageLabel: "Архив диалогов", pageHref: "/relay?archive=1" },
+  { section: "Диалоги", key: "relay.messages_empty", label: "Пустая переписка", defaultValue: "Сообщений пока нет.", multiline: false, pageLabel: "Диалог", pageHref: undefined },
   { section: "Профиль", key: "profile.eyebrow", label: "Надпись над именем в профиле", defaultValue: "Профиль", multiline: false },
   { section: "Профиль", key: "profile.reception_link", label: "Ссылка на Приёмную", defaultValue: "Открыть Приёмную ДАО Русь", multiline: false },
 ] as const;
+
+type PageContext = { pageLabel: string; pageHref?: string };
+
+const pageContextBySection: Record<(typeof interfaceTextFieldDefinitions)[number]["section"], PageContext> = {
+  "Сигналы": { pageLabel: "Создание сигнала", pageHref: "/exchange/new" },
+  "Ангел": { pageLabel: "Создание сигнала", pageHref: "/exchange/new" },
+  "Хранитель": { pageLabel: "Хранитель", pageHref: "/admin/guardian" },
+  "Навигация": { pageLabel: "Общий интерфейс" },
+  "Главная": { pageLabel: "Главная", pageHref: "/" },
+  "Сеть": { pageLabel: "Сеть", pageHref: "/participants" },
+  "Рядом": { pageLabel: "Рядом", pageHref: "/nearby" },
+  "Сообщества": { pageLabel: "Сообщества", pageHref: "/participants" },
+  "Обмен": { pageLabel: "Обмен", pageHref: "/exchange" },
+  "Мне нужно": { pageLabel: "Мне нужно", pageHref: "/need" },
+  "Диалоги": { pageLabel: "Диалоги", pageHref: "/relay" },
+  "Профиль": { pageLabel: "Профиль", pageHref: "/profile" },
+};
+
+export const interfaceTextFields = interfaceTextFieldDefinitions.map((field) => ({
+  ...pageContextBySection[field.section],
+  ...field,
+}));
 
 export type InterfaceTextKey = (typeof interfaceTextFields)[number]["key"];
 export type InterfaceTextValues = Record<InterfaceTextKey, string>;
@@ -225,7 +247,7 @@ export function parseInterfaceTextForm(formData: FormData): InterfaceTextOverrid
       continue;
     }
     const value = formData.get(field.key);
-    if (typeof value !== "string" || !value.trim() || value.trim().length > 1000) {
+    if (typeof value !== "string") {
       throw new InterfaceTextValidationError();
     }
     const normalized = value.trim();
@@ -252,7 +274,7 @@ export async function saveInterfaceTextsWithDatabase(
 
     for (const field of interfaceTextFields) {
       const next = desired[field.key];
-      if (next === undefined || (next !== null && (!next.trim() || next.length > 1000))) {
+      if (next === undefined) {
         throw new InterfaceTextValidationError();
       }
       const previous = current.get(field.key) ?? null;

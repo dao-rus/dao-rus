@@ -93,7 +93,9 @@ h1 { margin: 0 0 12px; font-size: clamp(34px, 7vw, 64px); line-height: 1; }
 .profileEdit { margin-top: 30px; }
 .interfaceForm { display: grid; gap: 22px; margin-top: 28px; }
 .interfaceField { display: grid; gap: 8px; }
-.interfaceField > label:first-child { color: var(--muted); font-size: 13px; }
+.interfaceFieldContext { color: var(--muted); font-size: 13px; }
+.interfaceFieldContext a { color: var(--accent); text-decoration: underline; text-underline-offset: 2px; }
+.interfaceField > label[for] { color: var(--muted); font-size: 13px; }
 .interfaceField > input, .interfaceField > textarea, .interfaceField > select {
   width: 100%; border: 1px solid var(--line); border-radius: 10px;
   padding: 12px; background: #fff; color: var(--ink);

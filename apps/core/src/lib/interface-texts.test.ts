@@ -47,6 +47,22 @@ function formWithDefaults() {
 }
 
 describe("interface texts", () => {
+  it("keeps page context on registry fields, including shared and dynamic screens", () => {
+    for (const field of interfaceTextFields) {
+      expect(field.pageLabel.trim(), field.key).not.toBe("");
+      if (field.pageHref) expect(field.pageHref, field.key).toMatch(/^\/(?!\/)/);
+    }
+    const field = (key: string) => interfaceTextFields.find((item) => item.key === key);
+    expect(field("exchange.title")).toMatchObject({ pageLabel: "Обмен", pageHref: "/exchange" });
+    expect(field("exchange.lead")).toMatchObject({ pageLabel: "Обмен", pageHref: "/exchange" });
+    expect(field("signal.new_title")).toMatchObject({ pageLabel: "Создание сигнала", pageHref: "/exchange/new" });
+    expect(field("profile.eyebrow")).toMatchObject({ pageLabel: "Профиль", pageHref: "/profile" });
+    expect(field("participants.title")).toMatchObject({ pageLabel: "Сеть", pageHref: "/participants" });
+    expect(field("nav.veche")).toMatchObject({ pageLabel: "Общий интерфейс" });
+    expect(field("nav.veche")).not.toHaveProperty("pageHref");
+    expect(field("relay.dialog_title")).toMatchObject({ pageLabel: "Диалог", pageHref: undefined });
+  });
+
   it("uses hardcoded defaults when the database has no overrides", async () => {
     const state = await readInterfaceTextsWithDatabase(new FakeDatabase());
     for (const field of interfaceTextFields) {
@@ -75,6 +91,35 @@ describe("interface texts", () => {
     }]);
     expect(JSON.stringify(database.events)).not.toContain("Новый заголовок");
     expect(database.released).toBe(true);
+  });
+
+  it("does not persist page metadata with edited text", async () => {
+    const database = new FakeDatabase();
+    const form = formWithDefaults();
+    form.set("exchange.title", "Обмен участниками");
+
+    const desired = parseInterfaceTextForm(form);
+    expect(Object.keys(desired)).toEqual(interfaceTextFields.map((field) => field.key));
+    expect(desired["exchange.title"]).toBe("Обмен участниками");
+    expect(await saveInterfaceTextsWithDatabase(database, "admin-id", desired))
+      .toEqual(["exchange.title"]);
+    expect([...database.overrides]).toEqual([["exchange.title", "Обмен участниками"]]);
+  });
+
+  it("saves empty and long text, preserving empty overrides instead of resetting defaults", async () => {
+    const database = new FakeDatabase();
+    const form = formWithDefaults();
+    const longText = "Д".repeat(1200);
+    form.set("home.title", "");
+    form.set("exchange.lead", longText);
+
+    expect(await saveInterfaceTextsWithDatabase(database, "admin-id", parseInterfaceTextForm(form)))
+      .toEqual(["home.title", "exchange.lead"]);
+    expect(database.overrides.get("home.title")).toBe("");
+    expect(database.overrides.get("exchange.lead")).toBe(longText);
+    const state = await readInterfaceTextsWithDatabase(database);
+    expect(state.values["home.title"]).toBe("");
+    expect(state.values["exchange.lead"]).toBe(longText);
   });
 
   it("uses the registry for new keys and ignores unregistered form and stored keys", async () => {

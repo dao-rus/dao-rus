@@ -16,7 +16,7 @@ type InterfacePageProps = {
 const updateMessages: Record<string, string> = {
   updated: "Тексты сохранены.",
   unchanged: "Изменений нет.",
-  invalid: "Проверьте заполнение полей. Текст не должен быть пустым или длиннее 1000 символов.",
+  invalid: "Не удалось прочитать все поля формы. Обновите страницу и попробуйте снова.",
 };
 
 const sections = [...new Set(interfaceTextFields.map((field) => field.section))];
@@ -59,11 +59,16 @@ export default async function InterfacePage({ searchParams }: InterfacePageProps
               <h2>{section}</h2>
               {interfaceTextFields.filter((field) => field.section === section).map((field) => (
                 <div className="interfaceField" key={field.key}>
+                  <div className="interfaceFieldContext">
+                    {field.pageHref ? (
+                      <Link href={field.pageHref}>{field.pageLabel} <span aria-hidden="true">↗</span></Link>
+                    ) : <span>{field.pageLabel}</span>}
+                  </div>
                   <label htmlFor={field.key}>{field.label}</label>
                   {field.multiline ? (
-                    <textarea id={field.key} name={field.key} defaultValue={values[field.key]} maxLength={1000} />
+                    <textarea id={field.key} name={field.key} defaultValue={values[field.key]} />
                   ) : (
-                    <input id={field.key} name={field.key} defaultValue={values[field.key]} maxLength={1000} />
+                    <input id={field.key} name={field.key} defaultValue={values[field.key]} />
                   )}
                   <small className="muted">По умолчанию: {field.defaultValue}</small>
                   <label className="interfaceReset">
