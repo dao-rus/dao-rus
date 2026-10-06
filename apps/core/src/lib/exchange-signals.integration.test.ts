@@ -12,7 +12,7 @@ import {
   listExchangeSignalsWithDatabase, sendRelayMessageWithDatabase, listRelayMessagesWithDatabase,
 } from "./relay";
 import {
-  createSignalWithDatabase, listParticipantSignalsWithDatabase, listNetworkSignalsWithDatabase,
+  getSignalWithDatabase, createSignalWithDatabase, listParticipantSignalsWithDatabase, listNetworkSignalsWithDatabase,
   requireEnabledSignalTypeWithDatabase, archiveSignalWithDatabase, updateSignalWithDatabase,
 } from "./signals";
 import { signalBodyProjection } from "./signal-compat";
@@ -369,6 +369,39 @@ describe.skipIf(!databaseUrl)("Exchange A1 on real PostgreSQL", () => {
       .rejects.toThrow("Signal unavailable");
     await pool.query("BEGIN;" + refinement.sql + ";COMMIT;");
     expect(Number((await pool.query("SELECT count(*) FROM darus_ledger")).rows[0].count)).toBe(rewards + ownerRewards);
+  });
+
+  it("B1 permalink access equals browse/profile access for every visibility and lifecycle", async () => {
+    const owner = await participant();
+    for (const visibility of ["public", "members", "private", "circle", "match_only", "network_blind"] as const) {
+      for (const status of ["active", "closed", "archived"] as const) {
+        const { signal } = await createSignalWithDatabase(pool, owner, {
+          typeKey: "need", label: `${visibility} ${status}`, description: "Canonical details", visibility,
+        });
+        if (status !== "active") await pool.query("UPDATE profile_signals SET status=$2 WHERE id=$1", [signal.id, status]);
+        const mine = await getSignalWithDatabase(pool, owner, signal.id);
+        expect(mine).toMatchObject({ id: signal.id, mine: true, status, visibility, label: signal.label });
+        const card = await getSignalWithDatabase(pool, outsider, signal.id);
+        const readable = status === "active" && ["public", "members", "network_blind"].includes(visibility);
+        if (!readable) expect(card).toBeNull();
+        else {
+          expect(card).toMatchObject({ id: signal.id, mine: false, status: "active", visibility });
+          expect((await listNetworkSignalsWithDatabase(pool, outsider, "need")).some((entry) => entry.id === signal.id)).toBe(true);
+        }
+        if (visibility === "network_blind") {
+          expect(mine).toMatchObject({ ownerId: null, author: null });
+          if (card) expect(card).toMatchObject({ ownerId: null, author: null });
+          expect(JSON.stringify(card)).not.toContain(owner);
+        } else if (card) expect(card.author?.id).toBe(owner);
+      }
+    }
+    expect(await getSignalWithDatabase(pool, outsider, randomUUID())).toBeNull();
+    expect(await getSignalWithDatabase(pool, outsider, "not-a-uuid")).toBeNull();
+    await addProfileSignalWithDatabase(pool, owner, "can", "  Legacy text\nnot split  ", "members");
+    const legacy = (await listParticipantSignalsWithDatabase(pool, owner, owner)).find((signal) => signal.typeKey === "can")!;
+    expect(await getSignalWithDatabase(pool, outsider, legacy.id)).toMatchObject({
+      label: "Legacy text\nnot split", description: null, legacyBody: true,
+    });
   });
 
 });

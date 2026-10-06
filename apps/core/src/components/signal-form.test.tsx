@@ -46,6 +46,7 @@ describe("universal Signal UX", () => {
     expect(html).toContain('id="signal-disabled"');
     expect(html).not.toContain('id="signal-dating"');
     expect(html).toContain('/exchange/new?signal=s');
+    expect(html).toContain('href="/exchange/s"');
     expect(html).toContain('value="archive_signal"');
   });
   it("adds neither owner actions nor empty/hidden category clues to foreign profiles", () => {

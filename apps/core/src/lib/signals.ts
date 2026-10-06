@@ -98,6 +98,23 @@ function signalFromRow(row: Record<string, unknown>, hideBlindOwner = false): Si
   };
 }
 
+// Existing A2 read scopes: profile identity excludes blind signals, the network masks it.
+function visibleActiveSignalSql(scope: "profile" | "network"): string {
+  const visibilities = scope === "profile" ? "'public', 'members'" : "'public', 'members', 'network_blind'";
+  return `s.status = 'active' AND s.visibility IN (${visibilities})`;
+}
+const networkIdentityColumns = `(s.participant_id = $1::uuid) AS mine,
+            CASE WHEN s.visibility <> 'network_blind' THEN s.participant_id END AS owner_id,
+            CASE WHEN s.visibility <> 'network_blind' THEN author.id END AS author_id,
+            CASE WHEN s.visibility <> 'network_blind' THEN author.display_name END AS author_name`;
+function networkSignalFromRow(row: Record<string, unknown>): NetworkSignal {
+  return {
+    ...signalFromRow(row, true), mine: Boolean(row.mine),
+    author: row.visibility === "network_blind" || !row.author_id ? null
+      : { id: String(row.author_id), name: String(row.author_name) },
+  };
+}
+
 export async function listParticipantSignalsWithDatabase(
   database: SignalReader, ownerId: string, viewerId: string, status: SignalStatus = "active",
 ): Promise<Signal[]> {
@@ -109,7 +126,7 @@ export async function listParticipantSignalsWithDatabase(
     `SELECT ${contentColumns}, s.participant_id AS owner_id
        FROM profile_signals s
       WHERE s.participant_id = $1::uuid AND s.status = $2
-        ${own ? "" : "AND s.visibility IN ('public', 'members')"}
+        ${own ? "" : `AND ${visibleActiveSignalSql("profile")}`}
       ORDER BY s.created_at DESC, s.id DESC`,
     [ownerId, status],
   );
@@ -121,22 +138,36 @@ export async function listNetworkSignalsWithDatabase(
 ): Promise<NetworkSignal[]> {
   const typeKey = normalizeSignalTypeKey(typeKeyValue);
   const result = await database.query(
-    `SELECT ${contentColumns}, (s.participant_id = $1::uuid) AS mine,
-            CASE WHEN s.visibility <> 'network_blind' THEN s.participant_id END AS owner_id,
-            CASE WHEN s.visibility <> 'network_blind' THEN author.id END AS author_id,
-            CASE WHEN s.visibility <> 'network_blind' THEN author.display_name END AS author_name
+    `SELECT ${contentColumns}, ${networkIdentityColumns}
        FROM profile_signals s
        JOIN participants author ON author.id = s.participant_id
-      WHERE s.status = 'active' AND s.kind = $2
-        AND s.visibility IN ('public', 'members', 'network_blind')
+      WHERE ${visibleActiveSignalSql("network")} AND s.kind = $2
       ORDER BY s.created_at DESC, s.id DESC LIMIT 100`,
     [viewerId, typeKey],
   );
-  return result.rows.map((row) => ({
-    ...signalFromRow(row, true), mine: Boolean(row.mine),
-    author: row.visibility === "network_blind" || !row.author_id ? null
-      : { id: String(row.author_id), name: String(row.author_name) },
-  }));
+  return result.rows.map(networkSignalFromRow);
+}
+
+// Same viewer permissions as network browsing plus the owner's existing profile access.
+// Unavailable and nonexistent IDs have the same null result; no unfiltered lookup is exposed.
+export async function getSignalWithDatabase(
+  database: SignalReader, viewerId: string, signalId: unknown,
+): Promise<NetworkSignal | null> {
+  if (typeof signalId !== "string" || !/^[0-9a-f]{8}(-[0-9a-f]{4}){3}-[0-9a-f]{12}$/i.test(signalId)) return null;
+  const result = await database.query(
+    `SELECT ${contentColumns}, ${networkIdentityColumns}
+       FROM profile_signals s
+       JOIN participants author ON author.id = s.participant_id
+      WHERE s.id = $2::uuid
+        AND (s.participant_id = $1::uuid OR (${visibleActiveSignalSql("network")}))`,
+    [viewerId, signalId],
+  );
+  return result.rowCount ? networkSignalFromRow(result.rows[0]) : null;
+}
+
+export async function getSignal(viewerId: string, signalId: unknown) {
+  const { pool } = await import("./db");
+  return getSignalWithDatabase(pool, viewerId, signalId);
 }
 
 async function withSignalTransaction<T>(database: SignalDatabase, work: (client: SignalClient) => Promise<T>): Promise<T> {
