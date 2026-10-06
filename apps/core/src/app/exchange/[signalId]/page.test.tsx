@@ -24,7 +24,7 @@ import { interfaceTextFields } from "../../../lib/interface-texts";
 const id = "10000000-0000-4000-8000-000000000001";
 const signal: NetworkSignal = { id, ownerId: "hidden-owner-id", typeKey: "need",
   label: "Ищу работу в СПб", description: "Нужен уважительный коллектив.", visibility: "public", status: "active",
-  legacyBody: false, externalShareEnabled: false, createdAt: new Date(), updatedAt: new Date(), mine: false,
+  legacyBody: false, createdAt: new Date(), updatedAt: new Date(), mine: false,
   author: { id: "hidden-owner-id", name: "Надежда К" } };
 const guestSignal = { id, typeKey: "need", label: signal.label, description: signal.description,
   authorName: "Надежда К" };
@@ -51,44 +51,50 @@ describe("canonical Signal card", () => {
     expect(output).toContain("Нужен уважительный коллектив.");
     expect(output).toContain('class="signalCardAuthor"');
     expect(output).toContain('href="/profile/hidden-owner-id"');
-    expect(output).toContain("Полезно · 2");
+    expect(output).toContain("♥ 2");
+    expect(output).not.toContain("Полезно");
     expect(output).not.toContain("Поддержать сеть");
     expect(output).not.toContain("Перевод токенов на поддержку сети пока недоступен.");
-    expect(output).not.toContain('data-share-url=');
+    expect(output).toContain("Перейти к автору");
+    expect(output).toContain(`data-share-url="http://localhost:3000/exchange/${id}"`);
+    expect(output).toContain("← К обмену");
+    expect(output.indexOf("Перейти к автору")).toBeLessThan(output.indexOf("♥ 2"));
+    expect(output.indexOf("♥ 2")).toBeLessThan(output.indexOf("data-share-url"));
   });
 
-  it("shows owner edit/archive and explicit external-share consent, without self reaction", async () => {
+  it("shows owner edit, archive and share, without self reaction or external-share UX", async () => {
     mocks.signal.mockResolvedValue({ ...signal, mine: true });
     const output = await html();
     expect(output).toContain(`/exchange/new?signal=${id}`);
     expect(output).toContain('value="archive_signal"');
-    expect(output).toContain('name="confirm_external_share"');
-    expect(output).toContain("включая моё имя");
-    expect(output).not.toContain("Полезно ·");
+    expect(output).toContain("data-share-url=");
+    expect(output).not.toContain("♥");
+    expect(output).not.toContain("confirm_external_share");
+    expect(output).not.toContain("внешнюю ссылку");
+    expect(output).not.toContain("Внешняя ссылка недоступна");
     expect(output).not.toContain('action="/api/relay"');
   });
 
-  it("shares only an opted-in active public card with a neutral payload", async () => {
-    mocks.signal.mockResolvedValue({ ...signal, externalShareEnabled: true });
+  it.each(["private", "circle", "match_only"])("does not offer Share for an owner's %s Signal", async (visibility) => {
+    mocks.signal.mockResolvedValue({ ...signal, mine: true, visibility });
     const output = await html();
-    expect(output).toContain(`data-share-url="http://localhost:3000/exchange/${id}"`);
-    expect(output).toContain('data-share-text="Сигнал в сети ДАО Русь."');
-    expect(output).not.toContain("hidden-owner-id</button>");
+    expect(output).not.toContain("data-share-url=");
+    expect(output).not.toContain("Внешняя ссылка");
   });
 
   it("never renders blind identity, even if a malformed adapter supplies it", async () => {
     mocks.signal.mockResolvedValue({ ...signal, visibility: "network_blind", typeKey: "need",
-      externalShareEnabled: true, author: { id: "hidden-owner-id", name: "Надежда К" } });
+      author: { id: "hidden-owner-id", name: "Надежда К" } });
     const output = await html();
     expect(output).toContain('action="/api/relay"');
     expect(output).toContain("Откликнуться");
-    expect(output).toContain("Полезно · 2");
+    expect(output).toContain("♥ 2");
+    expect(output).toContain("data-share-url=");
     expect(output).not.toContain("hidden-owner-id");
     expect(output).not.toContain("Надежда К");
-    expect(output).not.toContain('data-share-url=');
   });
 
-  it("renders a self-contained guest card only for explicit share policy", async () => {
+  it("renders a self-contained guest card with Share and no member actions", async () => {
     mocks.participant.mockResolvedValue(null);
     mocks.guest.mockResolvedValue(guestSignal);
     const output = await html();
@@ -98,6 +104,9 @@ describe("canonical Signal card", () => {
     expect(output).toContain("Ищу работу в СПб");
     expect(output).toContain("Надежда К");
     expect(output).toContain("Поделиться");
+    expect(output).toContain(`data-share-url="http://localhost:3000/exchange/${id}"`);
+    expect(output).not.toContain("К обмену");
+    expect(output).not.toContain("♥");
     expect(output).not.toContain("Core menu");
     expect(output).not.toContain('action="/api/signals/card"');
     expect(output).not.toContain('href="/profile/');
@@ -105,7 +114,7 @@ describe("canonical Signal card", () => {
     expect(mocks.signal).not.toHaveBeenCalled();
   });
 
-  it.each(["unshared public", "members", "private", "circle", "match_only", "network_blind", "archived", "closed"])(
+  it.each(["members", "private", "circle", "match_only", "network_blind", "archived", "closed"])(
     "denies a guest %s card", async () => {
       mocks.participant.mockResolvedValue(null);
       mocks.guest.mockResolvedValue(null);
@@ -113,6 +122,14 @@ describe("canonical Signal card", () => {
       expect(mocks.types).not.toHaveBeenCalled();
     },
   );
+
+  it("never reads member state or reactions for a guest public card", async () => {
+    mocks.participant.mockResolvedValue(null);
+    mocks.guest.mockResolvedValue(guestSignal);
+    await html();
+    expect(mocks.reaction).not.toHaveBeenCalled();
+    expect(mocks.signal).not.toHaveBeenCalled();
+  });
 
   it("keeps member permission denial as not found", async () => {
     mocks.signal.mockResolvedValue(null);
@@ -129,7 +146,7 @@ describe("canonical Signal card", () => {
     expect(output).toContain("Уточнить формулировку");
   });
 
-  it("publishes OpenGraph only for guest-shareable data and keeps noindex", async () => {
+  it("publishes OpenGraph only for guest-readable public data and keeps noindex", async () => {
     const hidden = await generateMetadata(props);
     expect(hidden).toEqual({ title: "Сигнал", robots: { index: false, follow: false } });
     expect(JSON.stringify(hidden)).not.toContain("Надежда К");

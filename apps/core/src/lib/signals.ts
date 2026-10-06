@@ -19,7 +19,6 @@ export type Signal = {
   visibility: SignalVisibility;
   status: SignalStatus;
   legacyBody: boolean;
-  externalShareEnabled: boolean;
   createdAt: Date;
   updatedAt: Date;
 };
@@ -82,7 +81,7 @@ export async function requireEnabledSignalTypeWithDatabase(
 }
 
 // Both read scopes and INSERT RETURNING share these canonical columns, never body.
-const contentColumns = `s.id, s.kind, s.label, s.description, s.visibility, s.status, s.external_share_enabled,
+const contentColumns = `s.id, s.kind, s.label, s.description, s.visibility, s.status,
                        s.legacy_body, s.created_at, s.updated_at`;
 function signalFromRow(row: Record<string, unknown>, hideBlindOwner = false): Signal {
   return {
@@ -94,7 +93,6 @@ function signalFromRow(row: Record<string, unknown>, hideBlindOwner = false): Si
     visibility: String(row.visibility) as SignalVisibility,
     status: String(row.status) as SignalStatus,
     legacyBody: Boolean(row.legacy_body),
-    externalShareEnabled: Boolean(row.external_share_enabled),
     createdAt: new Date(row.created_at as string | Date),
     updatedAt: new Date(row.updated_at as string | Date),
   };
@@ -194,6 +192,7 @@ export async function getSignalWithDatabase(
   return result.rowCount ? networkSignalFromRow(result.rows[0]) : null;
 }
 
+// `public` means readable without sign-in; the deprecated external_share_enabled column is ignored.
 export type GuestSignal = Pick<Signal, "id" | "typeKey" | "label" | "description"> & { authorName: string };
 
 export async function getGuestShareableSignalWithDatabase(database: SignalReader, signalId: unknown): Promise<GuestSignal | null> {
@@ -202,8 +201,7 @@ export async function getGuestShareableSignalWithDatabase(database: SignalReader
     `SELECT s.id, s.kind, s.label, s.description, author.display_name AS author_name
        FROM profile_signals s
        JOIN participants author ON author.id = s.participant_id
-      WHERE s.id = $1::uuid AND s.status = 'active' AND s.visibility = 'public'
-        AND s.external_share_enabled = true`,
+      WHERE s.id = $1::uuid AND s.status = 'active' AND s.visibility = 'public'`,
     [signalId],
   );
   if (!result.rowCount) return null;
@@ -215,37 +213,6 @@ export async function getGuestShareableSignalWithDatabase(database: SignalReader
 export async function getGuestShareableSignal(signalId: unknown) {
   const { pool } = await import("./db");
   return getGuestShareableSignalWithDatabase(pool, signalId);
-}
-
-export async function setSignalExternalShareWithDatabase(
-  database: SignalDatabase, ownerId: string, signalId: string, enabled: boolean,
-): Promise<boolean> {
-  if (!/^[0-9a-f]{8}(-[0-9a-f]{4}){3}-[0-9a-f]{12}$/i.test(signalId)) throw new SignalValidationError("Invalid signal ID");
-  return withSignalTransaction(database, async (client) => {
-    const result = await client.query(
-      `SELECT visibility, status, external_share_enabled FROM profile_signals
-        WHERE id = $1::uuid AND participant_id = $2::uuid FOR UPDATE`, [signalId, ownerId],
-    );
-    if (!result.rowCount) throw new SignalValidationError("Signal unavailable");
-    const row = result.rows[0];
-    if (enabled && (row.visibility !== "public" || row.status !== "active")) {
-      throw new SignalValidationError("Signal cannot be shared externally");
-    }
-    if (Boolean(row.external_share_enabled) === enabled) return false;
-    await client.query(
-      `UPDATE profile_signals SET external_share_enabled = $3, updated_at = now()
-        WHERE id = $1::uuid AND participant_id = $2::uuid`, [signalId, ownerId, enabled],
-    );
-    await client.query(`INSERT INTO events(event_type, participant_id, payload) VALUES ($1, $2::uuid, $3::jsonb)`,
-      [enabled ? "participant.signal_external_share_enabled" : "participant.signal_external_share_disabled",
-        ownerId, JSON.stringify({ signal_id: signalId })]);
-    return true;
-  });
-}
-
-export async function setSignalExternalShare(ownerId: string, signalId: string, enabled: boolean) {
-  const { pool } = await import("./db");
-  return setSignalExternalShareWithDatabase(pool, ownerId, signalId, enabled);
 }
 
 export async function getSignal(viewerId: string, signalId: unknown) {
@@ -317,7 +284,7 @@ async function insertSignal(
 export async function archiveSignalWithDatabase(database: SignalDatabase, ownerId: string, signalId: string): Promise<void> {
   await withSignalTransaction(database, async (client) => {
     const result = await client.query(
-      `UPDATE profile_signals SET status = 'archived', external_share_enabled = false, updated_at = now()
+      `UPDATE profile_signals SET status = 'archived', updated_at = now()
         WHERE id = $1::uuid AND participant_id = $2::uuid AND status = 'active' RETURNING id`,
       [signalId, ownerId],
     );
@@ -343,7 +310,6 @@ export async function updateSignalWithDatabase(
     const visibility = normalizeSignalVisibility(input.visibility, String(previous.rows[0].kind));
     const result = await client.query(
       `UPDATE profile_signals AS s SET label = $3, description = $4, visibility = $5,
-              external_share_enabled = (s.external_share_enabled AND $5 = 'public'),
               legacy_body = false, updated_at = now()
         WHERE s.id = $1::uuid AND s.participant_id = $2::uuid AND s.status = 'active'
         RETURNING ${contentColumns}, s.participant_id AS owner_id`,

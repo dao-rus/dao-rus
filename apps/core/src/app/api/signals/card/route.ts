@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { appBaseUrl } from "../../../../lib/config";
 import { getCurrentParticipant } from "../../../../lib/session";
-import { SignalValidationError, setSignalExternalShare } from "../../../../lib/signals";
+import { SignalValidationError } from "../../../../lib/signals";
 import { SignalReactionUnavailableError, setSignalReaction } from "../../../../lib/signal-reactions";
 import { signalHref } from "../../../../lib/signal-presentation";
 
@@ -21,11 +21,6 @@ export async function POST(request: NextRequest) {
   try {
     if (action === "react_add" || action === "react_remove") {
       await setSignalReaction(participant.id, id, action === "react_add");
-    } else if (action === "share_enable" || action === "share_disable") {
-      if (action === "share_enable" && form.get("confirm_external_share") !== "yes") {
-        return new NextResponse("Confirmation required", { status: 400 });
-      }
-      await setSignalExternalShare(participant.id, id, action === "share_enable");
     } else {
       return new NextResponse("Invalid action", { status: 400 });
     }

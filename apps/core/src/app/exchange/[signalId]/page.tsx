@@ -79,21 +79,21 @@ export default async function SignalPage({ params }: CardProps) {
   const type = types.find((entry) => entry.key === signal.typeKey);
   if (!type) notFound();
   const author = signal.visibility === "network_blind" ? null : signal.author;
-  const shareable = signal.status === "active" && signal.visibility === "public" && signal.externalShareEnabled;
-  const respondBlind = !signal.mine && signal.status === "active" && signal.visibility === "network_blind"
+  const active = signal.status === "active";
+  // Share only links others can open: public (guests), members, or blind (members, via Relay).
+  const shareable = active && ["public", "members", "network_blind"].includes(signal.visibility);
+  const respondBlind = !signal.mine && active && signal.visibility === "network_blind"
     && (signal.typeKey === "need" || signal.typeKey === "have");
 
   return <main className="shell"><article className="card signalCard">
     <CoreNavigation current="exchange" texts={texts} />
     <CardBody type={signalTypePresentation(type, texts).name} label={signal.label}
-      description={signal.description} author={author ? <p className="signalCardAuthor">
-        <Link href={`/profile/${author.id}`}>{author.name}</Link></p> : null} />
+      description={signal.description} author={author ? <p className="signalCardAuthor">{author.name}</p> : null} />
     {signal.mine ? <p className="muted signalCardState">
       {texts[`signal.visibility_${signal.visibility}`]} · {texts[`signal.status_${signal.status}`]}
     </p> : null}
-    <div className="signalActionBar">
-      {(signal.mine && signal.status === "active") || respondBlind || (!signal.mine && author) ? <div className="signalActionGroup">
-      {signal.mine && signal.status === "active" ? <>
+    {active ? <div className="signalActionBar">
+      {signal.mine ? <>
         <Link className="button secondary" href={`/exchange/new?signal=${signal.id}`}>
           {texts[signal.legacyBody ? "signal.refine" : "signal.edit"]}
         </Link>
@@ -110,33 +110,16 @@ export default async function SignalPage({ params }: CardProps) {
       </form> : null}
       {!signal.mine && author ? <Link className="button secondary" href={`/profile/${author.id}`}>
         {texts["signal.owner_profile"]}</Link> : null}
-      </div> : null}
-      {!signal.mine && signal.status === "active" ? <div className="signalActionGroup">
-      <form action="/api/signals/card" method="post">
+      {!signal.mine ? <form action="/api/signals/card" method="post">
         <input type="hidden" name="signal_id" value={signal.id} />
         <input type="hidden" name="action" value={reaction.reacted ? "react_remove" : "react_add"} />
         <button className="button secondary" type="submit" aria-pressed={reaction.reacted}
-          title={reaction.reacted ? texts["signal.reaction_remove"] : undefined}>
-          {texts["signal.reaction_useful"]} · {reaction.count}</button>
-      </form>
-      </div> : null}
-      {signal.status === "active" ? <div className="signalActionGroup">
-      {shareable ? <Share id={signal.id} label={signal.label} texts={texts} />
-        : <span className="signalUnavailable" title={texts["signal.share_unavailable"]}>
-          {texts["signal.share_unavailable"]}</span>}
-      </div> : null}
-    </div>
-    {signal.mine && signal.status === "active" && signal.visibility === "public" ?
-      <details className="signalSharePolicy"><summary>{texts[signal.externalShareEnabled ? "signal.external_disable" : "signal.external_enable"]}</summary>
-        <form action="/api/signals/card" method="post">
-          <input type="hidden" name="signal_id" value={signal.id} />
-          <input type="hidden" name="action" value={signal.externalShareEnabled ? "share_disable" : "share_enable"} />
-          {!signal.externalShareEnabled ? <label><input type="checkbox" name="confirm_external_share" value="yes" required />
-            {texts["signal.external_consent"]}</label> : null}
-          <button className="button secondary" type="submit">
-            {texts[signal.externalShareEnabled ? "signal.external_disable" : "signal.external_enable"]}</button>
-        </form>
-      </details> : null}
+          aria-label={texts["signal.reaction_like"]}
+          title={reaction.reacted ? texts["signal.reaction_remove"] : texts["signal.reaction_like"]}>
+          ♥ {reaction.count}</button>
+      </form> : null}
+      {shareable ? <Share id={signal.id} label={signal.label} texts={texts} /> : null}
+    </div> : null}
     <Link className="signalBackLink" href="/exchange">{texts["signal.back_exchange"]}</Link>
   </article></main>;
 }

@@ -2,7 +2,7 @@ import { describe, expect, it, vi } from "vitest";
 import {
   getSignalWithDatabase, listNetworkSignalsWithDatabase, listParticipantSignalsWithDatabase,
   updateSignalWithDatabase, requireEnabledSignalTypeWithDatabase, createSignalWithDatabase, searchNetworkSignalsWithDatabase,
-  getGuestShareableSignalWithDatabase, setSignalExternalShareWithDatabase, SignalValidationError, type SignalReader,
+  getGuestShareableSignalWithDatabase, SignalValidationError, type SignalReader,
 } from "./signals";
 import { signalBodyProjection } from "./signal-compat";
 
@@ -47,7 +47,7 @@ describe("universal Signal types and reads", () => {
     const [signal] = await listParticipantSignalsWithDatabase(db, "owner", "owner");
     expect(signal).toEqual({
       id: "signal", ownerId: "owner", typeKey: "future_type", label: "Ядро", description: "Условия",
-      visibility: "members", status: "active", legacyBody: false, externalShareEnabled: false,
+      visibility: "members", status: "active", legacyBody: false,
       createdAt: row.created_at, updatedAt: row.updated_at,
     });
     expect(signal).not.toHaveProperty("body");
@@ -149,7 +149,7 @@ describe("universal Signal types and reads", () => {
     }
     expect(db.query).not.toHaveBeenCalled();
   });
-  it("reads only explicitly shared active public Signals for guests with a minimal projection", async () => {
+  it("reads any active public Signal for guests with a minimal projection", async () => {
     const id = "10000000-0000-4000-8000-000000000001";
     const db = database([{ id, kind: "need", label: "Работа", description: "В СПб", author_name: "Надежда" }]);
     expect(await getGuestShareableSignalWithDatabase(db, id)).toEqual({
@@ -158,31 +158,12 @@ describe("universal Signal types and reads", () => {
     const [sql, values] = db.query.mock.calls[0];
     expect(values).toEqual([id]);
     expect(sql).toContain("s.status = 'active' AND s.visibility = 'public'");
-    expect(sql).toContain("s.external_share_enabled = true");
+    expect(sql).not.toContain("external_share_enabled");
     expect(sql).not.toContain("owner_id");
     expect(sql).not.toContain("s.body");
     db.query.mockClear();
     expect(await getGuestShareableSignalWithDatabase(db, "invalid")).toBeNull();
     expect(db.query).not.toHaveBeenCalled();
-  });
-  it("requires owner opt-in for external sharing and audits changes without content", async () => {
-    let shareEnabled = false;
-    const queries: Array<[string, unknown[] | undefined]> = [];
-    const client = { release: vi.fn(), query: vi.fn(async (sql: string, values?: unknown[]) => {
-      queries.push([sql, values]);
-      if (sql.startsWith("SELECT visibility")) return { rowCount: 1, rows: [{ visibility: "public", status: "active", external_share_enabled: shareEnabled }] };
-      if (sql.startsWith("UPDATE profile_signals")) shareEnabled = Boolean(values?.[2]);
-      return { rowCount: 1, rows: [] };
-    }) };
-    const db = { query: client.query, connect: vi.fn(async () => client) };
-    const id = "10000000-0000-4000-8000-000000000001";
-    expect(await setSignalExternalShareWithDatabase(db, "owner", id, true)).toBe(true);
-    expect(await setSignalExternalShareWithDatabase(db, "owner", id, true)).toBe(false);
-    expect(await setSignalExternalShareWithDatabase(db, "owner", id, false)).toBe(true);
-    const events = queries.filter(([sql]) => sql.startsWith("INSERT INTO events"));
-    expect(events).toHaveLength(2);
-    expect(JSON.stringify(events)).not.toContain("Работа");
-    expect(client.release).toHaveBeenCalledTimes(3);
   });
   it.each([false, true])("masks blind permalink identity, including for owner=%s", async (mine) => {
     const id = "10000000-0000-4000-8000-000000000001";

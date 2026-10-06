@@ -5,7 +5,7 @@ import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { applyMigration, migrationFile } from "./migration-integrity";
 import { readSignalReactionStateWithDatabase, setSignalReactionWithDatabase } from "./signal-reactions";
 import { archiveSignalWithDatabase, createSignalWithDatabase, getGuestShareableSignalWithDatabase,
-  getSignalWithDatabase, setSignalExternalShareWithDatabase, updateSignalWithDatabase } from "./signals";
+  updateSignalWithDatabase } from "./signals";
 
 const databaseUrl = process.env.SIGNAL_TEST_DATABASE_URL;
 const schema = `signal_card_test_${randomUUID().replaceAll("-", "")}`;
@@ -45,41 +45,23 @@ describe.skipIf(!databaseUrl)("Signal card sharing and reactions on PostgreSQL",
     await pool.end();
   });
 
-  it("fails closed for every old visibility and inactive status until public owner opt-in", async () => {
+  it("opens only active public Signals to guests, whatever the deprecated share column says", async () => {
     for (const visibility of ["public", "members", "private", "circle", "match_only", "network_blind"] as const) {
       const { signal } = await createSignalWithDatabase(pool, owner, { typeKey: "need", label: visibility, visibility });
+      await pool.query("UPDATE profile_signals SET external_share_enabled=$2 WHERE id=$1", [signal.id, visibility !== "public"]);
+      const guest = await getGuestShareableSignalWithDatabase(pool, signal.id);
+      if (visibility !== "public") { expect(guest).toBeNull(); continue; }
+      expect(guest).toEqual({ id: signal.id, typeKey: "need", label: visibility, description: null, authorName: "Владелец" });
+      await updateSignalWithDatabase(pool, owner, signal.id, { label: visibility, visibility: "members" });
       expect(await getGuestShareableSignalWithDatabase(pool, signal.id)).toBeNull();
-      if (visibility !== "public") {
-        await expect(setSignalExternalShareWithDatabase(pool, owner, signal.id, true)).rejects.toThrow();
-        expect(await getGuestShareableSignalWithDatabase(pool, signal.id)).toBeNull();
-      } else {
-        expect(await setSignalExternalShareWithDatabase(pool, owner, signal.id, true)).toBe(true);
-        expect(await setSignalExternalShareWithDatabase(pool, owner, signal.id, true)).toBe(false);
-        expect(await getGuestShareableSignalWithDatabase(pool, signal.id)).toMatchObject({
-          id: signal.id, label: visibility, authorName: "Владелец",
-        });
-        expect(await getSignalWithDatabase(pool, viewer, signal.id)).toMatchObject({ externalShareEnabled: true });
-        await updateSignalWithDatabase(pool, owner, signal.id, { label: visibility, visibility: "members" });
-        expect(await getGuestShareableSignalWithDatabase(pool, signal.id)).toBeNull();
-        await updateSignalWithDatabase(pool, owner, signal.id, { label: visibility, visibility: "public" });
-        expect(await getGuestShareableSignalWithDatabase(pool, signal.id)).toBeNull();
-        await setSignalExternalShareWithDatabase(pool, owner, signal.id, true);
-        await pool.query("UPDATE profile_signals SET visibility='members' WHERE id=$1", [signal.id]);
-        expect(await getGuestShareableSignalWithDatabase(pool, signal.id)).toBeNull();
-        await pool.query("UPDATE profile_signals SET visibility='public' WHERE id=$1", [signal.id]);
-        expect(await getGuestShareableSignalWithDatabase(pool, signal.id)).toBeNull();
-        await setSignalExternalShareWithDatabase(pool, owner, signal.id, true);
-        await archiveSignalWithDatabase(pool, owner, signal.id);
-        expect(await getGuestShareableSignalWithDatabase(pool, signal.id)).toBeNull();
-      }
-    }
-    for (const status of ["closed", "archived"] as const) {
-      const { signal } = await createSignalWithDatabase(pool, owner, { typeKey: "search", label: status, visibility: "public" });
-      await setSignalExternalShareWithDatabase(pool, owner, signal.id, true);
-      await pool.query("UPDATE profile_signals SET status=$2 WHERE id=$1", [signal.id, status]);
-      await expect(setSignalExternalShareWithDatabase(pool, owner, signal.id, true)).rejects.toThrow();
+      await updateSignalWithDatabase(pool, owner, signal.id, { label: visibility, visibility: "public" });
+      expect(await getGuestShareableSignalWithDatabase(pool, signal.id)).not.toBeNull();
+      await archiveSignalWithDatabase(pool, owner, signal.id);
       expect(await getGuestShareableSignalWithDatabase(pool, signal.id)).toBeNull();
     }
+    const { signal: closed } = await createSignalWithDatabase(pool, owner, { typeKey: "search", label: "closed", visibility: "public" });
+    await pool.query("UPDATE profile_signals SET status='closed' WHERE id=$1", [closed.id]);
+    expect(await getGuestShareableSignalWithDatabase(pool, closed.id)).toBeNull();
   });
 
   it("keeps reactions unique, revocable, independent of reputation and DARUS", async () => {
