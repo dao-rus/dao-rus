@@ -9,6 +9,11 @@ import {
   normalizeProfileVisibility,
   normalizeSignalBody,
   normalizeSignalKind,
+  normalizeSignalLabel,
+  normalizeSignalDescription,
+  createProfileSignalWithDatabase,
+  addProfileSignalWithDatabase,
+  listSignalTypesWithDatabase,
   ProfileAboutValidationError,
   residenceLabel,
   saveProfileWithDatabase,
@@ -29,7 +34,7 @@ describe("profile-about validation", () => {
   it("rejects empty or unsupported values", () => {
     expect(() => normalizeInterest("   ")).toThrow(ProfileAboutValidationError);
     expect(() => normalizeSignalBody("")).toThrow(ProfileAboutValidationError);
-    expect(() => normalizeSignalKind("offer")).toThrow(ProfileAboutValidationError);
+    expect(() => normalizeSignalKind("Offer with spaces")).toThrow(ProfileAboutValidationError);
     expect(() => normalizeProfileVisibility("everyone")).toThrow(ProfileAboutValidationError);
   });
 
@@ -47,6 +52,80 @@ describe("profile-about validation", () => {
     expect(() => normalizeResidence({ name: "Казань", type: "", country: "Россия" }))
       .toThrow(ProfileAboutValidationError);
     expect(residenceLabel({ name: "Москва", type: "город", country: "Россия" })).toBe("Москва, Россия");
+  });
+});
+
+describe("extensible structured signals", () => {
+  it("validates key syntax independently of the catalogue and bounds structured content", () => {
+    expect(normalizeSignalKind("future_type")).toBe("future_type");
+    expect(normalizeSignalLabel("  налоговый юрист  ")).toBe("налоговый юрист");
+    expect(normalizeSignalDescription("  Условия и контекст  ")).toBe("Условия и контекст");
+    expect(normalizeSignalDescription(undefined)).toBeNull();
+    expect(normalizeSignalDescription(" \n ")).toBeNull();
+    expect(() => normalizeSignalLabel(" ")).toThrow(ProfileAboutValidationError);
+    expect(() => normalizeSignalLabel("я".repeat(121))).toThrow(ProfileAboutValidationError);
+    expect(() => normalizeSignalDescription("я".repeat(10001))).toThrow(ProfileAboutValidationError);
+    expect(() => normalizeSignalDescription(1)).toThrow(ProfileAboutValidationError);
+    for (const kind of ["search", "know", "skill", "doing", "idea", "dating", "future_type"]) {
+      expect(() => normalizeSignalVisibility("network_blind", kind)).toThrow(ProfileAboutValidationError);
+    }
+  });
+
+  it("reads type names as data, including disabled types", async () => {
+    expect(await listSignalTypesWithDatabase({ async query() {
+      return { rowCount: 1, rows: [{ key: "custom", display_name: "Произвольное название", enabled: false }] };
+    } })).toEqual([{ key: "custom", displayName: "Произвольное название", enabled: false }]);
+  });
+
+  function databaseForType(enabled: boolean, failAudit = false) {
+    const queries: Array<{ text: string; values?: unknown[] }> = [];
+    let released = false;
+    const client: ProfileAboutDatabaseClient = {
+      async query(text, values) {
+        queries.push({ text, values });
+        if (text.includes("FROM signal_types")) return { rowCount: enabled ? 1 : 0, rows: enabled ? [{ key: values?.[0] }] : [] };
+        if (text.includes("INSERT INTO profile_signals")) return { rowCount: 1, rows: [{ id: "signal-id" }] };
+        if (failAudit && text.includes("INSERT INTO events")) throw new Error("audit failed");
+        return { rowCount: 0, rows: [] };
+      },
+      release() { released = true; },
+    };
+    return { queries, released: () => released, database: {
+      async connect() { return client; }, async query() { return { rowCount: 0, rows: [] }; },
+    } };
+  }
+
+  it("creates arbitrary catalogue types through the same transaction without a new reward", async () => {
+    const test = databaseForType(true);
+    expect(await createProfileSignalWithDatabase(test.database, "author", {
+      kind: "future_type", label: "Мастерская", description: " По выходным ", visibility: "private",
+    })).toEqual({ id: "signal-id" });
+    expect(test.queries.find(({ text }) => text.includes("INSERT INTO profile_signals"))?.values)
+      .toEqual(["author", "future_type", "Мастерская", "По выходным", "private"]);
+    expect(test.queries.filter(({ text }) => text.includes("INSERT INTO events"))[0].values?.[2])
+      .toBe(JSON.stringify({ signal_id: "signal-id", kind: "future_type", visibility: "private" }));
+    expect(test.queries.some(({ text }) => text.includes("darus_ledger"))).toBe(false);
+    expect(test.queries.at(-1)?.text).toBe("COMMIT");
+    expect(test.released()).toBe(true);
+  });
+
+  it("rejects unknown or disabled catalogue entries before insertion and rolls back", async () => {
+    const test = databaseForType(false);
+    await expect(createProfileSignalWithDatabase(test.database, "author", {
+      kind: "unknown", label: "Текст", visibility: "members",
+    })).rejects.toThrow("Unknown or disabled");
+    expect(test.queries.some(({ text }) => text.includes("INSERT INTO profile_signals"))).toBe(false);
+    expect(test.queries.at(-1)?.text).toBe("ROLLBACK");
+    expect(test.released()).toBe(true);
+  });
+
+  it("preserves the body-only contract and rolls back signals if audit fails", async () => {
+    const test = databaseForType(true, true);
+    await expect(addProfileSignalWithDatabase(test.database, "author", "need", " Старый текст ", "network_blind"))
+      .rejects.toThrow("audit failed");
+    expect(test.queries.find(({ text }) => text.includes("INSERT INTO profile_signals"))?.values)
+      .toEqual(["author", "need", "Старый текст", "network_blind"]);
+    expect(test.queries.at(-1)?.text).toBe("ROLLBACK");
   });
 });
 
@@ -189,9 +268,9 @@ describe("profile residence reads", () => {
 describe("anonymous signal publication boundary", () => {
   it("keeps network-blind and match-only signals out of another participant's profile", async () => {
     const signals = [
-      { id: "blind", kind: "need", body: "Анонимно", visibility: "network_blind" },
-      { id: "hidden", kind: "need", body: "Скрыто", visibility: "match_only" },
-      { id: "member", kind: "need", body: "Участникам", visibility: "members" },
+      { id: "blind", kind: "need", label: "Анонимно", description: null, legacy_body: true, body: "Анонимно", visibility: "network_blind" },
+      { id: "hidden", kind: "need", label: "Скрыто", description: null, legacy_body: true, body: "Скрыто", visibility: "match_only" },
+      { id: "member", kind: "need", label: "Участникам", description: null, legacy_body: true, body: "Участникам", visibility: "members" },
     ];
     const queries: string[] = [];
     const database = { async query(text: string) {
@@ -210,6 +289,7 @@ describe("anonymous signal publication boundary", () => {
     const foreign = await getVisibleProfileAboutWithDatabase(database, "author", "viewer");
     expect(own?.signals.map((signal) => signal.id)).toEqual(["blind", "hidden", "member"]);
     expect(foreign?.signals.map((signal) => signal.id)).toEqual(["member"]);
+    expect(foreign?.signals[0]).toMatchObject({ label: "Участникам", description: null, legacyBody: true });
     expect(queries.some((query) => query.includes("visibility IN ('public', 'members')"))).toBe(true);
     expect(normalizeSignalVisibility("network_blind", "need")).toBe("network_blind");
     expect(normalizeSignalVisibility("network_blind", "have")).toBe("network_blind");

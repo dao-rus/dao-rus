@@ -43,6 +43,7 @@ describe.skipIf(!databaseUrl)("onboarding quests on real PostgreSQL", () => {
       SELECT $1, amount, id, version, 'residence_first_filled', '2026-10-02T10:44:00Z' FROM reward_rules
        WHERE action_type='residence_first_filled' AND version=1`, [satisfied]);
     await pool.query("BEGIN;" + readFileSync(new URL("026_onboarding_quests.sql", directory), "utf8") + ";COMMIT;");
+    await pool.query("BEGIN;" + readFileSync(new URL("032_exchange_signal_types.sql", directory), "utf8") + ";COMMIT;");
   }, 30000);
   afterAll(async () => { await pool.query("ROLLBACK"); await pool.query(`DROP SCHEMA IF EXISTS ${schema} CASCADE`); await pool.end(); });
 

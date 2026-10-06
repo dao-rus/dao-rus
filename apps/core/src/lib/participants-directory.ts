@@ -1,5 +1,5 @@
 import { VERIFIED_SUBJECTS_CTE } from "./verification";
-import type { ProfileSignalKind, Residence } from "./profile-about";
+import type { LegacyProfileSignalKind, Residence } from "./profile-about";
 
 export type ParticipantDirectoryEntry = {
   participantId: string;
@@ -10,7 +10,7 @@ export type ParticipantDirectoryEntry = {
   hasTelegramPhoto: boolean;
   verificationPoints: number;
   positiveCount: number;
-  signalCounts: Record<ProfileSignalKind, number>;
+  signalCounts: Record<LegacyProfileSignalKind, number>;
   residence: Residence | null;
 };
 
