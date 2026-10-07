@@ -50,6 +50,8 @@ export async function POST(request: NextRequest) {
     const status = await relayReceptionUpdate(update);
     return NextResponse.json({ ok: true, status });
   }
-  await observeForumMemberUpdate(update);
+  if (await observeForumMemberUpdate(update) === "observed") {
+    await (await import("../../../../../lib/guardian-forum-actions")).afterForumMemberUpdate(update);
+  }
   return NextResponse.json({ ok: true });
 }

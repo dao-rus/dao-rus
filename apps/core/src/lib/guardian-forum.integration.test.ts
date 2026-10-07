@@ -42,7 +42,7 @@ const topics = settingsOf({ "topic.discussion.need": "18350", "topic.discussion.
 
 async function person(name = "Участник", old = false) {
   const id = randomUUID();
-  await pool.query("INSERT INTO participants(id, display_name, created_at) VALUES ($1, $2, now() - $3::interval)", [id, name, old ? "30 days" : "-1 minute"]);
+  await pool.query("INSERT INTO participants(id, display_name, membership_status, created_at) VALUES ($1, $2, 'participant', now() - $3::interval)", [id, name, old ? "30 days" : "-1 minute"]);
   return id;
 }
 const record = async (owner: string, visibility = "members", typeKey = "need", label = "Нужен совет") =>
@@ -176,6 +176,14 @@ describe.skipIf(!databaseUrl)("Guardian forum routes on real PostgreSQL", () => 
     await setForumAnnouncementWithDatabase(pool, newcomer, true);
     expect(await syncNewcomerAnnouncement(deps(), newcomer)).toBe("updated");
 
+    // An applicant who signed in to Core and filled in a city is not introduced until accepted into the forum.
+    const applicant = await person("Соискатель");
+    await pool.query("UPDATE participants SET membership_status='none', residence_name='Пермь', residence_type='город', residence_country='Россия' WHERE id=$1", [applicant]);
+    expect(await syncNewcomerAnnouncement(deps(), applicant)).toBe("none");
+    await pool.query("UPDATE participants SET membership_status='participant' WHERE id=$1", [applicant]);
+    expect(await syncNewcomerAnnouncement(deps(), applicant)).toBe("announced");
+    expect(forum.calls.at(-1)).toMatchObject({ kind: "send", text: "Новый участник: Соискатель\nГород: Пермь" });
+
     const shy = await person("Не объявлять");
     await pool.query("UPDATE participants SET residence_name='Тверь', residence_type='город', residence_country='Россия', announce_in_forum=false WHERE id=$1", [shy]);
     expect(await syncNewcomerAnnouncement(deps(), shy)).toBe("none");
@@ -183,7 +191,7 @@ describe.skipIf(!databaseUrl)("Guardian forum routes on real PostgreSQL", () => 
     await pool.query("UPDATE participants SET residence_name='Тула', residence_type='город', residence_country='Россия' WHERE id=$1", [late]);
     expect(await syncNewcomerAnnouncement(off, late)).toBe("none");
     expect(await syncNewcomerAnnouncement(deps(settingsOf({})), late)).toBe("none");
-    expect(forum.calls.filter((call) => call.kind === "send")).toHaveLength(1);
+    expect(forum.calls.filter((call) => call.kind === "send")).toHaveLength(2);
   });
 
   it("stores switches, bot name and topics, records what changed, and defaults every switch to on", async () => {

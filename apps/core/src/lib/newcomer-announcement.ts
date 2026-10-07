@@ -21,7 +21,7 @@ export async function setForumAnnouncementWithDatabase(database: SignalReader, p
 export async function syncNewcomerAnnouncement(deps: NewcomerDeps, participantId: string): Promise<"none" | "announced" | "updated" | "hidden"> {
   const topic = featureEnabled(deps.settings, "newcomer_announcements") ? topicFor(deps.settings, "topic.newcomers") : null;
   const person = await deps.database.query(
-    `SELECT p.display_name, p.residence_name, p.announce_in_forum,
+    `SELECT p.display_name, p.residence_name, p.announce_in_forum, (p.membership_status = 'participant') AS member,
             (SELECT p.created_at >= since.updated_at FROM guardian_settings since WHERE since.key = 'newcomers.since') AS newcomer,
             ARRAY(SELECT i.label FROM participant_interests i WHERE i.participant_id = p.id
                     AND i.visibility IN ('public', 'members') ORDER BY i.created_at, i.label LIMIT 12) AS interests,
@@ -41,7 +41,8 @@ export async function syncNewcomerAnnouncement(deps: NewcomerDeps, participantId
     await deps.database.query("UPDATE newcomer_announcements SET hidden = true, updated_at = now() WHERE participant_id = $1::uuid", [participantId]);
     return "hidden";
   }
-  if (!wanted || (!messageId && (!topic || !row.newcomer))) return "none";
+  // Signing in to Core is open to applicants too; only an accepted member of the forum is introduced there.
+  if (!wanted || (!messageId && (!topic || !row.newcomer || !row.member))) return "none";
   const text = [`${deps.texts["forum.newcomer_title"]}: ${String(row.display_name)}`,
     ...(row.residence_name != null ? [`${deps.texts["forum.newcomer_city"]}: ${String(row.residence_name)}`] : []),
     ...(interests.length ? [`${deps.texts["forum.newcomer_interests"]}: ${interests.join(", ")}`] : [])].join("\n");
