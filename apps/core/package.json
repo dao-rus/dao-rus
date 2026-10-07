@@ -14,6 +14,7 @@
     "telegram:forum:import": "tsx scripts/import-telegram-forum-roster.ts",
     "telegram:departures:import": "tsx scripts/import-telegram-departures.ts",
     "introductions:import": "tsx scripts/import-introductions.ts",
+    "telegram:forum:names": "tsx scripts/backfill-forum-names.ts",
     "notifications:worker": "node --import tsx scripts/notification-worker.ts"
   },
   "dependencies": {

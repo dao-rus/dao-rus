@@ -274,7 +274,7 @@ export async function observeForumMemberUpdate(
 // Whoever joins the forum is visible to its members by name there, so Core shows the same name
 // instead of a nameless placeholder. Only empty fields are filled: a later login knows better,
 // and a name the person chose in Core is never replaced.
-async function rememberForumMemberName(
+export async function rememberForumMemberName(
   database: ForumDatabase, userId: string, user: Record<string, unknown> | null,
 ): Promise<void> {
   const text = (value: unknown) => typeof value === "string" && value.trim() ? value.trim().slice(0, 128) : null;
@@ -294,4 +294,35 @@ async function rememberForumMemberName(
         AND NOT p.display_name_chosen_in_core AND p.display_name = 'Участник форума'`,
     [userId, username, firstName, lastName, name],
   );
+}
+
+// One-off: people who joined before names were remembered still show as the placeholder.
+// The reception bot, a forum administrator, can read their current Telegram name.
+export async function backfillForumMemberNames(
+  database: ForumDatabase, apply: boolean,
+  fetchUser?: (userId: string) => Promise<Record<string, unknown> | null>,
+): Promise<{ placeholders: number; named: number; unavailable: number }> {
+  const { token, forumChatId } = telegramReceptionConfig();
+  const read = fetchUser ?? (async (userId: string) => {
+    if (!token || !forumChatId) throw new Error("Reception bot is not configured");
+    const response = await botRequest(token, "getChatMember", { chat_id: forumChatId, user_id: Number(userId) });
+    return response.ok ? record(record(response.result)?.user) : null;
+  });
+  const pending = await database.query(
+    `SELECT identity.external_user_id FROM participants p
+       JOIN external_identities identity ON identity.participant_id = p.id AND identity.provider = 'telegram'
+       JOIN participant_forum_onboarding forum ON forum.participant_id = p.id AND forum.forum_status = 'joined'
+      WHERE p.display_name = 'Участник форума' AND NOT p.display_name_chosen_in_core
+        AND identity.external_user_id IS NOT NULL
+        AND (identity.username IS NULL OR identity.first_name IS NULL)
+      ORDER BY p.created_at`);
+  const result = { placeholders: pending.rows.length, named: 0, unavailable: 0 };
+  for (const row of pending.rows) {
+    const user = await read(String(row.external_user_id));
+    const hasName = [user?.first_name, user?.last_name, user?.username].some((value) => typeof value === "string" && value.trim());
+    if (!user || user.is_bot === true || !hasName) { result.unavailable++; continue; }
+    result.named++;
+    if (apply) await rememberForumMemberName(database, String(row.external_user_id), user);
+  }
+  return result;
 }
