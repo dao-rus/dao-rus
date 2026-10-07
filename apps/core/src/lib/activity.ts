@@ -42,6 +42,12 @@ export const activityEventLabels: Record<string, string> = {
   "membership.rejoined": "Возвращение в ДАО",
   "membership.excluded": "Исключение из ДАО",
   "membership.restored": "Восстановление в ДАО",
+  "award.established": "Учреждение награды",
+  "award.offered": "Предложение награды",
+  "award.declined": "Отказ от предложения награды",
+  "award.accepted": "Принятие награды",
+  "award.rejected": "Отвержение принятой награды",
+  "award.visibility_changed": "Изменение публичности награды",
 };
 
 export function activityEventLabel(eventType: string): string {

@@ -73,6 +73,12 @@ export function hasPrototypeAdminAccess(participantId: string): boolean {
   return prototypeAdminParticipantIds().has(participantId.toLowerCase());
 }
 
+// Institutional authority is separate from the technical admin allowlist.
+export function founderParticipantId(): string | null {
+  const value = env("FOUNDER_PARTICIPANT_ID")?.toLowerCase();
+  return value && /^[0-9a-f]{8}(?:-[0-9a-f]{4}){3}-[0-9a-f]{12}$/.test(value) ? value : null;
+}
+
 export function sessionTtlDays(): number {
   const raw = Number(env("SESSION_TTL_DAYS") ?? "30");
   return Number.isFinite(raw) && raw > 0 ? raw : 30;

@@ -28,8 +28,7 @@ describe("production deployment", () => {
 
     expect(importer).toContain('../src/lib/telegram-roster');
     expect(importer).toContain('../src/lib/db');
-    expect(dockerfile).toContain("src/lib/telegram-roster.ts");
-    expect(dockerfile).toContain("src/lib/db.ts");
+    expect(dockerfile).toContain("COPY --chown=nextjs:nodejs src/lib ./src/lib");
   });
 
   it("packages a separate notification worker with delivery disabled by default", async () => {
@@ -38,8 +37,7 @@ describe("production deployment", () => {
     const worker = serviceBlock(compose, "notification-worker", "caddy");
     const packageJson = await projectFile("package.json");
 
-    expect(dockerfile).toContain("src/lib/notification-delivery.ts");
-    expect(dockerfile).toContain("src/lib/config.ts");
+    expect(dockerfile).toContain("COPY --chown=nextjs:nodejs src/lib ./src/lib");
     expect(packageJson).toContain('"notifications:worker": "node --import tsx scripts/notification-worker.ts"');
     expect(worker).toContain('command: ["node", "--import", "tsx", "scripts/notification-worker.ts"]');
     expect(worker).toContain("- backend");
@@ -80,6 +78,9 @@ describe("production deployment", () => {
     expect(environment).not.toMatch(/TELEGRAM_OIDC_CLIENT_SECRET=\S+/);
     expect(environment).toContain("TELEGRAM_BOT_TOKEN=");
     expect(environment).not.toMatch(/TELEGRAM_BOT_TOKEN=\S+/);
+    expect(environment).toContain("FOUNDER_PARTICIPANT_ID=");
+    expect(environment).not.toMatch(/FOUNDER_PARTICIPANT_ID=\S+/);
+    expect(compose).toContain("FOUNDER_PARTICIPANT_ID: ${FOUNDER_PARTICIPANT_ID:-}");
     expect(compose).toContain("TELEGRAM_BOT_TOKEN: ${TELEGRAM_BOT_TOKEN:-}");
     expect(caddy).toContain("reverse_proxy web:3000");
   });
