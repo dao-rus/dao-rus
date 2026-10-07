@@ -175,7 +175,7 @@ describe.skipIf(!databaseUrl)("introduction import on real PostgreSQL", () => {
       `SELECT event_type, created_at, payload->>'source' AS source FROM events WHERE participant_id = $1
         AND event_type IN ('forum.joined', 'forum.rejoined') ORDER BY created_at`, [id])).rows
       .map((row) => `${row.event_type} ${new Date(String(row.created_at)).toISOString().slice(0, 10)} ${row.source}`);
-    expect(await importForumJoins(pool, entries, false)).toEqual({ entries: 3, unknown: 1, participants: 2, joined: 2, rejoined: 1, alreadyImported: 0, reclassified: 1 });
+    expect(await importForumJoins(pool, entries, false)).toEqual({ entries: 3, unknown: 1, participants: 2, joined: 2, rejoined: 1, alreadyImported: 0, reclassified: 1, exactKnown: 0 });
     expect(await history(one.id)).toEqual([]);
     expect(await importForumJoins(pool, entries, true)).toMatchObject({ participants: 2, joined: 2, rejoined: 1, reclassified: 1 });
     expect(await history(one.id)).toEqual(["forum.joined 2024-06-01 telegram_export", "forum.rejoined 2025-01-05 telegram_export"]);
@@ -184,6 +184,19 @@ describe.skipIf(!databaseUrl)("introduction import on real PostgreSQL", () => {
     expect(await getForumJoinDateWithDatabase(pool, (await person()).id)).toBeNull();
     expect(await importForumJoins(pool, entries, true)).toMatchObject({ participants: 0, joined: 0, rejoined: 0, alreadyImported: 3, reclassified: 0 });
     expect(await history(one.id)).toHaveLength(2);
+
+    // First signs of presence: written only where no join is on record, and never turn a real join into a return.
+    const silent = await person();
+    const traces = parseForumJoinEntries([
+      { telegram_user_id: silent.telegram, joins: [{ at: "2024-03-28T10:18:38Z", message_id: 8001, approximate: true }] },
+      { telegram_user_id: observed.telegram, joins: [{ at: "2024-01-01T00:00:00Z", message_id: 8001, approximate: true }] },
+    ]);
+    expect(await importForumJoins(pool, traces, true)).toMatchObject({ participants: 1, joined: 1, exactKnown: 1, reclassified: 0 });
+    expect((await getForumJoinDateWithDatabase(pool, silent.id))?.toISOString()).toBe("2024-03-28T10:18:38.000Z");
+    expect((await pool.query("SELECT payload->>'approximate' AS a FROM events WHERE participant_id = $1 AND event_type = 'forum.joined'", [silent.id])).rows[0].a).toBe("true");
+    expect(await history(observed.id)).toEqual(["forum.joined 2024-12-01 telegram_export", "forum.rejoined 2026-10-07 chat_member"]);
+    expect(await importForumJoins(pool, traces, true)).toMatchObject({ participants: 0, joined: 0, alreadyImported: 1, exactKnown: 1 });
+    expect(() => parseForumJoinEntries([{ telegram_user_id: "5", joins: [{ at: "2024-01-01T00:00:00Z", message_id: 1, approximate: true }, { at: "2024-02-01T00:00:00Z", message_id: 2 }] }])).toThrow(ForumJoinImportValidationError);
     expect(() => parseForumJoinEntries([{ telegram_user_id: "5", joins: [] }])).toThrow(ForumJoinImportValidationError);
     expect(() => parseForumJoinEntries([{ telegram_user_id: "5", joins: [{ at: "2024-06-01 09:00", message_id: 1 }] }])).toThrow(ForumJoinImportValidationError);
     expect(() => parseForumJoinEntries([{ telegram_user_id: "5", joins: [{ at: "2999-01-01T00:00:00Z", message_id: 1 }] }])).toThrow(ForumJoinImportValidationError);
