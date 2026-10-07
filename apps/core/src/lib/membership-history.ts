@@ -44,7 +44,7 @@ export function membershipEventTypeForTransition(
 }
 
 export const membershipEventLabels: Record<MembershipEventType, string> = {
-  "membership.joined": "Принят в ДАО",
+  "membership.joined": "Статус участника подтверждён в Ядре",
   "membership.left": "Вышел",
   "membership.rejoined": "Вернулся",
   "membership.excluded": "Исключён",
