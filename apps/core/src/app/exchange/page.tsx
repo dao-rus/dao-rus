@@ -66,8 +66,7 @@ export default async function ExchangePage({
           })}
         </nav>
         <ExchangeTypeNavScroll current={selected?.key} />
-        <div className="exchangeUtility"><Link href="/relay">{texts["relay.list_title"]}{dialogs.length ? ` (${dialogs.length})` : ""}</Link>
-          {hidden.length || showHidden ? <Link href="/exchange?hidden=1">{texts["exchange.hidden_link"]}{hidden.length ? ` (${hidden.length})` : ""}</Link> : null}</div>
+        <div className="exchangeUtility"><Link className={dialogs.length ? undefined : "quiet"} href="/relay">{texts["relay.list_title"]}{dialogs.length ? ` (${dialogs.length})` : ""}</Link></div>
         {showHidden ? <div className="exchangeSelection"><h2>{texts["exchange.hidden_title"]}</h2>
           <div className="exchangeCards">
             {hidden.length ? hidden.map((signal) => {
@@ -141,6 +140,9 @@ export default async function ExchangePage({
           </Link> : null}
           <Link className="button secondary" href="/profile">{texts["signal.profile_link"]}</Link>
         </div>
+        {/* Personal and rarely needed: kept below everything, and only while something is hidden. */}
+        {hidden.length && !showHidden ? <p className="exchangeHiddenNote">
+          <Link href="/exchange?hidden=1">{texts["exchange.hidden_link"]}: {hidden.length}</Link></p> : null}
       </section>
     </main>
   );

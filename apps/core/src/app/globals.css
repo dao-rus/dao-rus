@@ -600,6 +600,9 @@ dd { margin: 6px 0 0; }
 .closerKeys { display: grid; gap: 8px; margin: 0; padding: 14px; border: 1px solid var(--line); border-radius: 12px; }
 .closerKeys p { margin: 0; }
 .exchangeUtility { display: flex; flex-wrap: wrap; gap: 6px 18px; margin-top: 12px; font-size: 14px; }
+.exchangeUtility a.quiet, .exchangeHiddenNote a { color: var(--muted); text-decoration: none; }
+.exchangeUtility a.quiet:hover, .exchangeHiddenNote a:hover { color: var(--accent); text-decoration: underline; }
+.exchangeHiddenNote { margin: 18px 0 0; font-size: 13px; }
 .exchangeSort { display: inline-flex; margin-top: 12px; border: 1px solid var(--line); border-radius: 8px; overflow: hidden; font-size: 13px; }
 .exchangeSort a { padding: 6px 12px; color: var(--ink); text-decoration: none; }
 .exchangeSort a + a { border-left: 1px solid var(--line); }

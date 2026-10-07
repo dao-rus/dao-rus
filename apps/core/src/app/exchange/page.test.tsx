@@ -243,7 +243,13 @@ describe("network exchange catalog", () => {
     const text = textContent(page);
     expect(text).toContain("Скрытые записи");
     expect(text).toContain("Скрытая запись");
-    expect(text).toMatch(/Скрытые\s+\(1\)/);
+    // On the list of hidden records itself there is no second link to it.
+    expect(collectProps(page, (props) => props.href === "/exchange?hidden=1")).toHaveLength(0);
+    mocks.signals.mockResolvedValue([]);
+    const feed = await ExchangePage({ searchParams: Promise.resolve({ type: "need" }) });
+    const link = collectProps(feed, (props) => props.href === "/exchange?hidden=1");
+    expect(link).toHaveLength(1);
+    expect(textContent(link[0].children as ReactNode)).toMatch(/Скрытые\s*:\s*1/);
     expect(text).not.toContain("Надежда К");
     const forms = collectProps(page, (props) => props.action === "/api/signals/card");
     expect(forms).toHaveLength(1);

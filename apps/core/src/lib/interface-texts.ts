@@ -194,7 +194,7 @@ const interfaceTextFieldDefinitions = [
   { section: "Обмен", key: "exchange.sort_new", label: "Сортировка: новые", defaultValue: "Новые", multiline: false },
   { section: "Обмен", key: "exchange.sort_top", label: "Сортировка: по лайкам", defaultValue: "Топ", multiline: false },
   { section: "Обмен", key: "exchange.sort_label", label: "Сортировка: подпись", defaultValue: "Порядок записей", multiline: false },
-  { section: "Обмен", key: "exchange.hidden_link", label: "Ссылка на скрытые записи", defaultValue: "Скрытые", multiline: false },
+  { section: "Обмен", key: "exchange.hidden_link", label: "Ссылка на скрытые записи", defaultValue: "Скрытых записей", multiline: false },
   { section: "Обмен", key: "exchange.hidden_title", label: "Заголовок скрытых записей", defaultValue: "Скрытые записи", multiline: false },
   { section: "Обмен", key: "exchange.hidden_empty", label: "Нет скрытых записей", defaultValue: "Вы ничего не скрывали.", multiline: false },
   { section: "Обмен", key: "signal.hide", label: "Кнопка: скрыть для себя", defaultValue: "Скрыть для себя", multiline: false },
