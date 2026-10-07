@@ -597,6 +597,8 @@ dd { margin: 6px 0 0; }
 }
 .exchangeCloserIntro { white-space: pre-line; line-height: 1.55; }
 .exchangeCloser h3 { margin: 22px 0 0; font-size: 16px; }
+.closerKeys { display: grid; gap: 8px; margin: 0; padding: 14px; border: 1px solid var(--line); border-radius: 12px; }
+.closerKeys p { margin: 0; }
 .exchangeUtility { margin-top: 12px; font-size: 14px; }
 .exchangeSelection { margin-top: 22px; }
 .exchangeSelection h2 { margin: 0 0 8px; font-size: 20px; }

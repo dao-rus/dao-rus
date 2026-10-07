@@ -5,15 +5,21 @@ import type { Signal, SignalType, SignalVisibility } from "../lib/signals";
 import type { InterfaceTextValues } from "../lib/interface-texts";
 import { defaultSignalVisibility, groupSignalTypes, signalTypePresentation, signalVisibilityOptions } from "../lib/signal-presentation";
 import { UserText } from "./user-text";
+import type { CloserGoal, CloserKeys } from "../lib/closer";
 
-export function SignalForm({ types, initialType, signal, texts }: {
+export function SignalForm({ types, initialType, signal, texts, closer }: {
   types: SignalType[]; initialType: string; signal?: Signal; texts: InterfaceTextValues;
+  // «Ближе» match keys: the goal catalogue, the author's city from the profile and saved keys.
+  closer?: { goals: CloserGoal[]; city: string | null; keys?: CloserKeys };
 }) {
   const [typeKey, setTypeKey] = useState(initialType);
   const [visibility, setVisibility] = useState<SignalVisibility>(
     signal && signalVisibilityOptions(initialType).includes(signal.visibility) ? signal.visibility
       : defaultSignalVisibility(initialType));
-  const [error, setError] = useState(false);
+  const [error, setError] = useState<false | "invalid" | "closer_limit">(false);
+  const closerGoals = (closer?.goals ?? []).filter((goal) => goal.enabled || goal.key === closer?.keys?.goalKey);
+  const [goalKey, setGoalKey] = useState(closer?.keys?.goalKey ?? "");
+  const closerGoal = closerGoals.find((goal) => goal.key === goalKey);
   const [pending, setPending] = useState(false);
   const [label, setLabel] = useState(signal?.legacyBody ? "" : signal?.label ?? "");
   const [description, setDescription] = useState(signal?.legacyBody ? signal.label : signal?.description ?? "");
@@ -29,10 +35,13 @@ export function SignalForm({ types, initialType, signal, texts }: {
     setPending(true); setError(false);
     try {
       const response = await fetch("/api/signals", { method: "POST", body: data, headers: { Accept: "application/json" } });
-      if (!response.ok) { setError(true); return; }
+      if (!response.ok) {
+        const failure = await response.json().catch(() => null) as { error?: string } | null;
+        setError(failure?.error === "closer_limit" ? "closer_limit" : "invalid"); return;
+      }
       const result = await response.json() as { location: string };
       window.location.assign(result.location);
-    } catch { setError(true); } finally { setPending(false); }
+    } catch { setError("invalid"); } finally { setPending(false); }
   }
   async function askAngel() {
     if (!angelText.trim()) return;
@@ -81,17 +90,43 @@ export function SignalForm({ types, initialType, signal, texts }: {
     <input id="signal-label" name="label" required maxLength={120} aria-describedby="signal-label-hint"
       placeholder={presentation.placeholder} value={label} onChange={(event) => setLabel(event.target.value)} />
     <label htmlFor="signal-description">{texts["signal.description"]}</label>
-    <p id="signal-description-hint" className="muted">{texts["signal.description_hint"]}</p>
+    <p id="signal-description-hint" className="muted">{texts[typeKey === "dating" ? "closer.description_hint" : "signal.description_hint"]}</p>
     <textarea id="signal-description" name="description" maxLength={10000} aria-describedby="signal-description-hint"
       placeholder={texts["signal.description_placeholder"]}
       value={description} onChange={(event) => setDescription(event.target.value)} />
+    {typeKey === "dating" && closer ? <fieldset className="closerKeys">
+      <p className="muted">{texts["closer.keys_hint"]}</p>
+      <label htmlFor="closer-goal">{texts["closer.goal"]}</label>
+      <select id="closer-goal" name="closer_goal" required value={goalKey} onChange={(event) => setGoalKey(event.target.value)}>
+        <option value="" disabled>—</option>
+        {closerGoals.map((goal) => <option key={goal.key} value={goal.key} disabled={!goal.enabled}>{goal.displayName}</option>)}
+      </select>
+      <label htmlFor="closer-city">{texts["closer.city"]}</label>
+      <select id="closer-city" name="closer_city" defaultValue={closer.keys ? (closer.keys.anyCity || !closer.city ? "any" : "city") : closer.city ? "city" : "any"}>
+        <option value="city" disabled={!closer.city}>{closer.city ? `${texts["closer.city_mine"]}: ${closer.city}` : texts["closer.city_mine"]}</option>
+        <option value="any">{texts["closer.city_any"]}</option>
+      </select>
+      {closer.city ? null : <p className="muted">{texts["closer.city_missing"]}</p>}
+      {closerGoal?.asksGender ? <>
+        <label htmlFor="closer-self">{texts["closer.self"]}</label>
+        <select id="closer-self" name="closer_self" defaultValue={closer.keys?.selfGender ?? ""}>
+          <option value="">{texts["closer.gender_self_none"]}</option>
+          <option value="m">{texts["closer.gender_m"]}</option><option value="f">{texts["closer.gender_f"]}</option>
+        </select>
+        <label htmlFor="closer-seeks">{texts["closer.seeks"]}</label>
+        <select id="closer-seeks" name="closer_seeks" defaultValue={closer.keys?.seeksGender ?? "any"}>
+          <option value="any">{texts["closer.gender_any"]}</option>
+          <option value="m">{texts["closer.gender_m"]}</option><option value="f">{texts["closer.gender_f"]}</option>
+        </select>
+      </> : null}
+    </fieldset> : null}
     <label htmlFor="signal-visibility">{texts["signal.visibility"]}</label>
     <select id="signal-visibility" name="visibility" value={visibility} onChange={(event) => setVisibility(event.target.value as SignalVisibility)}>
       {signalVisibilityOptions(typeKey).map((value) => <option key={value} value={value}>{texts[`signal.visibility_${value}`]}</option>)}
     </select>
     {typeKey === "dating" ? <p className="muted privacyHint">{texts["signal.dating_hint"]}</p> : null}
     {typeKey === "need" || typeKey === "have" ? <p className="muted privacyHint">{texts["exchange.privacy_hint"]}</p> : null}
-    {error ? <p className="formError" role="alert">{texts["signal.invalid"]}</p> : null}
+    {error ? <p className="formError" role="alert">{texts[error === "closer_limit" ? "closer.limit" : "signal.invalid"]}</p> : null}
     <button className="button primary" type="submit" disabled={pending}>{texts["signal.save"]}</button>
   </form>;
 }

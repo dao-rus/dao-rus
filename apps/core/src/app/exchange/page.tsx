@@ -11,6 +11,7 @@ import { AngelSearch } from "../../components/angel-search";
 import { UserText } from "../../components/user-text";
 import { SignalPreview } from "../../components/signal-preview";
 import { SignalTypeIcon } from "../../components/signal-type-icon";
+import { listCloserGoals, listCloserMatches, listOwnCloserKeys } from "../../lib/closer";
 import { ExchangeTypeNavScroll } from "../../components/exchange-type-nav-scroll";
 
 export const dynamic = "force-dynamic";
@@ -34,6 +35,14 @@ export default async function ExchangePage({
   const signals = selected && !closer ? await listNetworkSignals(participant.id, selected.key) : [];
   const ownCloser = closer ? (await listParticipantSignals(participant.id, participant.id))
     .filter((signal) => signal.typeKey === "dating") : [];
+  const [closerKeys, closerGoals, matches] = closer ? await Promise.all([
+    listOwnCloserKeys(participant.id), listCloserGoals(), listCloserMatches(participant.id)]) : [new Map(), [], []];
+  const ownCloserMeta = (signal: (typeof ownCloser)[number]) => {
+    const keys = closerKeys.get(signal.id);
+    if (!keys) return texts["closer.no_keys"];
+    if (signal.visibility !== "match_only") return texts["closer.draft"];
+    return closerGoals.find((goal) => goal.key === keys.goalKey)?.displayName;
+  };
   const presentation = selected ? signalTypePresentation(selected, texts) : null;
 
   return (
@@ -62,8 +71,24 @@ export default async function ExchangePage({
           {ownCloser.length ? <><h3>{texts["exchange.closer_own_title"]}</h3>
             <div className="exchangeCards">
               {ownCloser.map((signal) => <SignalPreview key={signal.id} href={signalHref(signal.id)} label={signal.label}
-                description={signal.description} meta={texts[`signal.visibility_${signal.visibility}`]} />)}
+                description={signal.description} meta={ownCloserMeta(signal)} />)}
             </div></> : null}
+          <h3>{texts["closer.matches_title"]}</h3>
+          {/* A match carries no author and is not a link: the record itself stays unreachable by URL. */}
+          <div className="exchangeCards">
+            {matches.length ? matches.map((match) => <article className="exchangeCard" key={match.signalId}>
+              <div className="signalPreviewKicker">{match.goalName} · {match.city ?? texts["closer.city_any"]}</div>
+              <strong className="exchangeCardTitle"><UserText inline text={match.label} /></strong>
+              {match.description ? <UserText text={match.description} /> : null}
+              {match.encounterId ? <p><Link className="button secondary" href={`/relay/${match.encounterId}`}>{texts["closer.continue_dialog"]}</Link></p>
+                : <form action="/api/relay" method="post">
+                  <input type="hidden" name="action" value="closer_respond" />
+                  <input type="hidden" name="my_signal_id" value={match.mySignalId} />
+                  <input type="hidden" name="signal_id" value={match.signalId} />
+                  <button className="button primary" type="submit">{texts["closer.open_dialog"]}</button>
+                </form>}
+            </article>) : <p className="muted">{texts["closer.matches_empty"]}</p>}
+          </div>
         </div> : <>
           {signals.some((signal) => signal.visibility === "network_blind") ? <p className="muted exchangeBlindHint">{texts["exchange.privacy_hint"]}</p> : null}
           <div className="exchangeCards">

@@ -3,6 +3,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 const mocks = vi.hoisted(() => ({ participant: vi.fn(), types: vi.fn(), signals: vi.fn(), texts: vi.fn() }));
 vi.mock("../../../lib/session", () => ({ getCurrentParticipant: mocks.participant }));
 vi.mock("../../../lib/signals", () => ({ listSignalTypes: mocks.types, listParticipantSignals: mocks.signals }));
+vi.mock("../../../lib/closer", () => ({ listCloserGoals: async () => [], getCloserCity: async () => null, listOwnCloserKeys: async () => new Map() }));
 vi.mock("../../../lib/interface-texts", () => ({ readInterfaceTexts: mocks.texts }));
 vi.mock("next/navigation", () => ({ redirect: () => { throw new Error("redirect"); }, notFound: () => { throw new Error("notFound"); } }));
 import Page from "./page";

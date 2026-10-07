@@ -10,6 +10,9 @@ import {
   sendRelayMessage,
 } from "@/lib/relay";
 
+import { CloserUnavailableError, openCloserDialog } from "../../../lib/closer";
+import { notifyCloser } from "../../../lib/closer-notify";
+
 export const runtime = "nodejs";
 
 function redirectTo(path: string) {
@@ -27,6 +30,11 @@ export async function POST(request: NextRequest) {
       const encounterId = await createRelayEncounter(participant.id, form.get("signal_id"));
       return redirectTo("/relay/" + encounterId);
     }
+    if (action === "closer_respond") {
+      const dialog = await openCloserDialog(participant.id, form.get("my_signal_id"), form.get("signal_id"));
+      if (dialog.notifyParticipantId) await notifyCloser([dialog.notifyParticipantId], "dialog", "/relay/" + dialog.encounterId);
+      return redirectTo("/relay/" + dialog.encounterId);
+    }
     const encounterId = form.get("encounter_id");
     if (action === "message") {
       await sendRelayMessage(participant.id, encounterId, form.get("body"));
@@ -42,7 +50,7 @@ export async function POST(request: NextRequest) {
     }
     return new NextResponse("Invalid relay action", { status: 400 });
   } catch (error) {
-    if (error instanceof RelayAccessError) {
+    if (error instanceof RelayAccessError || error instanceof CloserUnavailableError) {
       return new NextResponse("Relay interaction is unavailable", { status: 404 });
     }
     if (error instanceof RelayValidationError) {

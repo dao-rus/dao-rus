@@ -7,6 +7,8 @@ const mocks = vi.hoisted(() => ({
   message: vi.fn(),
   consent: vi.fn(),
   cancel: vi.fn(),
+  closerOpen: vi.fn(),
+  closerNotify: vi.fn(),
 }));
 vi.mock("@/lib/config", () => ({ appBaseUrl: () => "https://core.daorus.org" }));
 vi.mock("@/lib/session", () => ({ getCurrentParticipant: mocks.participant }));
@@ -18,8 +20,14 @@ vi.mock("@/lib/relay", () => ({
   RelayAccessError: class RelayAccessError extends Error {},
   RelayValidationError: class RelayValidationError extends Error {},
 }));
+vi.mock("../../../lib/closer", () => ({
+  openCloserDialog: mocks.closerOpen,
+  CloserUnavailableError: class CloserUnavailableError extends Error {},
+}));
+vi.mock("../../../lib/closer-notify", () => ({ notifyCloser: mocks.closerNotify }));
 
 import { POST } from "./route";
+import { CloserUnavailableError } from "../../../lib/closer";
 import { RelayAccessError, RelayValidationError } from "@/lib/relay";
 
 const participantId = "10000000-0000-4000-8000-000000000001";
@@ -44,6 +52,22 @@ describe("Relay form adapter", () => {
     expect(mocks.respond).toHaveBeenCalledWith(participantId, "signal-id");
     expect(response.status).toBe(303);
     expect(response.headers.get("location")).toBe("https://core.daorus.org/relay/" + encounterId);
+  });
+
+  it("opens a Closer dialog for the session participant and notifies the other side only when it is new", async () => {
+    mocks.closerOpen.mockResolvedValue({ encounterId, notifyParticipantId: "other" });
+    const response = await POST(request({ action: "closer_respond", my_signal_id: "mine", signal_id: "theirs" }));
+    expect(mocks.closerOpen).toHaveBeenCalledWith(participantId, "mine", "theirs");
+    expect(mocks.closerNotify).toHaveBeenCalledWith(["other"], "dialog", "/relay/" + encounterId);
+    expect(response.headers.get("location")).toBe("https://core.daorus.org/relay/" + encounterId);
+    mocks.closerNotify.mockClear();
+    mocks.closerOpen.mockResolvedValue({ encounterId, notifyParticipantId: null });
+    await POST(request({ action: "closer_respond", my_signal_id: "mine", signal_id: "theirs" }));
+    expect(mocks.closerNotify).not.toHaveBeenCalled();
+    mocks.closerOpen.mockRejectedValue(new CloserUnavailableError());
+    const denied = await POST(request({ action: "closer_respond", my_signal_id: "mine", signal_id: "theirs" }));
+    expect(denied.status).toBe(404);
+    expect(denied.headers.get("location")).toBeNull();
   });
 
   it("rejects a self-response, closed signal, or foreign encounter without exposing a path", async () => {

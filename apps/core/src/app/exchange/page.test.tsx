@@ -9,10 +9,14 @@ const mocks = vi.hoisted(() => ({
   texts: vi.fn(),
   types: vi.fn(),
   own: vi.fn(),
+  matches: vi.fn(),
+  keys: vi.fn(),
 }));
 vi.mock("@/lib/session", () => ({ getCurrentParticipant: mocks.participant }));
 vi.mock("@/lib/interface-texts", () => ({ readInterfaceTexts: mocks.texts }));
 vi.mock("../../lib/signals", () => ({ listNetworkSignals: mocks.signals, listSignalTypes: mocks.types, listParticipantSignals: mocks.own }));
+vi.mock("../../lib/closer", () => ({ listCloserMatches: mocks.matches, listOwnCloserKeys: mocks.keys,
+  listCloserGoals: async () => [{ key: "friend", displayName: "Друг", asksGender: false, enabled: true }] }));
 vi.mock("@/lib/relay", () => ({
   listRelayEncounters: mocks.encounters,
 }));
@@ -45,6 +49,8 @@ describe("network exchange catalog", () => {
     mocks.participant.mockResolvedValue({ id: "viewer" });
     mocks.encounters.mockResolvedValue([]);
     mocks.own.mockResolvedValue([]);
+    mocks.matches.mockResolvedValue([]);
+    mocks.keys.mockResolvedValue(new Map());
     mocks.types.mockResolvedValue(["need", "can", "want", "have"].map((key) => ({ key, displayName: key, enabled: true })));
     mocks.texts.mockResolvedValue({ values: {
       "exchange.title": "Обмен",
@@ -177,25 +183,42 @@ describe("network exchange catalog", () => {
     const futureLink = collectProps(page, (props) => props.href === "/exchange?type=future_type")[0];
     expect(textContent(futureLink.children as ReactNode)).toContain("Будущий тип");
   });
-  it("never lists other people's Closer records: the tab explains the section and shows only the viewer's own", async () => {
+  it("shows Closer as own records plus identity-free matches, never as a network listing", async () => {
     mocks.types.mockResolvedValue([{ key: "need", displayName: "Нужно", enabled: true }, { key: "dating", displayName: "Знакомства", enabled: true }]);
     mocks.texts.mockResolvedValue({ values: { "exchange.title": "Обмен", "relay.list_title": "Диалоги",
       "exchange.closer_intro": "Запись скрыта от других участников.", "exchange.closer_own_title": "Ваши записи",
-      "signal.visibility_match_only": "Только при совпадении", "signal.create": "Добавить", "exchange.empty": "Сигналов пока нет." } });
+      "closer.no_keys": "Не участвует в подборе", "closer.draft": "Черновик", "closer.matches_title": "Совпадения",
+      "closer.matches_empty": "Совпадений пока нет.", "closer.city_any": "Неважен", "closer.open_dialog": "Начать анонимный разговор",
+      "closer.continue_dialog": "Открыть разговор", "signal.create": "Добавить", "exchange.empty": "Сигналов пока нет." } });
     mocks.own.mockResolvedValue([
       { id: "mine", typeKey: "dating", label: "Близкий друг", description: null, visibility: "match_only" },
+      { id: "draft", typeKey: "dating", label: "Набросок", description: null, visibility: "private" },
+      { id: "legacy", typeKey: "dating", label: "Старая запись", description: null, visibility: "match_only" },
       { id: "other-type", typeKey: "need", label: "Фотограф", description: null, visibility: "members" },
+    ]);
+    const friend = { goalKey: "friend", anyCity: false, selfGender: null, seeksGender: null };
+    mocks.keys.mockResolvedValue(new Map([["mine", friend], ["draft", friend]]));
+    mocks.matches.mockResolvedValue([
+      { mySignalId: "mine", signalId: "theirs", goalName: "Друг", city: "Псков", label: "Ищу друга", description: "Подробности", encounterId: null },
+      { mySignalId: "mine", signalId: "talking", goalName: "Друг", city: null, label: "Уже говорим", description: null, encounterId: "enc" },
     ]);
     const page = await ExchangePage({ searchParams: Promise.resolve({ type: "dating" }) });
     expect(mocks.signals).not.toHaveBeenCalled();
     expect(mocks.own).toHaveBeenCalledWith("viewer", "viewer");
+    expect(mocks.matches).toHaveBeenCalledWith("viewer");
     const text = textContent(page);
-    expect(text).toContain("Запись скрыта от других участников.");
-    expect(text).toContain("Близкий друг");
-    expect(text).toContain("Только при совпадении");
+    for (const shown of ["Запись скрыта от других участников.", "Близкий друг", "Друг", "Черновик", "Не участвует в подборе",
+      "Ищу друга", "Псков", "Подробности", "Уже говорим", "Неважен"]) expect(text).toContain(shown);
     expect(text).not.toContain("Фотограф");
     expect(text).not.toContain("Сигналов пока нет.");
-    expect(collectProps(page, (props) => props.action === "/api/relay")).toHaveLength(0);
+    // A match is neither a link to the record nor to anybody's profile; the only action is the anonymous dialog.
+    expect(collectProps(page, (props) => ["/exchange/theirs", "/exchange/talking"].includes(String(props.href)))).toHaveLength(0);
+    expect(collectProps(page, (props) => String(props.href ?? "").startsWith("/profile/"))).toHaveLength(0);
+    const dialogs = collectProps(page, (props) => props.action === "/api/relay");
+    expect(dialogs).toHaveLength(1);
+    const field = (name: string) => collectProps(dialogs[0].children as ReactNode, (props) => props.name === name)[0]?.value;
+    expect([field("action"), field("my_signal_id"), field("signal_id")]).toEqual(["closer_respond", "mine", "theirs"]);
+    expect(collectProps(page, (props) => props.href === "/relay/enc")).toHaveLength(1);
     expect(collectProps(page, (props) => props.href === "/exchange/new?type=dating")).toHaveLength(1);
   });
   it.each(["unknown", "../../private", "disabled"])("falls back safely for %s type queries", async (type) => {
