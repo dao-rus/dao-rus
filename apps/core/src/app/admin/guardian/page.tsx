@@ -11,6 +11,7 @@ import { getGuardianCampaignById, getGuardianOneShotCampaigns, technicalBroadcas
 import { guardianScenarios } from "../../../lib/guardian-campaign-scenarios";
 import { guardianSystemPresets } from "../../../lib/guardian-campaign-input";
 import { residenceLabel } from "../../../lib/profile-about";
+import { getGuardianArrivalSummary } from "../../../lib/guardian-arrivals";
 import { getGuardianDepartureSummary } from "../../../lib/guardian-departures";
 import { readInterfaceTexts, type InterfaceTextKey } from "../../../lib/interface-texts";
 
@@ -23,8 +24,8 @@ export default async function GuardianPage({ searchParams }: { searchParams: Pro
   if (!participant) redirect("/");
   if (!hasPrototypeAdminAccess(participant.id)) redirect("/profile");
   const params = await searchParams;
-  const [overview, departures, campaigns, result, { values: texts }] = await Promise.all([
-    getGuardianAudience(), getGuardianDepartureSummary(), getGuardianOneShotCampaigns(),
+  const [overview, arrivals, departures, campaigns, result, { values: texts }] = await Promise.all([
+    getGuardianAudience(), getGuardianArrivalSummary(), getGuardianDepartureSummary(), getGuardianOneShotCampaigns(),
     params.message || params.broadcast || params.campaign_id ? getGuardianCampaignById(params.message ?? params.broadcast ?? params.campaign_id!) : null,
     readInterfaceTexts(),
   ]);
@@ -58,6 +59,10 @@ export default async function GuardianPage({ searchParams }: { searchParams: Pro
       <td>{labels(row.key)}</td><td><strong>{row.count}</strong></td>
       <td><Link className="button secondary" href={"/admin/guardian?" + (row.preset ? "preset=" + row.preset : "condition=" + row.key) + "#guardian-composer"}>{texts["guardian.write"]}</Link></td>
     </tr>)}</tbody></table>
+    <h2>Прибытие</h2>
+    <p>{texts["guardian.arrivals_recent"]} <strong>{arrivals.last30Days}</strong></p>
+    <p>{texts["guardian.arrivals_total"]} <strong>{arrivals.total}</strong></p>
+    <Link className="button secondary" href="/admin/guardian/arrivals">{texts["guardian.arrivals_title"]}</Link>
     <h2>Убытие</h2>
     <p>{texts["guardian.departures_recent"]} <strong>{departures.last30Days}</strong></p>
     <p>{texts["guardian.departures_total"]} <strong>{departures.total}</strong></p>
