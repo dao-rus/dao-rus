@@ -568,15 +568,35 @@ dd { margin: 6px 0 0; }
 .needForm select { font: inherit; }
 .needProfileLink { display: inline-block; margin-top: 24px; }
 
+/* Let the card shrink below the width of the unbroken type strip, which scrolls on its own. */
+.exchangePage { min-width: 0; }
 .exchangePage h1 { font-size: clamp(32px, 7vw, 52px); }
 .exchangeCards { display: grid; gap: 14px; margin: 20px 0; }
 .angelPanel { margin: 18px 0; padding: 14px; border: 1px solid var(--line); border-radius: 12px; }
 .angelSearchForm { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 10px; align-items: center; }
 .angelSearchForm label { grid-column: 1 / -1; color: var(--muted); font-size: 14px; }
 .angelSearchForm input { width: 100%; min-width: 0; min-height: 44px; padding: 10px 12px; border: 1px solid var(--line); border-radius: 10px; }
-.exchangeTypeNav { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 18px; }
-.exchangeTypeNav .button { min-height: 36px; padding: 6px 11px; gap: 6px; font-size: 14px; line-height: 1.2; }
-.exchangeTypeSymbol { min-width: 1em; text-align: center; font-weight: 700; }
+/* One unbroken strip of types. It scrolls sideways when narrow; edge shadows show only where content is cut off. */
+.exchangeTypeNav { display: flex; min-width: 0; max-width: 100%; margin-top: 18px; overflow-x: auto; border: 1px solid var(--line); border-radius: 10px; scrollbar-width: none;
+  background:
+    linear-gradient(to right, var(--card) 40%, transparent) left / 36px 100% no-repeat local,
+    linear-gradient(to left, var(--card) 40%, transparent) right / 36px 100% no-repeat local,
+    linear-gradient(to right, rgba(30, 33, 29, .22), transparent) left / 14px 100% no-repeat scroll,
+    linear-gradient(to left, rgba(30, 33, 29, .22), transparent) right / 14px 100% no-repeat scroll; }
+.exchangeTypeNav::-webkit-scrollbar { display: none; }
+.exchangeTypeTab { flex: 1 0 auto; display: inline-flex; align-items: center; justify-content: center; gap: 4px; min-height: 40px; padding: 6px 5px;
+  border-left: 1px solid var(--line); color: var(--ink); font-size: 13px; line-height: 1.2; text-decoration: none; white-space: nowrap; }
+.exchangeTypeTab:first-child { border-left: 0; }
+.exchangeTypeTab:hover { color: var(--accent); }
+.exchangeTypeTab:focus-visible { outline: 2px solid var(--accent); outline-offset: -2px; }
+.exchangeTypeTab[aria-current="page"] { background: var(--accent); color: var(--accent-ink); }
+.signalTypeIcon { flex: none; width: 16px; height: 16px; }
+@media (max-width: 620px) {
+  .exchangeTypeTab { flex-direction: column; gap: 3px; min-width: 46px; min-height: 50px; padding: 7px 8px; font-size: 12px; }
+  .signalTypeIcon { width: 18px; height: 18px; }
+}
+.exchangeCloserIntro { white-space: pre-line; line-height: 1.55; }
+.exchangeCloser h3 { margin: 22px 0 0; font-size: 16px; }
 .exchangeUtility { margin-top: 12px; font-size: 14px; }
 .exchangeSelection { margin-top: 22px; }
 .exchangeSelection h2 { margin: 0 0 8px; font-size: 20px; }

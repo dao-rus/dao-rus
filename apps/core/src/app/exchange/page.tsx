@@ -5,11 +5,13 @@ import { CoreNavigation } from "../../components/core-navigation";
 import { getCurrentParticipant } from "@/lib/session";
 import { readInterfaceTexts } from "@/lib/interface-texts";
 import { listRelayEncounters } from "@/lib/relay";
-import { listNetworkSignals, listSignalTypes } from "../../lib/signals";
-import { selectSignalType, signalHref, signalTypePresentation } from "../../lib/signal-presentation";
+import { listNetworkSignals, listParticipantSignals, listSignalTypes } from "../../lib/signals";
+import { orderSignalTypes, selectSignalType, signalHref, signalTypePresentation } from "../../lib/signal-presentation";
 import { AngelSearch } from "../../components/angel-search";
 import { UserText } from "../../components/user-text";
 import { SignalPreview } from "../../components/signal-preview";
+import { SignalTypeIcon } from "../../components/signal-type-icon";
+import { ExchangeTypeNavScroll } from "../../components/exchange-type-nav-scroll";
 
 export const dynamic = "force-dynamic";
 export const metadata: Metadata = { title: "Обмен" };
@@ -25,9 +27,13 @@ export default async function ExchangePage({
   const [catalog, dialogs, { values: texts }] = await Promise.all([
     listSignalTypes(), listRelayEncounters(participant.id, false), readInterfaceTexts(),
   ]);
-  const types = catalog.filter((type) => type.enabled);
+  const types = orderSignalTypes(catalog.filter((type) => type.enabled));
   const selected = selectSignalType(types, params.type ?? params.tab);
-  const signals = selected ? await listNetworkSignals(participant.id, selected.key) : [];
+  // «Ближе» is never a public listing: the tab explains the mechanics and shows only the viewer's own records.
+  const closer = selected?.key === "dating";
+  const signals = selected && !closer ? await listNetworkSignals(participant.id, selected.key) : [];
+  const ownCloser = closer ? (await listParticipantSignals(participant.id, participant.id))
+    .filter((signal) => signal.typeKey === "dating") : [];
   const presentation = selected ? signalTypePresentation(selected, texts) : null;
 
   return (
@@ -41,33 +47,43 @@ export default async function ExchangePage({
         <nav className="exchangeTypeNav" aria-label="Типы сигналов">
           {types.map((type) => {
             const item = signalTypePresentation(type, texts);
-            return <Link key={type.key} className={selected?.key === type.key ? "button primary" : "button secondary"}
-              href={`/exchange?type=${type.key}`} aria-current={selected?.key === type.key ? "page" : undefined}>
-              <span className="exchangeTypeSymbol" aria-hidden="true">{item.symbol}</span>{item.navigationName}
+            return <Link key={type.key} className="exchangeTypeTab" href={`/exchange?type=${type.key}`}
+              aria-current={selected?.key === type.key ? "page" : undefined}>
+              <SignalTypeIcon typeKey={type.key} /><span>{item.navigationName}</span>
             </Link>;
           })}
         </nav>
+        <ExchangeTypeNavScroll current={selected?.key} />
         <div className="exchangeUtility"><Link href="/relay">{texts["relay.list_title"]}{dialogs.length ? ` (${dialogs.length})` : ""}</Link></div>
         {presentation ? <div className="exchangeSelection"><h2>{presentation.navigationName}</h2><p className="muted">{presentation.description}</p>
           {presentation.example ? <p className="muted">{presentation.example}</p> : null}</div> : null}
-        {signals.some((signal) => signal.visibility === "network_blind") ? <p className="muted exchangeBlindHint">{texts["exchange.privacy_hint"]}</p> : null}
-        <div className="exchangeCards">
-          {signals.length ? signals.map((signal) => (
-            <SignalPreview key={signal.id} href={signalHref(signal.id)} label={signal.label}
-              description={signal.description}
-              author={signal.author && signal.visibility !== "network_blind" ? signal.author.name : null}>
-              {signal.mine ? (
-                <span className="muted">{texts["signal.mine"]}</span>
-              ) : signal.visibility === "network_blind" && (selected?.key === "need" || selected?.key === "have") ? (
-                <form action="/api/relay" method="post">
-                  <input type="hidden" name="action" value="respond" />
-                  <input type="hidden" name="signal_id" value={signal.id} />
-                  <button className="button primary" type="submit">{texts["signal.respond"]}</button>
-                </form>
-              ) : null}
-            </SignalPreview>
-          )) : <p className="muted">{texts["exchange.empty"]}</p>}
-        </div>
+        {closer ? <div className="exchangeCloser">
+          <p className="exchangeCloserIntro">{texts["exchange.closer_intro"]}</p>
+          {ownCloser.length ? <><h3>{texts["exchange.closer_own_title"]}</h3>
+            <div className="exchangeCards">
+              {ownCloser.map((signal) => <SignalPreview key={signal.id} href={signalHref(signal.id)} label={signal.label}
+                description={signal.description} meta={texts[`signal.visibility_${signal.visibility}`]} />)}
+            </div></> : null}
+        </div> : <>
+          {signals.some((signal) => signal.visibility === "network_blind") ? <p className="muted exchangeBlindHint">{texts["exchange.privacy_hint"]}</p> : null}
+          <div className="exchangeCards">
+            {signals.length ? signals.map((signal) => (
+              <SignalPreview key={signal.id} href={signalHref(signal.id)} label={signal.label}
+                description={signal.description}
+                author={signal.author && signal.visibility !== "network_blind" ? signal.author.name : null}>
+                {signal.mine ? (
+                  <span className="muted">{texts["signal.mine"]}</span>
+                ) : signal.visibility === "network_blind" && (selected?.key === "need" || selected?.key === "have") ? (
+                  <form action="/api/relay" method="post">
+                    <input type="hidden" name="action" value="respond" />
+                    <input type="hidden" name="signal_id" value={signal.id} />
+                    <button className="button primary" type="submit">{texts["signal.respond"]}</button>
+                  </form>
+                ) : null}
+              </SignalPreview>
+            )) : <p className="muted">{texts["exchange.empty"]}</p>}
+          </div>
+        </>}
         <div className="actions">
           {selected && presentation ? <Link className="button secondary" href={`/exchange/new?type=${selected.key}`}>
             {presentation.cta}

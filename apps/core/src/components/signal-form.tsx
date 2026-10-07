@@ -3,7 +3,7 @@
 import { useState, type FormEvent } from "react";
 import type { Signal, SignalType, SignalVisibility } from "../lib/signals";
 import type { InterfaceTextValues } from "../lib/interface-texts";
-import { groupSignalTypes, signalTypePresentation, signalVisibilityOptions } from "../lib/signal-presentation";
+import { defaultSignalVisibility, groupSignalTypes, signalTypePresentation, signalVisibilityOptions } from "../lib/signal-presentation";
 import { UserText } from "./user-text";
 
 export function SignalForm({ types, initialType, signal, texts }: {
@@ -12,7 +12,7 @@ export function SignalForm({ types, initialType, signal, texts }: {
   const [typeKey, setTypeKey] = useState(initialType);
   const [visibility, setVisibility] = useState<SignalVisibility>(
     signal && signalVisibilityOptions(initialType).includes(signal.visibility) ? signal.visibility
-      : initialType === "dating" ? "private" : "members");
+      : defaultSignalVisibility(initialType));
   const [error, setError] = useState(false);
   const [pending, setPending] = useState(false);
   const [label, setLabel] = useState(signal?.legacyBody ? "" : signal?.label ?? "");
@@ -56,7 +56,7 @@ export function SignalForm({ types, initialType, signal, texts }: {
         {proposal.description ? <UserText className="profileBio" text={proposal.description} /> : null}
         <button className="button secondary" type="button" onClick={() => {
           setTypeKey(proposal.typeKey); setLabel(proposal.label); setDescription(proposal.description ?? "");
-          if (!signalVisibilityOptions(proposal.typeKey).includes(visibility)) setVisibility(proposal.typeKey === "dating" ? "private" : "members");
+          if (!signalVisibilityOptions(proposal.typeKey).includes(visibility)) setVisibility(defaultSignalVisibility(proposal.typeKey));
           setProposal(undefined);
         }}>{texts["angel.proposal_accept"]}</button>
         <button className="button secondary" type="button" onClick={() => setProposal(undefined)}>{texts["angel.proposal_cancel"]}</button>
@@ -67,7 +67,7 @@ export function SignalForm({ types, initialType, signal, texts }: {
       : <><label htmlFor="signal-type">{texts["signal.type"]}</label>
         <select id="signal-type" name="type_key" value={typeKey} onChange={(event) => {
           const key = event.target.value; setTypeKey(key);
-          if (!signalVisibilityOptions(key).includes(visibility) || key === "dating") setVisibility(key === "dating" ? "private" : "members");
+          if (!signalVisibilityOptions(key).includes(visibility) || key === "dating") setVisibility(defaultSignalVisibility(key));
         }}>
           {groupSignalTypes(types.filter((entry) => entry.enabled), texts).map((group) => <optgroup key={group.key} label={group.name}>
             {group.types.map((entry) => <option key={entry.key} value={entry.key}>{signalTypePresentation(entry, texts).name}</option>)}

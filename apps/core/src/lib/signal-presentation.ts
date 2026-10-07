@@ -16,7 +16,7 @@ export const signalPresentationDefaults = [
   { key: "want", symbol: "♥", name: "♥ Хочу", group: "intentions", description: "То, к чему вы стремитесь, даже если пока ещё не начали это делать.", example: "фотография" },
   { key: "doing", symbol: "▶", name: "▶ Делаю", group: "intentions", description: "Проекты, дела и направления, которыми вы реально занимаетесь сейчас.", example: "образовательный проект" },
   { key: "idea", symbol: "✦", name: "Идея", group: "intentions", description: "Мысли и замыслы, которые вам кажутся интересными, даже если вы пока не знаете, как их воплотить.", example: "домашняя мастерская" },
-  { key: "dating", symbol: "⚭", name: "Знакомства", group: "connections", description: "Люди и формы общения, которые вы хотели бы найти: дружба, компания, совместные занятия, отношения.", example: "компания для прогулок" },
+  { key: "dating", symbol: "⚭", name: "Ближе", group: "connections", description: "То, что нужно, но трудно сказать при всех: близкий друг, отношения, семья, человек, который поймёт.", example: "близкий друг" },
 ] as const;
 export const signalGroupDefaults = [
   ["needs", "Потребности и поиск"], ["resources", "Возможности и ресурсы"],
@@ -43,13 +43,26 @@ export function groupSignalTypes(types: SignalType[], texts: InterfaceTextValues
     types: types.filter((type) => signalTypePresentation(type, texts).group === key),
   })).filter((group) => group.types.length);
 }
+// Navigation follows the semantic order of the hints above; catalogue-only types keep catalogue order after them.
+export function orderSignalTypes(types: SignalType[]): SignalType[] {
+  const rank = (type: SignalType) => {
+    const index = signalPresentationDefaults.findIndex((entry) => entry.key === type.key);
+    return index < 0 ? signalPresentationDefaults.length : index;
+  };
+  return types.map((type, index) => ({ type, index }))
+    .sort((a, b) => rank(a.type) - rank(b.type) || a.index - b.index).map((entry) => entry.type);
+}
 export function selectSignalType(types: SignalType[], key?: string): SignalType | undefined {
   return types.find((type) => type.key === key) || types.find((type) => type.key === "need") || types[0];
 }
 export function signalVisibilityOptions(typeKey: string): SignalVisibility[] {
-  if (typeKey === "dating") return ["private", "match_only", "circle"];
+  // «Ближе» is never published: a record either waits for a match or stays a private draft.
+  if (typeKey === "dating") return ["match_only", "private"];
   return ["members", "public", "match_only", "private", "circle",
     ...(typeKey === "need" || typeKey === "have" ? ["network_blind" as const] : [])];
+}
+export function defaultSignalVisibility(typeKey: string): SignalVisibility {
+  return typeKey === "dating" ? "match_only" : "members";
 }
 export function groupProfileSignals(signals: Signal[], types: SignalType[]) {
   const visibleTypes = [...types, ...Array.from(new Set(signals.map((signal) => signal.typeKey)))

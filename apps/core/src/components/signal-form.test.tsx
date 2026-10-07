@@ -34,10 +34,10 @@ describe("universal Signal UX", () => {
     expect(html).toContain('name="signal_id"');
     expect(html).not.toContain('name="type_key" value="disabled"');
   });
-  it("defaults dating to private and offers no publication or blind option", () => {
+  it("defaults dating to match-only and offers no publication, circle or blind option", () => {
     const html = renderToStaticMarkup(<SignalForm types={types} initialType="dating" texts={texts} />);
-    expect(html).toContain('value="private" selected=""');
-    for (const value of ["public", "members", "network_blind"]) expect(html).not.toContain(`option value="${value}"`);
+    expect(html).toContain('value="match_only" selected=""');
+    for (const value of ["public", "members", "circle", "network_blind"]) expect(html).not.toContain(`option value="${value}"`);
   });
   it("shows populated types only, legacy text and owner actions, including disabled historical types", () => {
     const html = renderToStaticMarkup(<ProfileSignals signals={[signal, { ...signal, id: "s2", typeKey: "disabled", label: "История" }]}
