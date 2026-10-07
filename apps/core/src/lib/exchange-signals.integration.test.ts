@@ -16,6 +16,7 @@ import {
   requireEnabledSignalTypeWithDatabase, archiveSignalWithDatabase, updateSignalWithDatabase,
 } from "./signals";
 import { signalBodyProjection } from "./signal-compat";
+import { setSignalReactionWithDatabase } from "./signal-reactions";
 
 const databaseUrl = process.env.SIGNAL_TEST_DATABASE_URL;
 const schema = `signal_test_${randomUUID().replaceAll("-", "")}`;
@@ -196,32 +197,52 @@ describe.skipIf(!databaseUrl)("Exchange A1 on real PostgreSQL", () => {
     }
   });
 
-  it("keeps /need's body-only contract and exact one-time need/have rewards for both creation paths", async () => {
+  it("keeps /need's body-only contract and never rewards the declaration itself", async () => {
     const id = await participant();
     const need = await addProfileSignalWithDatabase(pool, id, "need", "я".repeat(500), "network_blind");
     const have = await createProfileSignalWithDatabase(pool, id, { kind: "have", label: "Мастерская", visibility: "private" });
-    expect(need?.amount).toBe("0.200000");
-    expect(have.reward?.amount).toBe("0.200000");
+    expect(need).toBeUndefined();
+    expect(have.reward).toBeUndefined();
     expect((await getProfileAboutWithDatabase(pool, id))?.signals.find((entry) => entry.kind === "need"))
       .toMatchObject({ body: "я".repeat(500), label: "я".repeat(500), description: null, legacyBody: true });
-    for (const kind of ["need", "have"]) {
-      const results = await Promise.all(Array.from({ length: 8 }, () => createProfileSignalWithDatabase(pool, id, {
-        kind, label: "Повтор", visibility: "members",
-      })));
-      expect(results.every((result) => !result.reward)).toBe(true);
+    for (const kind of ["need", "have", "search", "can", "want", "know", "skill", "doing", "idea", "dating"]) {
+      expect((await createProfileSignalWithDatabase(pool, id, { kind, label: "Тест", visibility: "private" })).reward).toBeUndefined();
     }
+    expect(await rewardCount(id)).toBe(0);
+    expect((await pool.query("SELECT count(*)::int AS n FROM onboarding_quest_completions WHERE participant_id=$1", [id])).rows[0].n).toBe(0);
+  });
+
+  it("rewards the first need and the first have once, when another participant likes or responds", async () => {
+    const id = await participant(), fans = await Promise.all(Array.from({ length: 8 }, () => participant()));
+    const record = async (kind: string, visibility = "members") =>
+      (await createProfileSignalWithDatabase(pool, id, { kind, label: "Запись", visibility })).id;
+    const need = await record("need"), have = await record("have"), search = await record("search");
+    // Other types and one's own action never complete anything.
+    await setSignalReactionWithDatabase(pool, fans[0], search, true);
+    await expect(setSignalReactionWithDatabase(pool, id, need, true)).rejects.toThrow();
+    expect(await rewardCount(id)).toBe(0);
+    // Eight simultaneous likes of the first need produce exactly one reward.
+    await Promise.all(fans.map((fan) => setSignalReactionWithDatabase(pool, fan, need, true)));
+    expect(await rewardCount(id)).toBe(1);
+    await setSignalReactionWithDatabase(pool, fans[0], need, false);
+    await setSignalReactionWithDatabase(pool, fans[0], need, true);
+    await setSignalReactionWithDatabase(pool, fans[1], await record("need"), true);
+    expect(await rewardCount(id)).toBe(1);
+    await setSignalReactionWithDatabase(pool, fans[0], have, true);
     expect(await rewardCount(id)).toBe(2);
-    for (const kind of ["search", "can", "want", "know", "skill", "doing", "idea", "dating"]) {
-      expect((await createProfileSignalWithDatabase(pool, id, { kind, label: "Тест", visibility: "private" })).reward)
-        .toBeUndefined();
-    }
-    expect(await rewardCount(id)).toBe(2);
-    const concurrentId = await participant();
-    const rewards = await Promise.all(Array.from({ length: 8 }, (_, index) => index % 2
-      ? createProfileSignalWithDatabase(pool, concurrentId, { kind: "need", label: "Тест", visibility: "private" }).then((r) => r.reward)
-      : addProfileSignalWithDatabase(pool, concurrentId, "need", "Тест", "private")));
-    expect(rewards.filter(Boolean)).toHaveLength(1);
-    expect(await rewardCount(concurrentId)).toBe(1);
+    const ledger = await pool.query("SELECT source_type, amount FROM darus_ledger WHERE participant_id=$1 ORDER BY source_type", [id]);
+    expect(ledger.rows).toEqual([{ source_type: "have_first_created", amount: "0.200000" }, { source_type: "need_first_created", amount: "0.200000" }]);
+    // The reward belongs to the author of the record, never to the one who liked it.
+    for (const fan of fans) expect(await rewardCount(fan)).toBe(0);
+
+    // An anonymous Relay response counts the same way, and a later like adds nothing.
+    const blindOwner = await participant();
+    const blind = (await createProfileSignalWithDatabase(pool, blindOwner, { kind: "need", label: "Анонимно", visibility: "network_blind" })).id;
+    await createRelayEncounterWithDatabase(pool, fans[2], blind);
+    expect(await rewardCount(blindOwner)).toBe(1);
+    await setSignalReactionWithDatabase(pool, fans[3], blind, true);
+    await createRelayEncounterWithDatabase(pool, fans[4], blind);
+    expect(await rewardCount(blindOwner)).toBe(1);
   });
 
   it("preserves visibility, active-only reads and archive ownership for structured signals", async () => {

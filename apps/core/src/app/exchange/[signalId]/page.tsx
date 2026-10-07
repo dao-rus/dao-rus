@@ -8,7 +8,8 @@ import { appBaseUrl } from "../../../lib/config";
 import { readInterfaceTexts, type InterfaceTextValues } from "../../../lib/interface-texts";
 import { readPublicSignalReactionCount, readSignalReactionState } from "../../../lib/signal-reactions";
 import { getCurrentParticipant } from "../../../lib/session";
-import { getGuestShareableSignal, getSignal, listSignalTypes } from "../../../lib/signals";
+import { getGuestShareableSignal, getSignal, isSignalHidden, listSignalTypes, readSignalViews } from "../../../lib/signals";
+import { SignalViewBeacon } from "../../../components/signal-view-beacon";
 import { signalHref, signalTypePresentation } from "../../../lib/signal-presentation";
 import { UserText } from "../../../components/user-text";
 
@@ -56,7 +57,7 @@ export default async function SignalPage({ params }: CardProps) {
   if (!viewer) {
     const guest = await getGuestShareableSignal(signalId);
     if (!guest) notFound();
-    const [{ values: texts }, likes] = await Promise.all([readInterfaceTexts(), readPublicSignalReactionCount(guest.id)]);
+    const [{ values: texts }, likes, views] = await Promise.all([readInterfaceTexts(), readPublicSignalReactionCount(guest.id), readSignalViews(guest.id)]);
     // A like click is the sign-in moment: standard Telegram auth, back to this canonical card.
     const likeHref = `/api/auth/telegram/start?next=${encodeURIComponent(signalHref(guest.id))}`;
     return <main className="shell"><article className="signalGuestCard">
@@ -65,14 +66,17 @@ export default async function SignalPage({ params }: CardProps) {
       {guest.description ? <UserText className="signalCardDescription" text={guest.description} /> : null}
       <p className="signalCardAuthor">{guest.authorName}</p>
       <a className="signalGuestLike" href={likeHref} aria-label={texts["signal.reaction_like"]}>♥ {likes}</a>
+      <p className="signalCardViews">{texts["signal.views"]}: {views}</p>
+      <SignalViewBeacon signalId={guest.id} />
       <div className="signalGuestShare"><Share id={guest.id} label={guest.label} description={guest.description} texts={texts} /></div>
     </article></main>;
   }
 
   const signal = await getSignal(viewer.id, signalId);
   if (!signal) notFound();
-  const [types, { values: texts }, reaction] = await Promise.all([
+  const [types, { values: texts }, reaction, views, hiddenByViewer] = await Promise.all([
     listSignalTypes(), readInterfaceTexts(), readSignalReactionState(signal.id, viewer.id),
+    readSignalViews(signal.id), isSignalHidden(viewer.id, signal.id),
   ]);
   const type = types.find((entry) => entry.key === signal.typeKey);
   if (!type) notFound();
@@ -90,6 +94,9 @@ export default async function SignalPage({ params }: CardProps) {
     {signal.mine ? <p className="muted signalCardState">
       {texts[`signal.visibility_${signal.visibility}`]} · {texts[`signal.status_${signal.status}`]}
     </p> : null}
+    <p className="signalCardViews">{texts["signal.views"]}: {views}</p>
+    {hiddenByViewer ? <p className="muted">{texts["signal.hidden_note"]}</p> : null}
+    {!signal.mine && active ? <SignalViewBeacon signalId={signal.id} /> : null}
     {active ? <div className="signalActionBar">
       {signal.mine ? <>
         <Link className="button secondary" href={`/exchange/new?signal=${signal.id}`}>
@@ -115,6 +122,11 @@ export default async function SignalPage({ params }: CardProps) {
           aria-label={texts["signal.reaction_like"]}
           title={reaction.reacted ? texts["signal.reaction_remove"] : texts["signal.reaction_like"]}>
           ♥ {reaction.count}</button>
+      </form> : null}
+      {!signal.mine ? <form action="/api/signals/card" method="post">
+        <input type="hidden" name="signal_id" value={signal.id} />
+        <input type="hidden" name="action" value={hiddenByViewer ? "unhide" : "hide"} />
+        <button className="button secondary" type="submit">{texts[hiddenByViewer ? "signal.unhide" : "signal.hide"]}</button>
       </form> : null}
       {shareable ? <Share id={signal.id} label={signal.label} description={signal.description} texts={texts} /> : null}
     </div> : null}

@@ -128,7 +128,7 @@ export default async function ProfilePage({ searchParams }: ProfilePageProps) {
           <div className="profileSectionHeading">
             <div>
               <h2>О себе</h2>
-              <p className="muted">Расскажите о себе и оставьте сигналы для будущих совпадений.</p>
+              <p className="muted">Расскажите о себе и оставьте записи для будущих совпадений.</p>
             </div>
           </div>
 

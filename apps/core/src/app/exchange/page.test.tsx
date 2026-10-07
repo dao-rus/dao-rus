@@ -11,10 +11,11 @@ const mocks = vi.hoisted(() => ({
   own: vi.fn(),
   matches: vi.fn(),
   keys: vi.fn(),
+  hidden: vi.fn(),
 }));
 vi.mock("@/lib/session", () => ({ getCurrentParticipant: mocks.participant }));
 vi.mock("@/lib/interface-texts", () => ({ readInterfaceTexts: mocks.texts }));
-vi.mock("../../lib/signals", () => ({ listNetworkSignals: mocks.signals, listSignalTypes: mocks.types, listParticipantSignals: mocks.own }));
+vi.mock("../../lib/signals", () => ({ listNetworkSignals: mocks.signals, listSignalTypes: mocks.types, listParticipantSignals: mocks.own, listHiddenSignals: mocks.hidden }));
 vi.mock("../../lib/closer", () => ({ listCloserMatches: mocks.matches, listOwnCloserKeys: mocks.keys,
   listCloserGoals: async () => [{ key: "friend", displayName: "Друг", asksGender: false, enabled: true }] }));
 vi.mock("@/lib/relay", () => ({
@@ -51,6 +52,7 @@ describe("network exchange catalog", () => {
     mocks.own.mockResolvedValue([]);
     mocks.matches.mockResolvedValue([]);
     mocks.keys.mockResolvedValue(new Map());
+    mocks.hidden.mockResolvedValue([]);
     mocks.types.mockResolvedValue(["need", "can", "want", "have"].map((key) => ({ key, displayName: key, enabled: true })));
     mocks.texts.mockResolvedValue({ values: {
       "exchange.title": "Обмен",
@@ -86,7 +88,7 @@ describe("network exchange catalog", () => {
   it("opens Need by default and offers catalogue categories", async () => {
     mocks.signals.mockResolvedValue([]);
     const page = await ExchangePage({ searchParams: Promise.resolve({}) });
-    expect(mocks.signals).toHaveBeenCalledWith("viewer", "need");
+    expect(mocks.signals).toHaveBeenCalledWith("viewer", "need", "new");
     for (const [kind, label] of [["need", "Нужно"], ["can", "Могу"],
       ["want", "Хочу"], ["have", "Есть"]]) {
       const link = collectProps(page, (props) => props.href === `/exchange?type=${kind}`)[0];
@@ -102,7 +104,7 @@ describe("network exchange catalog", () => {
     })));
     mocks.signals.mockResolvedValue([]);
     const page = await ExchangePage({ searchParams: Promise.resolve({}) });
-    const nav = collectProps(page, (props) => props["aria-label"] === "Типы сигналов")[0];
+    const nav = collectProps(page, (props) => props["aria-label"] === "Типы записей")[0];
     expect(nav).toBeDefined();
     const links = collectProps(nav.children as ReactNode, (props) => typeof props.href === "string");
     expect(links.map((link) => link.href)).toEqual(signalPresentationDefaults.map((type) => `/exchange?type=${type.key}`));
@@ -123,7 +125,7 @@ describe("network exchange catalog", () => {
   it.each(["need", "can", "want", "have"])("requests %s signals when selected", async (kind) => {
     mocks.signals.mockResolvedValue([]);
     await ExchangePage({ searchParams: Promise.resolve({ tab: kind }) });
-    expect(mocks.signals).toHaveBeenCalledWith("viewer", kind);
+    expect(mocks.signals).toHaveBeenCalledWith("viewer", kind, "new");
   });
 
   it("shows a public author but never offers the anonymous Relay form for that record", async () => {
@@ -159,7 +161,7 @@ describe("network exchange catalog", () => {
       "relay.list_title": "Переписки",
     } });
     const page = await ExchangePage({ searchParams: Promise.resolve({ tab: "have" }) });
-    expect(mocks.signals).toHaveBeenCalledWith("viewer", "have");
+    expect(mocks.signals).toHaveBeenCalledWith("viewer", "have", "new");
     const text = textContent(page);
     expect(text).toContain("Свои дела");
     expect(text).toContain("Новый вводный текст");
@@ -175,7 +177,7 @@ describe("network exchange catalog", () => {
     ]);
     mocks.signals.mockResolvedValue([{ id: "new", label: "Новое ядро", description: "Контекст", author: null }]);
     const page = await ExchangePage({ searchParams: Promise.resolve({ type: "future_type" }) });
-    expect(mocks.signals).toHaveBeenCalledWith("viewer", "future_type");
+    expect(mocks.signals).toHaveBeenCalledWith("viewer", "future_type", "new");
     expect(textContent(page)).toContain("Будущий тип");
     expect(textContent(page)).toContain("Контекст");
     expect(textContent(page)).not.toContain("Скрытый тип");
@@ -221,10 +223,36 @@ describe("network exchange catalog", () => {
     expect(collectProps(page, (props) => props.href === "/relay/enc")).toHaveLength(1);
     expect(collectProps(page, (props) => props.href === "/exchange/new?type=dating")).toHaveLength(1);
   });
+  it("sorts by likes on request, keeps the choice across tabs, and defaults to new for anything else", async () => {
+    mocks.signals.mockResolvedValue([]);
+    const top = await ExchangePage({ searchParams: Promise.resolve({ type: "can", sort: "top" }) });
+    expect(mocks.signals).toHaveBeenLastCalledWith("viewer", "can", "top");
+    expect(collectProps(top, (props) => props.href === "/exchange?type=have&sort=top")).toHaveLength(1);
+    const current = collectProps(top, (props) => props["aria-current"] === "true");
+    expect(current.map((link) => link.href)).toEqual(["/exchange?type=can&sort=top"]);
+    await ExchangePage({ searchParams: Promise.resolve({ type: "can", sort: "likes; DROP" }) });
+    expect(mocks.signals).toHaveBeenLastCalledWith("viewer", "can", "new");
+  });
+  it("lists the viewer's hidden records with a way back, instead of a type listing", async () => {
+    mocks.hidden.mockResolvedValue([{ id: "h1", typeKey: "need", label: "Скрытая запись", description: null,
+      visibility: "network_blind", mine: false, author: { id: "leak", name: "Надежда К" } }]);
+    mocks.texts.mockResolvedValue({ values: { "exchange.title": "Обмен", "relay.list_title": "Диалоги", "exchange.hidden_link": "Скрытые",
+      "exchange.hidden_title": "Скрытые записи", "signal.unhide": "Вернуть в ленту", "exchange.tab_need": "? Нужно" } });
+    const page = await ExchangePage({ searchParams: Promise.resolve({ hidden: "1" }) });
+    expect(mocks.signals).not.toHaveBeenCalled();
+    const text = textContent(page);
+    expect(text).toContain("Скрытые записи");
+    expect(text).toContain("Скрытая запись");
+    expect(text).toMatch(/Скрытые\s+\(1\)/);
+    expect(text).not.toContain("Надежда К");
+    const forms = collectProps(page, (props) => props.action === "/api/signals/card");
+    expect(forms).toHaveLength(1);
+    expect(collectProps(forms[0].children as ReactNode, (props) => props.name === "action")[0].value).toBe("unhide");
+  });
   it.each(["unknown", "../../private", "disabled"])("falls back safely for %s type queries", async (type) => {
     mocks.signals.mockResolvedValue([]);
     await ExchangePage({ searchParams: Promise.resolve({ type }) });
-    expect(mocks.signals).toHaveBeenCalledWith("viewer", "need");
+    expect(mocks.signals).toHaveBeenCalledWith("viewer", "need", "new");
   });
 
 });

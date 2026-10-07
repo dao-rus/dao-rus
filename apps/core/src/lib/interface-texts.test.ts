@@ -221,6 +221,6 @@ describe("interface texts", () => {
     expect(restored.values["exchange.title"]).toBe("Обмен");
     expect(restored.values["exchange.lead"])
       .toBe("Здесь люди находят друг друга через потребности, возможности, знания, навыки, идеи и дела.");
-    expect(restored.values["exchange.empty"]).toBe("Сигналов пока нет.");
+    expect(restored.values["exchange.empty"]).toBe("Записей пока нет.");
   });
 });

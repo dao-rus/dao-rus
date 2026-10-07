@@ -599,7 +599,12 @@ dd { margin: 6px 0 0; }
 .exchangeCloser h3 { margin: 22px 0 0; font-size: 16px; }
 .closerKeys { display: grid; gap: 8px; margin: 0; padding: 14px; border: 1px solid var(--line); border-radius: 12px; }
 .closerKeys p { margin: 0; }
-.exchangeUtility { margin-top: 12px; font-size: 14px; }
+.exchangeUtility { display: flex; flex-wrap: wrap; gap: 6px 18px; margin-top: 12px; font-size: 14px; }
+.exchangeSort { display: inline-flex; margin-top: 12px; border: 1px solid var(--line); border-radius: 8px; overflow: hidden; font-size: 13px; }
+.exchangeSort a { padding: 6px 12px; color: var(--ink); text-decoration: none; }
+.exchangeSort a + a { border-left: 1px solid var(--line); }
+.exchangeSort a[aria-current] { background: var(--accent); color: var(--accent-ink); }
+.signalCardViews { margin: 10px 0 0; color: var(--muted); font-size: 13px; }
 .exchangeSelection { margin-top: 22px; }
 .exchangeSelection h2 { margin: 0 0 8px; font-size: 20px; }
 .exchangeSelection p { margin: 6px 0; }

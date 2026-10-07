@@ -4,8 +4,9 @@ import { Pool } from "pg";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { applyMigration, migrationFile } from "./migration-integrity";
 import { readSignalReactionStateWithDatabase, setSignalReactionWithDatabase } from "./signal-reactions";
-import { archiveSignalWithDatabase, createSignalWithDatabase, getGuestShareableSignalWithDatabase,
-  updateSignalWithDatabase } from "./signals";
+import { archiveSignalWithDatabase, countSignalViewWithDatabase, createSignalWithDatabase, getGuestShareableSignalWithDatabase,
+  getSignalWithDatabase, isSignalHiddenWithDatabase, listHiddenSignalsWithDatabase, listNetworkSignalsWithDatabase,
+  readSignalViewsWithDatabase, searchNetworkSignalsWithDatabase, setSignalHiddenWithDatabase, updateSignalWithDatabase } from "./signals";
 
 const databaseUrl = process.env.SIGNAL_TEST_DATABASE_URL;
 const schema = `signal_card_test_${randomUUID().replaceAll("-", "")}`;
@@ -92,5 +93,89 @@ describe.skipIf(!databaseUrl)("Signal card sharing and reactions on PostgreSQL",
     expect(history.rows.filter((row) => row.revoked_at === null)).toHaveLength(1);
     await expect(pool.query("DELETE FROM signal_reactions WHERE signal_id=$1", [signal.id])).rejects.toThrow();
     expect(await counts()).toEqual(before);
+  });
+
+  async function person(name = "Участник") {
+    const id = randomUUID();
+    await pool.query("INSERT INTO participants(id,display_name) VALUES ($1,$2)", [id, name]);
+    return id;
+  }
+  const make = async (author: string, label: string, visibility = "members", typeKey = "idea") =>
+    (await createSignalWithDatabase(pool, author, { typeKey, label, visibility })).signal.id;
+
+  it("orders Top by active likes and New by date, without changing who can see what", async () => {
+    const author = await person(), [a, b, c] = await Promise.all([person(), person(), person()]);
+    const type = "doing";
+    const old = await make(author, "Старая с двумя лайками", "members", type);
+    const mid = await make(author, "Средняя с одним", "public", type);
+    const fresh = await make(author, "Свежая без лайков", "members", type);
+    await pool.query("UPDATE profile_signals SET created_at = now() - interval '3 days' WHERE id=$1", [old]);
+    await pool.query("UPDATE profile_signals SET created_at = now() - interval '2 days' WHERE id=$1", [mid]);
+    const priv = await make(author, "Закрытая", "private", type);
+    for (const fan of [a, b]) await setSignalReactionWithDatabase(pool, fan, old, true);
+    await setSignalReactionWithDatabase(pool, c, mid, true);
+    const ids = async (sort?: "new" | "top") => (await listNetworkSignalsWithDatabase(pool, a, type, sort))
+      .map((signal) => signal.id).filter((id) => [old, mid, fresh, priv].includes(id));
+    expect(await ids()).toEqual([fresh, mid, old]);
+    expect(await ids("new")).toEqual([fresh, mid, old]);
+    expect(await ids("top")).toEqual([old, mid, fresh]);
+    // A revoked like stops counting.
+    for (const fan of [a, b]) await setSignalReactionWithDatabase(pool, fan, old, false);
+    expect(await ids("top")).toEqual([mid, fresh, old]);
+  });
+
+  it("hides a record only for the participant who hid it, and never one's own or an unreachable one", async () => {
+    const author = await person("Автор Скрываемый"), me = await person(), other = await person();
+    const shown = await make(author, "Обычная запись о рыбалке"), secret = await make(author, "Закрытая", "private");
+    const mine = await make(me, "Моя запись");
+    expect(await setSignalHiddenWithDatabase(pool, me, mine, true)).toBeNull();
+    expect(await setSignalHiddenWithDatabase(pool, me, secret, true)).toBeNull();
+    expect(await setSignalHiddenWithDatabase(pool, me, "not-a-uuid", true)).toBeNull();
+    expect((await pool.query("SELECT count(*)::int AS n FROM signal_hides WHERE participant_id=$1", [me])).rows[0].n).toBe(0);
+
+    expect((await setSignalHiddenWithDatabase(pool, me, shown, true))?.id).toBe(shown);
+    await setSignalHiddenWithDatabase(pool, me, shown, true);
+    expect(await isSignalHiddenWithDatabase(pool, me, shown)).toBe(true);
+    const listed = async (viewer: string) => (await listNetworkSignalsWithDatabase(pool, viewer, "idea")).some((signal) => signal.id === shown);
+    expect(await listed(me)).toBe(false);
+    expect(await listed(other)).toBe(true);
+    expect(await searchNetworkSignalsWithDatabase(pool, me, { typeKeys: [], terms: ["рыбалке"] })).toEqual([]);
+    expect(await searchNetworkSignalsWithDatabase(pool, other, { typeKeys: [], terms: ["рыбалке"] })).toHaveLength(1);
+    // Still reachable by its address, and nothing about the hide reaches the author or the counters.
+    expect((await getSignalWithDatabase(pool, me, shown))?.id).toBe(shown);
+    expect((await readSignalReactionStateWithDatabase(pool, shown, author)).count).toBe(0);
+    expect((await listHiddenSignalsWithDatabase(pool, me)).map((signal) => signal.id)).toEqual([shown]);
+    expect(await listHiddenSignalsWithDatabase(pool, other)).toEqual([]);
+    expect((await pool.query("SELECT count(*)::int AS n FROM events WHERE payload->>'signal_id' = $1 AND event_type LIKE '%hid%'", [shown])).rows[0].n).toBe(0);
+
+    // A record withdrawn by its author leaves the hidden list, and can still be un-hidden.
+    await archiveSignalWithDatabase(pool, author, shown);
+    expect(await listHiddenSignalsWithDatabase(pool, me)).toEqual([]);
+    await setSignalHiddenWithDatabase(pool, me, shown, false);
+    expect(await isSignalHiddenWithDatabase(pool, me, shown)).toBe(false);
+  });
+
+  it("counts views as a plain number: not the author's own, and only where the record can be opened", async () => {
+    const author = await person(), member = await person();
+    const open = await make(author, "Публичная", "public"), inner = await make(author, "Для участников");
+    const blind = await make(author, "Анонимная", "network_blind", "need"), secret = await make(author, "Закрытая", "private");
+    expect(await countSignalViewWithDatabase(pool, author, open)).toBe(false);
+    expect(await readSignalViewsWithDatabase(pool, open)).toBe(0);
+    await Promise.all(Array.from({ length: 20 }, (_, index) => countSignalViewWithDatabase(pool, index % 2 ? member : null, open)));
+    expect(await readSignalViewsWithDatabase(pool, open)).toBe(20);
+    expect(await countSignalViewWithDatabase(pool, member, inner)).toBe(true);
+    expect(await countSignalViewWithDatabase(pool, member, blind)).toBe(true);
+    // Guests can only add to a publicly readable record; nobody can to a private or missing one.
+    for (const [who, id] of [[null, inner], [null, blind], [member, secret], [null, secret], [member, randomUUID()], [member, "x"]] as const) {
+      expect(await countSignalViewWithDatabase(pool, who, id)).toBe(false);
+    }
+    expect([await readSignalViewsWithDatabase(pool, inner), await readSignalViewsWithDatabase(pool, blind), await readSignalViewsWithDatabase(pool, secret)])
+      .toEqual([1, 1, 0]);
+    await archiveSignalWithDatabase(pool, author, open);
+    expect(await countSignalViewWithDatabase(pool, member, open)).toBe(false);
+    // Nothing identifies a viewer: the table holds a record reference and a number.
+    const columns = await pool.query(
+      "SELECT column_name FROM information_schema.columns WHERE table_schema = $1 AND table_name = 'signal_view_counts' ORDER BY 1", [schema]);
+    expect(columns.rows.map((row) => row.column_name)).toEqual(["signal_id", "views"]);
   });
 });

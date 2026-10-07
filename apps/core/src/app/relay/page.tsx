@@ -39,7 +39,7 @@ export default async function RelayListPage({
             <article className="exchangeCard" key={encounter.id}>
               <UserText text={encounter.body} />
               <p className="muted">
-                {encounter.role === "author" ? "Автор сигнала" : "Откликнувшийся"}
+                {encounter.role === "author" ? "Автор записи" : "Откликнувшийся"}
                 {" · "}
                 {encounter.status === "revealed" ? "Контакт открыт"
                   : encounter.status === "cancelled" ? "Отменён" : "Анонимный диалог"}

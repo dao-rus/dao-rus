@@ -133,19 +133,87 @@ export async function listParticipantSignalsWithDatabase(
   return result.rows.map((row) => signalFromRow(row, !own));
 }
 
+export type NetworkSignalSort = "new" | "top";
+// "Hide for me" is the viewer's own choice; it never changes what anyone else sees.
+const notHiddenByViewer = `NOT EXISTS (SELECT 1 FROM signal_hides hidden
+                             WHERE hidden.signal_id = s.id AND hidden.participant_id = $1::uuid)`;
+const activeLikes = `(SELECT count(*) FROM signal_reactions liked WHERE liked.signal_id = s.id AND liked.revoked_at IS NULL)`;
+
 export async function listNetworkSignalsWithDatabase(
-  database: SignalReader, viewerId: string, typeKeyValue: unknown,
+  database: SignalReader, viewerId: string, typeKeyValue: unknown, sort: NetworkSignalSort = "new",
 ): Promise<NetworkSignal[]> {
   const typeKey = normalizeSignalTypeKey(typeKeyValue);
   const result = await database.query(
     `SELECT ${contentColumns}, ${networkIdentityColumns}
        FROM profile_signals s
        JOIN participants author ON author.id = s.participant_id
-      WHERE ${visibleActiveSignalSql("network")} AND s.kind = $2
-      ORDER BY s.created_at DESC, s.id DESC LIMIT 100`,
+      WHERE ${visibleActiveSignalSql("network")} AND s.kind = $2 AND ${notHiddenByViewer}
+      ORDER BY ${sort === "top" ? `${activeLikes} DESC, ` : ""}s.created_at DESC, s.id DESC LIMIT 100`,
     [viewerId, typeKey],
   );
   return result.rows.map(networkSignalFromRow);
+}
+
+// The viewer's hidden records that they could still open, for the "return to feed" list.
+export async function listHiddenSignalsWithDatabase(database: SignalReader, viewerId: string): Promise<NetworkSignal[]> {
+  const result = await database.query(
+    `SELECT ${contentColumns}, ${networkIdentityColumns}
+       FROM signal_hides h
+       JOIN profile_signals s ON s.id = h.signal_id
+       JOIN participants author ON author.id = s.participant_id
+      WHERE h.participant_id = $1::uuid AND ${visibleActiveSignalSql("network")}
+      ORDER BY h.created_at DESC, s.id DESC LIMIT 100`, [viewerId]);
+  return result.rows.map(networkSignalFromRow);
+}
+
+export async function isSignalHiddenWithDatabase(database: SignalReader, viewerId: string, signalId: string): Promise<boolean> {
+  const result = await database.query(
+    "SELECT 1 FROM signal_hides WHERE participant_id = $1::uuid AND signal_id = $2::uuid", [viewerId, signalId]);
+  return Boolean(result.rowCount);
+}
+
+// Only a record of another participant that the viewer can currently open may be hidden.
+export async function setSignalHiddenWithDatabase(
+  database: SignalReader, viewerId: string, signalId: unknown, hidden: boolean,
+): Promise<NetworkSignal | null> {
+  const signal = await getSignalWithDatabase(database, viewerId, signalId);
+  if (!hidden) {
+    // Returning a record to the feed must work even after its author withdrew it.
+    if (typeof signalId === "string" && /^[0-9a-f]{8}(-[0-9a-f]{4}){3}-[0-9a-f]{12}$/i.test(signalId)) {
+      await database.query("DELETE FROM signal_hides WHERE participant_id = $1::uuid AND signal_id = $2::uuid", [viewerId, signalId]);
+    }
+    return signal;
+  }
+  if (!signal || signal.mine) return null;
+  {
+    await database.query(
+      `INSERT INTO signal_hides(participant_id, signal_id)
+       SELECT $1::uuid, s.id FROM profile_signals s
+        WHERE s.id = $2::uuid AND s.participant_id <> $1::uuid AND ${visibleActiveSignalSql("network")}
+       ON CONFLICT DO NOTHING`, [viewerId, signal.id]);
+  }
+  return signal;
+}
+
+// Views: a plain counter. The author's own openings are not counted, and a view is
+// accepted only for a record the viewer (or a guest, viewerId = null) can actually open.
+export async function countSignalViewWithDatabase(database: SignalReader, viewerId: string | null, signalId: unknown): Promise<boolean> {
+  if (typeof signalId !== "string" || !/^[0-9a-f]{8}(-[0-9a-f]{4}){3}-[0-9a-f]{12}$/i.test(signalId)) return false;
+  const result = await database.query(
+    `INSERT INTO signal_view_counts AS counted(signal_id, views)
+     SELECT s.id, 1 FROM profile_signals s
+      WHERE s.id = $2::uuid AND s.status = 'active'
+        AND CASE WHEN $1::uuid IS NULL THEN s.visibility = 'public'
+                 ELSE s.participant_id <> $1::uuid AND s.visibility IN ('public', 'members', 'network_blind') END
+     ON CONFLICT (signal_id) DO UPDATE SET views = counted.views + 1
+     RETURNING signal_id`, [viewerId, signalId]);
+  return Boolean(result.rowCount);
+}
+
+// The count is shown wherever the record itself is shown, so it needs no access rule of its own.
+export async function readSignalViewsWithDatabase(database: SignalReader, signalId: string): Promise<number> {
+  const result = await database.query("SELECT views FROM signal_view_counts WHERE signal_id = $1::uuid", [signalId]);
+  return Number(result.rows[0]?.views ?? 0);
 }
 
 export type NetworkSignalSearch = { typeKeys: string[]; terms: string[] };
@@ -162,7 +230,7 @@ export async function searchNetworkSignalsWithDatabase(
     `SELECT ${contentColumns}, ${networkIdentityColumns}
        FROM profile_signals s
        JOIN participants author ON author.id = s.participant_id
-      WHERE ${visibleActiveSignalSql("network")}
+      WHERE ${visibleActiveSignalSql("network")} AND ${notHiddenByViewer}
         AND (cardinality($2::text[]) = 0 OR s.kind = ANY($2::text[]))
         AND (cardinality($3::text[]) = 0 OR NOT EXISTS (
           SELECT 1 FROM unnest($3::text[]) AS term
@@ -336,10 +404,17 @@ export async function listParticipantSignals(ownerId: string, viewerId: string, 
   const { pool } = await import("./db");
   return listParticipantSignalsWithDatabase(pool, ownerId, viewerId, status);
 }
-export async function listNetworkSignals(viewerId: string, typeKey: unknown) {
+export async function listNetworkSignals(viewerId: string, typeKey: unknown, sort?: NetworkSignalSort) {
   const { pool } = await import("./db");
-  return listNetworkSignalsWithDatabase(pool, viewerId, typeKey);
+  return listNetworkSignalsWithDatabase(pool, viewerId, typeKey, sort);
 }
+export async function listHiddenSignals(viewerId: string) { const { pool } = await import("./db"); return listHiddenSignalsWithDatabase(pool, viewerId); }
+export async function isSignalHidden(viewerId: string, signalId: string) { const { pool } = await import("./db"); return isSignalHiddenWithDatabase(pool, viewerId, signalId); }
+export async function setSignalHidden(viewerId: string, signalId: unknown, hidden: boolean) {
+  const { pool } = await import("./db"); return setSignalHiddenWithDatabase(pool, viewerId, signalId, hidden);
+}
+export async function countSignalView(viewerId: string | null, signalId: unknown) { const { pool } = await import("./db"); return countSignalViewWithDatabase(pool, viewerId, signalId); }
+export async function readSignalViews(signalId: string) { const { pool } = await import("./db"); return readSignalViewsWithDatabase(pool, signalId); }
 export async function searchNetworkSignals(viewerId: string, search: NetworkSignalSearch) {
   const { pool } = await import("./db");
   return searchNetworkSignalsWithDatabase(pool, viewerId, search);

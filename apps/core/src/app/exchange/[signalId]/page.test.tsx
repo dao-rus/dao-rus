@@ -3,10 +3,12 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import type { NetworkSignal } from "../../../lib/signals";
 
 const mocks = vi.hoisted(() => ({ participant: vi.fn(), signal: vi.fn(), guest: vi.fn(),
-  types: vi.fn(), texts: vi.fn(), reaction: vi.fn(), publicLikes: vi.fn() }));
+  types: vi.fn(), texts: vi.fn(), reaction: vi.fn(), publicLikes: vi.fn(), views: vi.fn(), hiddenState: vi.fn() }));
 vi.mock("../../../lib/session", () => ({ getCurrentParticipant: mocks.participant }));
 vi.mock("../../../lib/signals", () => ({ getSignal: mocks.signal,
-  getGuestShareableSignal: mocks.guest, listSignalTypes: mocks.types }));
+  getGuestShareableSignal: mocks.guest, listSignalTypes: mocks.types,
+  readSignalViews: mocks.views, isSignalHidden: mocks.hiddenState }));
+vi.mock("../../../components/signal-view-beacon", () => ({ SignalViewBeacon: ({ signalId }: { signalId: string }) => <i data-view-beacon={signalId} /> }));
 vi.mock("../../../lib/signal-reactions", () => ({ readSignalReactionState: mocks.reaction,
   readPublicSignalReactionCount: mocks.publicLikes }));
 vi.mock("../../../lib/interface-texts", async (original) => ({
@@ -163,7 +165,7 @@ describe("canonical Signal card", () => {
 
   it("publishes OpenGraph only for guest-readable public data and keeps noindex", async () => {
     const hidden = await generateMetadata(props);
-    expect(hidden).toEqual({ title: "Сигнал", robots: { index: false, follow: false } });
+    expect(hidden).toEqual({ title: "Запись", robots: { index: false, follow: false } });
     expect(JSON.stringify(hidden)).not.toContain("Надежда К");
     mocks.guest.mockResolvedValue(guestSignal);
     const shared = await generateMetadata(props);

@@ -29,7 +29,7 @@ export default async function RelayDetailPage({
     listRelayMessages(participant.id, encounter.id),
     readInterfaceTexts(),
   ]);
-  const otherRole = encounter.role === "author" ? "Откликнувшийся" : "Автор сигнала";
+  const otherRole = encounter.role === "author" ? "Откликнувшийся" : "Автор записи";
   const writable = encounter.status !== "cancelled";
 
   return (
@@ -39,7 +39,7 @@ export default async function RelayDetailPage({
         <div className="eyebrow">DAO Rus · Анонимный диалог</div>
         <h1>{texts["relay.dialog_title"]}</h1>
         <UserText className="relaySignal" text={encounter.body} />
-        <p className="muted">Вы: {encounter.role === "author" ? "Автор сигнала" : "Откликнувшийся"}</p>
+        <p className="muted">Вы: {encounter.role === "author" ? "Автор записи" : "Откликнувшийся"}</p>
         {encounter.other ? (
           <div className="relayReveal">
             <strong>Контакт открыт</strong>
