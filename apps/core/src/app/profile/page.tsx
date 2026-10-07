@@ -14,6 +14,7 @@ import {
 import { getProfileAbout, residenceDirectoryHref, residenceLabel } from "@/lib/profile-about";
 import { getReputationSummary } from "@/lib/reputation";
 import { getCurrentParticipant } from "@/lib/session";
+import { getForumJoinDate } from "@/lib/forum-join-history";
 import { getDarusBalance } from "@/lib/tokenization";
 import { getVerificationProfile } from "@/lib/verification";
 import { getOnboardingRewardFeedback } from "../../lib/onboarding-quests";
@@ -66,7 +67,7 @@ export default async function ProfilePage({ searchParams }: ProfilePageProps) {
 
   const params = await searchParams;
   const onboardingReward = await getOnboardingRewardFeedback(participant.id, params.onboarding_reward);
-  const [activity, membershipHistory, verification, about, { values: texts }, darusBalance, reputation, signals, signalTypes] = await Promise.all([
+  const [activity, membershipHistory, verification, about, { values: texts }, darusBalance, reputation, signals, signalTypes, forumJoinedAt] = await Promise.all([
     getActivitySummary(participant.id),
     getMembershipHistory(participant.id),
     getVerificationProfile(participant.id, participant.id),
@@ -76,6 +77,7 @@ export default async function ProfilePage({ searchParams }: ProfilePageProps) {
     getReputationSummary(participant.id, participant.id),
     listParticipantSignals(participant.id, participant.id),
     listSignalTypes(),
+    getForumJoinDate(participant.id).catch(() => null),
   ]);
   const forumAnnouncement = await import("../../lib/newcomer-announcement")
     .then((module) => module.readForumAnnouncementChoice(participant.id)).catch(() => null);
@@ -220,7 +222,9 @@ export default async function ProfilePage({ searchParams }: ProfilePageProps) {
             <dd><strong>{verification?.isVerified ? "✓ Личность подтверждена" : "Личность пока не подтверждена"}</strong></dd>
           </div>
           <div><dt>Статус</dt><dd>{statusLabels[participant.membershipStatus] ?? participant.membershipStatus}</dd></div>
-          <div><dt>Дата регистрации</dt><dd><LocalDateTime value={participant.createdAt.toISOString()} /></dd></div>
+          {forumJoinedAt
+            ? <div><dt>{texts["profile.forum_since"]}</dt><dd><LocalDateTime value={forumJoinedAt.toISOString()} /></dd></div>
+            : <div><dt>Дата регистрации</dt><dd><LocalDateTime value={participant.createdAt.toISOString()} /></dd></div>}
         </dl>
 
         <p><Link className="metricLink" href={`/profile/${participant.id}`}>Подтверждение личности →</Link></p>

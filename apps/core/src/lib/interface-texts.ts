@@ -251,6 +251,7 @@ const interfaceTextFieldDefinitions = [
   { section: "Диалоги", key: "relay.archive_empty", label: "Пустой архив", defaultValue: "Архив пуст.", multiline: false, pageLabel: "Архив диалогов", pageHref: "/relay?archive=1" },
   { section: "Диалоги", key: "relay.messages_empty", label: "Пустая переписка", defaultValue: "Сообщений пока нет.", multiline: false, pageLabel: "Диалог", pageHref: undefined },
   { section: "Профиль", key: "profile.eyebrow", label: "Надпись над именем в профиле", defaultValue: "Профиль", multiline: false },
+  { section: "Профиль", key: "profile.forum_since", label: "Дата вступления в форум", defaultValue: "В форуме ДАО с", multiline: false },
   { section: "Профиль", key: "profile.reception_link", label: "Ссылка на Приёмную", defaultValue: "Открыть Приёмную ДАО Русь", multiline: false },
 ] as const;
 

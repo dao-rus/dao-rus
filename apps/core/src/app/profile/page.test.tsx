@@ -28,6 +28,7 @@ vi.mock("@/lib/profile-about", () => ({
 }));
 vi.mock("@/lib/interface-texts", () => ({ readInterfaceTexts: mocks.readInterfaceTexts }));
 vi.mock("@/lib/tokenization", () => ({ getDarusBalance: mocks.getDarusBalance }));
+vi.mock("@/lib/forum-join-history", () => ({ getForumJoinDate: async () => null }));
 vi.mock("@/lib/reputation", () => ({ getReputationSummary: mocks.getReputationSummary }));
 vi.mock("@/lib/config", () => ({ hasPrototypeAdminAccess: () => false, telegramReceptionConfig: () => ({}) }));
 vi.mock("@/components/local-date-time", () => ({ LocalDateTime: () => null }));

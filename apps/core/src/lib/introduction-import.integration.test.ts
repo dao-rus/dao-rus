@@ -160,6 +160,35 @@ describe.skipIf(!databaseUrl)("introduction import on real PostgreSQL", () => {
     expect((await backfillForumMemberNames(pool, true, fetchUser)).named).toBe(0);
   });
 
+  it("restores join history from an export: first join, returns, no duplicates, and a later observed join becomes a return", async () => {
+    const { importForumJoins, parseForumJoinEntries, getForumJoinDateWithDatabase, ForumJoinImportValidationError } = await import("./forum-join-history");
+    const one = await person(), observed = await person();
+    // Core itself saw this person join recently; the export shows they first came long before.
+    await pool.query(`INSERT INTO events(event_type, participant_id, payload) VALUES ('forum.joined', $1, $2::jsonb)`,
+      [observed.id, JSON.stringify({ source: "chat_member", observed_at: "2026-10-07T13:30:00.000Z" })]);
+    const entries = parseForumJoinEntries([
+      { telegram_user_id: one.telegram, joins: [{ at: "2025-01-05T10:00:00Z", message_id: 7002 }, { at: "2024-06-01T09:00:00Z", message_id: 7001 }] },
+      { telegram_user_id: observed.telegram, joins: [{ at: "2024-12-01T08:00:00Z", message_id: 7003 }] },
+      { telegram_user_id: "777777777", joins: [{ at: "2024-01-01T00:00:00Z", message_id: 7004 }] },
+    ]);
+    const history = async (id: string) => (await pool.query(
+      `SELECT event_type, created_at, payload->>'source' AS source FROM events WHERE participant_id = $1
+        AND event_type IN ('forum.joined', 'forum.rejoined') ORDER BY created_at`, [id])).rows
+      .map((row) => `${row.event_type} ${new Date(String(row.created_at)).toISOString().slice(0, 10)} ${row.source}`);
+    expect(await importForumJoins(pool, entries, false)).toEqual({ entries: 3, unknown: 1, participants: 2, joined: 2, rejoined: 1, alreadyImported: 0, reclassified: 1 });
+    expect(await history(one.id)).toEqual([]);
+    expect(await importForumJoins(pool, entries, true)).toMatchObject({ participants: 2, joined: 2, rejoined: 1, reclassified: 1 });
+    expect(await history(one.id)).toEqual(["forum.joined 2024-06-01 telegram_export", "forum.rejoined 2025-01-05 telegram_export"]);
+    expect(await history(observed.id)).toEqual(["forum.joined 2024-12-01 telegram_export", "forum.rejoined 2026-10-07 chat_member"]);
+    expect((await getForumJoinDateWithDatabase(pool, one.id))?.toISOString()).toBe("2024-06-01T09:00:00.000Z");
+    expect(await getForumJoinDateWithDatabase(pool, (await person()).id)).toBeNull();
+    expect(await importForumJoins(pool, entries, true)).toMatchObject({ participants: 0, joined: 0, rejoined: 0, alreadyImported: 3, reclassified: 0 });
+    expect(await history(one.id)).toHaveLength(2);
+    expect(() => parseForumJoinEntries([{ telegram_user_id: "5", joins: [] }])).toThrow(ForumJoinImportValidationError);
+    expect(() => parseForumJoinEntries([{ telegram_user_id: "5", joins: [{ at: "2024-06-01 09:00", message_id: 1 }] }])).toThrow(ForumJoinImportValidationError);
+    expect(() => parseForumJoinEntries([{ telegram_user_id: "5", joins: [{ at: "2999-01-01T00:00:00Z", message_id: 1 }] }])).toThrow(ForumJoinImportValidationError);
+  });
+
   it("rejects a malformed file before touching anyone", () => {
     expect(() => parseIntroductionEntries([{ telegram_user_id: "12", residence: { name: "Москва" }, interests: [] }])).toThrow(IntroductionImportValidationError);
     expect(() => parseIntroductionEntries([{ telegram_user_id: "12", interests: [] }, { telegram_user_id: "12", interests: [] }])).toThrow(IntroductionImportValidationError);
