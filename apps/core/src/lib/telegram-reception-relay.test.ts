@@ -21,6 +21,7 @@ type RelayRow = {
   privateChatId: string;
   privateMessageId: number | null;
   forumMessageId: number | null;
+  headingId?: number | null;
   status: string;
   errorCode?: string;
 };
@@ -30,7 +31,7 @@ function fakeDatabase() {
   const query = vi.fn(async (sql: string, values?: unknown[]) => {
     if (sql.includes("SELECT private_chat_id")) {
       const row = [...rows.values()].find((candidate) =>
-        candidate.forumChatId === values?.[0] && candidate.forumMessageId === values?.[1] &&
+        candidate.forumChatId === values?.[0] && (candidate.forumMessageId === values?.[1] || candidate.headingId === values?.[1]) &&
         candidate.status === "sent");
       return { rowCount: row ? 1 : 0, rows: row ? [{ private_chat_id: row.privateChatId }] : [] };
     }
@@ -49,6 +50,7 @@ function fakeDatabase() {
       row.status = "sent";
       row.privateMessageId ??= values?.[1] as number | null;
       row.forumMessageId ??= values?.[2] as number | null;
+      row.headingId = values?.[3] as number | null;
     }
     if (sql.includes("SET status = 'failed'")) {
       const row = rows.get(Number(values?.[0]))!;
@@ -87,21 +89,18 @@ function fakeBot(): ReceptionRelayBot {
 describe("Reception relay", () => {
   beforeEach(() => { receptionConfig.topicId = "77"; });
 
-  it("copies a private message into the configured topic and keeps only routing IDs", async () => {
+  it("relays a text message into the configured topic as one message, name on top, and keeps only routing IDs", async () => {
     const { database, rows } = fakeDatabase();
     const bot = fakeBot();
     expect(await relayReceptionUpdate(privateMessage(), database, bot)).toBe("sent");
+    expect(bot.sendAttribution).toHaveBeenCalledTimes(1);
     expect(bot.sendAttribution).toHaveBeenCalledWith({
-      chatId: "-1001234567890", topicId: 77, text: "От: Анна Иванова (@anna)",
+      chatId: "-1001234567890", topicId: 77, text: "От: Анна Иванова (@anna)\n\nПривет", entities: [],
     });
-    expect(vi.mocked(bot.sendAttribution).mock.invocationCallOrder[0])
-      .toBeLessThan(vi.mocked(bot.copyMessage).mock.invocationCallOrder[0]);
-    expect(bot.copyMessage).toHaveBeenCalledWith({
-      chatId: "-1001234567890", fromChatId: "42", messageId: 11, topicId: 77,
-    });
+    expect(bot.copyMessage).not.toHaveBeenCalled();
     expect(rows.get(1)).toMatchObject({
       status: "sent", privateChatId: "42", privateMessageId: 11,
-      forumMessageId: 502,
+      forumMessageId: 501,
     });
     expect(JSON.stringify(rows.get(1))).not.toContain("Привет");
     expect(JSON.stringify(rows.get(1))).not.toContain("Анна");
@@ -114,7 +113,7 @@ describe("Reception relay", () => {
       from: { id: 42, is_bot: false, first_name: "Анна" },
     }), database, bot)).toBe("sent");
     expect(bot.sendAttribution).toHaveBeenCalledWith({
-      chatId: "-1001234567890", topicId: 77, text: "От: Анна",
+      chatId: "-1001234567890", topicId: 77, text: "От: Анна\n\nПривет", entities: [],
     });
   });
 
@@ -134,12 +133,12 @@ describe("Reception relay", () => {
     const { database, rows } = fakeDatabase();
     const bot = fakeBot();
     await relayReceptionUpdate(privateMessage(), database, bot);
-    expect(await relayReceptionUpdate(forumReply(2, { reply_to_message: { message_id: 502 } }), database, bot)).toBe("sent");
+    expect(await relayReceptionUpdate(forumReply(2, { reply_to_message: { message_id: 501 } }), database, bot)).toBe("sent");
     expect(bot.copyMessage).toHaveBeenLastCalledWith({
       chatId: "42", fromChatId: "-1001234567890", messageId: 90,
     });
     expect(rows.get(2)).toMatchObject({
-      direction: "forum_to_private", forumMessageId: 90, privateMessageId: 503,
+      direction: "forum_to_private", forumMessageId: 90, privateMessageId: 502,
     });
     expect(bot.sendAttribution).toHaveBeenCalledTimes(1);
   });
@@ -149,15 +148,12 @@ describe("Reception relay", () => {
     const { database } = fakeDatabase();
     const bot = fakeBot();
     expect(await relayReceptionUpdate(privateMessage(), database, bot)).toBe("sent");
-    expect(bot.copyMessage).toHaveBeenCalledWith({
-      chatId: "-1001234567890", fromChatId: "42", messageId: 11,
-    });
     expect(bot.sendAttribution).toHaveBeenCalledWith({
-      chatId: "-1001234567890", text: "От: Анна Иванова (@anna)",
+      chatId: "-1001234567890", text: "От: Анна Иванова (@anna)\n\nПривет", entities: [],
     });
     expect(await relayReceptionUpdate(forumReply(2, {
       message_thread_id: undefined, is_topic_message: undefined,
-      reply_to_message: { message_id: 502 },
+      reply_to_message: { message_id: 501 },
     }), database, bot)).toBe("sent");
     expect(bot.copyMessage).toHaveBeenLastCalledWith({
       chatId: "42", fromChatId: "-1001234567890", messageId: 90,
@@ -165,8 +161,50 @@ describe("Reception relay", () => {
     expect(await relayReceptionUpdate(forumReply(3, {
       is_topic_message: true, message_thread_id: 99,
     }), database, bot)).toBe("ignored");
-    expect(bot.copyMessage).toHaveBeenCalledTimes(2);
+    expect(bot.copyMessage).toHaveBeenCalledTimes(1);
     expect(bot.sendAttribution).toHaveBeenCalledTimes(1);
+  });
+
+  it("delivers a reply to either message of a relayed photo: the name line or the copy", async () => {
+    const { database, rows } = fakeDatabase();
+    const bot = fakeBot();
+    expect(await relayReceptionUpdate(privateMessage(1, { text: undefined, photo: [{ file_id: "photo" }] }), database, bot)).toBe("sent");
+    expect(bot.sendAttribution).toHaveBeenCalledWith({ chatId: "-1001234567890", topicId: 77, text: "От: Анна Иванова (@anna)" });
+    expect(rows.get(1)).toMatchObject({ forumMessageId: 502, headingId: 501 });
+    for (const [update, target] of [[2, 501], [3, 502]] as const) {
+      expect(await relayReceptionUpdate(forumReply(update, { message_id: 90 + update, reply_to_message: { message_id: target } }), database, bot)).toBe("sent");
+      expect(bot.copyMessage).toHaveBeenLastCalledWith({ chatId: "42", fromChatId: "-1001234567890", messageId: 90 + update });
+    }
+    expect(await relayReceptionUpdate(forumReply(4, { reply_to_message: { message_id: 777 } }), database, bot)).toBe("ignored");
+  });
+
+  it("keeps the applicant's formatting in the single message, and drops it rather than lose the words", async () => {
+    const { database } = fakeDatabase();
+    const bot = fakeBot();
+    const entities = [{ type: "bold", offset: 0, length: 6 }, { type: "text_link", offset: 7, length: 4, url: "https://example.org" }, { type: "broken" }];
+    await relayReceptionUpdate(privateMessage(1, { text: "Привет сайт", entities }), database, bot);
+    const prefix = "От: Анна Иванова (@anna)\n\n";
+    expect(bot.sendAttribution).toHaveBeenCalledWith({ chatId: "-1001234567890", topicId: 77, text: prefix + "Привет сайт",
+      entities: [{ type: "bold", offset: prefix.length, length: 6 }, { type: "text_link", offset: prefix.length + 7, length: 4, url: "https://example.org" }] });
+    // Telegram refuses the formatting: the same text is sent once more without it.
+    const picky: ReceptionRelayBot = {
+      sendAttribution: vi.fn(async (input: { entities?: unknown[] }) => input.entities?.length
+        ? { status: "failed" as const, errorCode: "telegram_400" } : { status: "sent" as const, messageId: 700 }),
+      copyMessage: vi.fn(),
+    };
+    expect(await relayReceptionUpdate(privateMessage(2, { text: "Привет сайт", entities }), database, picky)).toBe("sent");
+    expect(picky.sendAttribution).toHaveBeenCalledTimes(2);
+    expect(vi.mocked(picky.sendAttribution).mock.calls[1][0]).toEqual({ chatId: "-1001234567890", topicId: 77, text: prefix + "Привет сайт" });
+    expect(picky.copyMessage).not.toHaveBeenCalled();
+  });
+
+  it("falls back to the name line plus a copy when the text would not fit into one message", async () => {
+    const { database, rows } = fakeDatabase();
+    const bot = fakeBot();
+    expect(await relayReceptionUpdate(privateMessage(1, { text: "я".repeat(4090) }), database, bot)).toBe("sent");
+    expect(bot.sendAttribution).toHaveBeenCalledWith({ chatId: "-1001234567890", topicId: 77, text: "От: Анна Иванова (@anna)" });
+    expect(bot.copyMessage).toHaveBeenCalledTimes(1);
+    expect(rows.get(1)).toMatchObject({ forumMessageId: 502, headingId: 501 });
   });
 
   it("ignores wrong forums, wrong topics, unmapped replies and bot messages", async () => {
@@ -186,7 +224,7 @@ describe("Reception relay", () => {
     const bot = fakeBot();
     expect(await relayReceptionUpdate(privateMessage(), database, bot)).toBe("sent");
     expect(await relayReceptionUpdate(privateMessage(), database, bot)).toBe("duplicate");
-    expect(bot.copyMessage).toHaveBeenCalledTimes(1);
+    expect(bot.copyMessage).not.toHaveBeenCalled();
     expect(bot.sendAttribution).toHaveBeenCalledTimes(1);
   });
 
@@ -211,8 +249,10 @@ describe("Reception relay", () => {
       copyMessage: vi.fn(),
     };
     expect(await relayReceptionUpdate(privateMessage(), database, bot)).toBe("failed");
+    expect(rows.get(1)).toMatchObject({ status: "failed", errorCode: "telegram_403" });
+    expect(await relayReceptionUpdate(privateMessage(2, { text: undefined, photo: [{ file_id: "photo" }] }), database, bot)).toBe("failed");
     expect(bot.copyMessage).not.toHaveBeenCalled();
-    expect(rows.get(1)).toMatchObject({ status: "failed", errorCode: "attribution_telegram_403" });
+    expect(rows.get(2)).toMatchObject({ status: "failed", errorCode: "attribution_telegram_403" });
   });
 
   it("keeps concurrent attribution and copy pairs together", async () => {
@@ -231,8 +271,8 @@ describe("Reception relay", () => {
       }),
     };
     await Promise.all([
-      relayReceptionUpdate(privateMessage(1), database, bot),
-      relayReceptionUpdate(privateMessage(2, { message_id: 12 }), database, bot),
+      relayReceptionUpdate(privateMessage(1, { text: undefined, voice: { file_id: "v1" } }), database, bot),
+      relayReceptionUpdate(privateMessage(2, { message_id: 12, text: undefined, voice: { file_id: "v2" } }), database, bot),
     ]);
     expect(calls).toEqual(["attribution", "copy", "attribution", "copy"]);
   });
@@ -265,6 +305,7 @@ describe("copyMessage Bot API adapter", () => {
     expect(url).toBe("https://api.telegram.org/bottoken/sendMessage");
     expect(JSON.parse(String(options?.body))).toEqual({
       chat_id: "-1001234567890", text: "От: Анна Иванова (@anna)", message_thread_id: 77,
+      link_preview_options: { is_disabled: true },
     });
   });
 });
