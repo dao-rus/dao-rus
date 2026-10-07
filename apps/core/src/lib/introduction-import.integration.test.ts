@@ -112,6 +112,28 @@ describe.skipIf(!databaseUrl)("introduction import on real PostgreSQL", () => {
     expect(await profile(gone.id)).toEqual({ city: null, interests: [] });
   });
 
+  it("a forum join names the placeholder profile, but never overrides login data or a chosen name", async () => {
+    process.env.TELEGRAM_FORUM_CHAT_ID = "-1001725482832";
+    const { observeForumMemberUpdate } = await import("./telegram-forum-onboarding");
+    let updateId = 5000;
+    const join = (telegram: number, user: object) => observeForumMemberUpdate({ update_id: updateId++, chat_member: {
+      chat: { id: -1001725482832 }, date: 1790858400 + updateId, old_chat_member: { status: "left" },
+      new_chat_member: { status: "member", user: { id: telegram, ...user } } } }, pool);
+    const shown = async (telegram: number) => (await pool.query(
+      `SELECT p.display_name, e.username, e.first_name, e.last_name FROM external_identities e JOIN participants p ON p.id = e.participant_id
+        WHERE e.external_user_id = $1`, [String(telegram)])).rows[0];
+    await join(910001, { first_name: "Анна", last_name: "Иванова", username: "anna_i" });
+    expect(await shown(910001)).toEqual({ display_name: "Анна Иванова", username: "anna_i", first_name: "Анна", last_name: "Иванова" });
+    await join(910002, { first_name: "Борис" });
+    expect(await shown(910002)).toEqual({ display_name: "Борис", username: null, first_name: "Борис", last_name: null });
+
+    const known = await person();
+    await pool.query("UPDATE external_identities SET first_name = 'Вера', username = 'vera' WHERE participant_id = $1", [known.id]);
+    await pool.query("UPDATE participants SET display_name = 'Вера из Ядра', display_name_chosen_in_core = true WHERE id = $1", [known.id]);
+    await join(Number(known.telegram), { first_name: "Другое", username: "other" });
+    expect(await shown(Number(known.telegram))).toMatchObject({ display_name: "Вера из Ядра", username: "vera", first_name: "Вера" });
+  });
+
   it("rejects a malformed file before touching anyone", () => {
     expect(() => parseIntroductionEntries([{ telegram_user_id: "12", residence: { name: "Москва" }, interests: [] }])).toThrow(IntroductionImportValidationError);
     expect(() => parseIntroductionEntries([{ telegram_user_id: "12", interests: [] }, { telegram_user_id: "12", interests: [] }])).toThrow(IntroductionImportValidationError);

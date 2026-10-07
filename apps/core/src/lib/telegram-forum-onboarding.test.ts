@@ -195,6 +195,20 @@ describe("forum onboarding", () => {
     expect(events).toEqual(["participant.created", "forum.joined"]);
   });
 
+  it("remembers the name a person joined the forum under, and nothing for a leave", async () => {
+    const { database } = fakeDatabase(false);
+    const query = vi.spyOn(database, "query");
+    const update = (id: number, old: string, status: string) => ({ update_id: id, chat_member: {
+      chat: { id: -1001234567890 }, date: 1790858400 + id, old_chat_member: { status: old },
+      new_chat_member: { status, user: { id: 42, first_name: " Анна ", last_name: "Иванова", username: "anna" } } } });
+    await observeForumMemberUpdate(update(1, "left", "member"), database);
+    const named = query.mock.calls.filter(([sql]) => String(sql).includes("SET display_name"));
+    expect(named).toHaveLength(1);
+    expect(named[0][1]).toEqual(["42", "anna", "Анна", "Иванова", "Анна Иванова"]);
+    await observeForumMemberUpdate(update(2, "member", "left"), database);
+    expect(query.mock.calls.filter(([sql]) => String(sql).includes("SET display_name"))).toHaveLength(1);
+  });
+
   it("does not create a Participant for a left event", async () => {
     const { database, counts } = fakeDatabase(false);
     const result = await observeForumMemberUpdate({ update_id: 902, chat_member: {

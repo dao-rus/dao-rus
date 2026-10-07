@@ -267,5 +267,31 @@ export async function observeForumMemberUpdate(
     Number.isSafeInteger(updateId) ? Number(updateId) : undefined,
     joined && wasAbsent && user?.is_bot !== true,
     { wasJoined, status: String(status) });
+  if (result && joined && user?.is_bot !== true) await rememberForumMemberName(database, String(userId), user);
   return result ? "observed" : "ignored";
+}
+
+// Whoever joins the forum is visible to its members by name there, so Core shows the same name
+// instead of a nameless placeholder. Only empty fields are filled: a later login knows better,
+// and a name the person chose in Core is never replaced.
+async function rememberForumMemberName(
+  database: ForumDatabase, userId: string, user: Record<string, unknown> | null,
+): Promise<void> {
+  const text = (value: unknown) => typeof value === "string" && value.trim() ? value.trim().slice(0, 128) : null;
+  const firstName = text(user?.first_name), lastName = text(user?.last_name), username = text(user?.username);
+  const name = [firstName, lastName].filter(Boolean).join(" ") || username;
+  if (!name) return;
+  await database.query(
+    `WITH named AS (
+       UPDATE external_identities identity
+          SET username = COALESCE(identity.username, $2), first_name = COALESCE(identity.first_name, $3),
+              last_name = COALESCE(identity.last_name, $4), updated_at = now()
+        WHERE identity.provider = 'telegram' AND identity.external_user_id = $1
+          AND (identity.username IS NULL OR identity.first_name IS NULL)
+       RETURNING identity.participant_id)
+     UPDATE participants p SET display_name = $5, updated_at = now()
+       FROM named WHERE p.id = named.participant_id
+        AND NOT p.display_name_chosen_in_core AND p.display_name = 'Участник форума'`,
+    [userId, username, firstName, lastName, name],
+  );
 }
