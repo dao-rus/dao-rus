@@ -90,6 +90,7 @@ describe("/participants", () => {
       "participants.sort_label": "Сортировка:", "participants.sort_name": "Имя",
       "participants.sort_verification": "Топ-верификация",
       "participants.sort_reputation": "Топ-репутация",
+      "participants.sort_joined": "Стаж",
       "participants.sort_core": "Ядро",
     } });
     mocks.listCommunityPosts.mockResolvedValue([]);

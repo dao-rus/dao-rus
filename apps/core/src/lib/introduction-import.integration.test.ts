@@ -189,6 +189,23 @@ describe.skipIf(!databaseUrl)("introduction import on real PostgreSQL", () => {
     expect(() => parseForumJoinEntries([{ telegram_user_id: "5", joins: [{ at: "2999-01-01T00:00:00Z", message_id: 1 }] }])).toThrow(ForumJoinImportValidationError);
   });
 
+  it("sorts the directory by join date: longest in the DAO first, unknown dates last", async () => {
+    const { listParticipantsDirectoryWithDatabase } = await import("./participants-directory");
+    const tag = `Стаж${Date.now()}`;
+    const make = async (name: string, joinedAt: string | null) => {
+      const one = await person();
+      await pool.query("UPDATE participants SET display_name = $2 WHERE id = $1", [one.id, `${tag} ${name}`]);
+      await pool.query("INSERT INTO participant_forum_onboarding(participant_id, forum_status, observed_at) VALUES ($1, 'joined', now())", [one.id]);
+      if (joinedAt) await pool.query(`INSERT INTO events(event_type, participant_id, created_at, payload) VALUES ('forum.joined', $1, $2, $3::jsonb)`,
+        [one.id, joinedAt, JSON.stringify({ source: "telegram_export", observed_at: joinedAt })]);
+    };
+    await make("А без даты", null); await make("Б новый", "2025-02-01T00:00:00Z"); await make("В старый", "2023-10-14T00:00:00Z");
+    const names = async (sort: "joined" | "name") => (await listParticipantsDirectoryWithDatabase(pool, tag, { sort }))
+      .map((entry) => entry.displayName.replace(`${tag} `, ""));
+    expect(await names("joined")).toEqual(["В старый", "Б новый", "А без даты"]);
+    expect(await names("name")).toEqual(["А без даты", "Б новый", "В старый"]);
+  });
+
   it("rejects a malformed file before touching anyone", () => {
     expect(() => parseIntroductionEntries([{ telegram_user_id: "12", residence: { name: "Москва" }, interests: [] }])).toThrow(IntroductionImportValidationError);
     expect(() => parseIntroductionEntries([{ telegram_user_id: "12", interests: [] }, { telegram_user_id: "12", interests: [] }])).toThrow(IntroductionImportValidationError);

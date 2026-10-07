@@ -42,7 +42,7 @@ export default async function ParticipantsPage({ searchParams }: ParticipantsPag
   const interestFilter = typeof interest === "string" ? interest.trim() : "";
   const residenceFilter = residenceFromQuery(params);
   const community = communityFromParams(params);
-  const sort: DirectorySort = params.sort === "verification" || params.sort === "reputation" || params.sort === "core"
+  const sort: DirectorySort = params.sort === "verification" || params.sort === "reputation" || params.sort === "core" || params.sort === "joined"
     ? params.sort : "name";
   const filterParams = new URLSearchParams();
   if (interestFilter) filterParams.set("interest", interestFilter);
@@ -126,7 +126,7 @@ export default async function ParticipantsPage({ searchParams }: ParticipantsPag
 
         <nav className="participantsSort" aria-label="Сортировка участников">
           <span>{texts["participants.sort_label"]}</span>
-          {(["name", "verification", "reputation", "core"] as const).map((choice) => (
+          {(["name", "verification", "reputation", "joined", "core"] as const).map((choice) => (
             <Link key={choice} href={sortHref(choice)} aria-current={sort === choice ? "page" : undefined}>
               {texts[`participants.sort_${choice}`]}
             </Link>
