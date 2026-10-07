@@ -26,6 +26,7 @@ vi.mock("@/lib/session", () => ({
 }));
 vi.mock("@/lib/award-views", () => ({ getAwardBadges: vi.fn().mockResolvedValue({}), getOwnAwardOffers: vi.fn().mockResolvedValue([]) }));
 vi.mock("@/lib/award-access", () => ({ hasAwardCapability: () => false }));
+vi.mock("@/lib/forum-join-history", () => ({ getForumJoinDate: vi.fn().mockResolvedValue(null) }));
 
 vi.mock("@/lib/config", () => ({
   hasPrototypeAdminAccess: mocks.hasPrototypeAdminAccess,

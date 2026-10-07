@@ -84,6 +84,10 @@ describe.skipIf(!databaseUrl)("award foundation on real PostgreSQL", () => {
     expect((await getAwardBadgesWithDatabase(pool,[included]))[included]).toHaveLength(1);
     await setAwardVisibilityWithDatabase(pool,included,instanceId,{showInPublicList:true,showNextToName:true});
     await actOnAwardInstanceWithDatabase(pool,included,instanceId,"reject");
+    const retained=(await pool.query("SELECT status,reason,personal_address,batch_id,declined_at,accepted_at,rejected_at FROM award_instances WHERE id=$1",[instanceId])).rows[0];
+    expect(retained).toMatchObject({status:"rejected",reason:"Contribution",personal_address:"Private memory",batch_id:batchId});
+    expect(retained.declined_at).toBeInstanceOf(Date); expect(retained.accepted_at).toBeInstanceOf(Date); expect(retained.rejected_at).toBeInstanceOf(Date);
+    expect((await pool.query("SELECT count(*)::int AS n FROM award_candidates WHERE batch_id=$1",[batchId])).rows[0].n).toBe(3);
     expect((await getPublicAwardWithDatabase(pool,definition.slug))!.recipients).toEqual([]);
     expect(await getAwardBadgesWithDatabase(pool,[included])).toEqual({});
     await expect(actOnAwardInstanceWithDatabase(pool,included,instanceId,"accept")).rejects.toBeInstanceOf(AwardTransitionError);
@@ -317,7 +321,7 @@ describe.skipIf(!databaseUrl)("award foundation on real PostgreSQL", () => {
         expect(await actions(instance.id)).toEqual(before);
       }
     }
-  });
+  }, 15000); // Sixteen real PostgreSQL fixtures and transitions also run under full-suite load.
   it("serializes a visibility/rejection race and keeps rejected instances nonpublic", async () => {
     const instance = await accept(await offer());
     await Promise.allSettled([
