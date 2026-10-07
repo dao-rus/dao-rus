@@ -15,6 +15,7 @@ const mocks = vi.hoisted(() => ({
 }));
 
 vi.mock("@/lib/session", () => ({ getCurrentParticipant: mocks.getCurrentParticipant }));
+vi.mock("@/lib/award-access", () => ({ hasAwardCapability: () => false }));
 vi.mock("@/lib/activity", () => ({ getActivitySummary: mocks.getActivitySummary }));
 vi.mock("@/lib/membership-history", () => ({
   getMembershipHistory: mocks.getMembershipHistory,
@@ -135,3 +136,5 @@ describe("/profile copy", () => {
     expect(findProps(page, (props) => props.children === "Сохранить профиль")?.form).toBe("profile-form");
   });
 });
+
+vi.mock("@/lib/award-views", () => ({ getAwardBadges: vi.fn().mockResolvedValue({}), getOwnAwardOffers: vi.fn().mockResolvedValue([]) }));

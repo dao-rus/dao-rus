@@ -94,6 +94,7 @@ dao-rus/
 * безопасность и аудит.
 
 Текущее направление развития: [Telegram-first архитектура DAO Rus](docs/architecture/telegram-first.md).
+Наградная система v0.1: [модель, выпуски и безопасные публичные проекции](docs/architecture/awards.md).
 
 ### `docs/strategy/`
 

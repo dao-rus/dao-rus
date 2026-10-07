@@ -24,6 +24,8 @@ vi.mock("next/navigation", () => ({
 vi.mock("@/lib/session", () => ({
   getCurrentParticipant: mocks.getCurrentParticipant,
 }));
+vi.mock("@/lib/award-views", () => ({ getAwardBadges: vi.fn().mockResolvedValue({}), getOwnAwardOffers: vi.fn().mockResolvedValue([]) }));
+vi.mock("@/lib/award-access", () => ({ hasAwardCapability: () => false }));
 
 vi.mock("@/lib/config", () => ({
   hasPrototypeAdminAccess: mocks.hasPrototypeAdminAccess,

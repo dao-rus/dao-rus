@@ -261,3 +261,5 @@ describe("public subject profile name", () => {
     expect(hasPositiveFeedback(qualityFlag)).toBe(false);
   });
 });
+
+vi.mock("@/lib/award-views", () => ({ getAwardBadges: vi.fn().mockResolvedValue({}), getOwnAwardOffers: vi.fn().mockResolvedValue([]) }));

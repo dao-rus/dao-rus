@@ -1,3 +1,6 @@
+import { createAwardBatchWithDatabase, snapshotAwardAudienceWithDatabase, addAwardCandidateWithDatabase, editAwardCandidateWithDatabase, finalizeAwardBatchWithDatabase } from "./award-batches";
+import { getPublicAwardWithDatabase, getAwardBadgesWithDatabase, getOwnAwardOffersWithDatabase } from "./award-views";
+import { selectParticipantAudienceWithDatabase } from "./participant-audience";
 import { randomUUID } from "node:crypto";
 import { readFileSync, readdirSync } from "node:fs";
 import { Pool } from "pg";
@@ -45,6 +48,81 @@ async function accept(instance: AwardInstance) {
 }
 
 describe.skipIf(!databaseUrl)("award foundation on real PostgreSQL", () => {
+  async function editedCandidate(batch:string,recipient:string,status="included",reason="Contribution",address="Private memory") {
+    const candidate=(await pool.query("SELECT id FROM award_candidates WHERE batch_id=$1 AND participant_id=$2",[batch,recipient])).rows[0];
+    await editAwardCandidateWithDatabase(pool,founder,batch,candidate.id,{status,reason,personalAddress:address});
+    return candidate.id as string;
+  }
+  it("runs a complete release, authenticated offer projection, both public opt-ins and irreversible rejection", async()=>{
+    const images={original:Buffer.from([1]),thumbnail:Buffer.from([2])};
+    const definition=await establishAwardWithDatabase(pool,founder,{slug:`e2e-${randomUUID()}`,name:"Знак Дара",imageUrl:"",images,establishedOn:"2026-10-07",description:"Public description",criterion:"Founder review",publicAddress:"Public greeting",kind:"open"});
+    const included=await participant(),excluded=await participant(),manual=await participant();
+    const city=`Test-${randomUUID()}`;
+    await pool.query("UPDATE participants SET residence_name=$2,residence_type='город',residence_country='Россия' WHERE id=ANY($1)",[[included,excluded],city]);
+    const batch=await createAwardBatchWithDatabase(pool,founder,definition.id,"regular"),batchId=String(batch.id);
+    await snapshotAwardAudienceWithDatabase(pool,founder,batchId,{city:JSON.stringify([city.toLowerCase(),"город","россия"])});
+    expect((await pool.query("SELECT count(*)::int AS n FROM award_instances WHERE award_id=$1",[definition.id])).rows[0].n).toBe(0);
+    await pool.query("UPDATE participants SET residence_name='Changed' WHERE id=$1",[included]);
+    expect((await pool.query("SELECT count(*)::int AS n FROM award_candidates WHERE batch_id=$1",[batchId])).rows[0].n).toBe(2);
+    await editedCandidate(batchId,excluded,"excluded"); await editedCandidate(batchId,excluded,"included"); await editedCandidate(batchId,excluded,"excluded");
+    await addAwardCandidateWithDatabase(pool,founder,batchId,manual); await addAwardCandidateWithDatabase(pool,founder,batchId,manual);
+    const candidate=await editedCandidate(batchId,included); await editedCandidate(batchId,manual);
+    const [release,retry]=await Promise.all([finalizeAwardBatchWithDatabase(pool,founder,batchId),finalizeAwardBatchWithDatabase(pool,founder,batchId)]);
+    expect(release).toHaveLength(2); expect(retry).toEqual(release);
+    const instanceId=String(release.find(r=>r.participant_id===included)!.id);
+    await expect(editAwardCandidateWithDatabase(pool,founder,batchId,candidate,{status:"excluded",reason:"x",personalAddress:""})).rejects.toBeInstanceOf(AwardTransitionError);
+    await expect(pool.query("UPDATE award_candidates SET reason='changed' WHERE id=$1",[candidate])).rejects.toThrow();
+    expect(await getOwnAwardOffersWithDatabase(pool,manual,instanceId)).toEqual([]);
+    expect((await getOwnAwardOffersWithDatabase(pool,included,instanceId))[0].instance.personalAddress).toBe("Private memory");
+    expect((await getPublicAwardWithDatabase(pool,definition.slug))!.recipients).toEqual([]);
+    await actOnAwardInstanceWithDatabase(pool,included,instanceId,"decline"); await actOnAwardInstanceWithDatabase(pool,included,instanceId,"accept");
+    await setAwardVisibilityWithDatabase(pool,included,instanceId,{showInPublicList:true,showNextToName:false});
+    expect((await getPublicAwardWithDatabase(pool,definition.slug))!.recipients).toHaveLength(1);
+    expect(await getAwardBadgesWithDatabase(pool,[included,manual])).toEqual({});
+    await setAwardVisibilityWithDatabase(pool,included,instanceId,{showInPublicList:false,showNextToName:true});
+    expect((await getPublicAwardWithDatabase(pool,definition.slug))!.recipients).toEqual([]);
+    expect((await getAwardBadgesWithDatabase(pool,[included]))[included]).toHaveLength(1);
+    await setAwardVisibilityWithDatabase(pool,included,instanceId,{showInPublicList:true,showNextToName:true});
+    await actOnAwardInstanceWithDatabase(pool,included,instanceId,"reject");
+    expect((await getPublicAwardWithDatabase(pool,definition.slug))!.recipients).toEqual([]);
+    expect(await getAwardBadgesWithDatabase(pool,[included])).toEqual({});
+    await expect(actOnAwardInstanceWithDatabase(pool,included,instanceId,"accept")).rejects.toBeInstanceOf(AwardTransitionError);
+    expect((await pool.query("SELECT count(*)::int AS n FROM events WHERE event_type='award.batch_finalized' AND payload->>'batch_id'=$1",[batchId])).rows[0].n).toBe(1);
+    expect((await actions(instanceId)).map(e=>e.event_type)).toEqual(["award.offered","award.declined","award.accepted","award.visibility_changed","award.visibility_changed","award.visibility_changed","award.rejected"]);
+  });
+  it("rolls back an entire conflicting remint, supports fresh historical recipients and denies open remint",async()=>{
+    const definition=await award(),old=await participant(),fresh=await participant();
+    await offerAwardWithDatabase(pool,founder,{awardId:definition.id,participantId:old,reason:"Already awarded"});
+    const batch=String((await createAwardBatchWithDatabase(pool,founder,definition.id,"remint")).id);
+    for(const p of [old,fresh]) { await addAwardCandidateWithDatabase(pool,founder,batch,p); await editedCandidate(batch,p); }
+    await expect(finalizeAwardBatchWithDatabase(pool,founder,batch)).rejects.toBeInstanceOf(AwardConflictError);
+    expect((await pool.query("SELECT status FROM award_batches WHERE id=$1",[batch])).rows[0].status).toBe("draft");
+    expect((await pool.query("SELECT id FROM award_instances WHERE batch_id=$1",[batch])).rows).toEqual([]);
+    await editedCandidate(batch,old,"excluded"); expect(await finalizeAwardBatchWithDatabase(pool,founder,batch)).toHaveLength(1);
+    const open=await award("open"); await expect(createAwardBatchWithDatabase(pool,founder,open.id,"remint")).rejects.toThrow("historical");
+    await expect(createAwardBatchWithDatabase(pool,fresh,open.id,"regular")).rejects.toBeInstanceOf(AwardAccessError);
+    await expect(addAwardCandidateWithDatabase(pool,fresh,batch,fresh)).rejects.toBeInstanceOf(AwardAccessError);
+    await expect(finalizeAwardBatchWithDatabase(pool,fresh,batch)).rejects.toBeInstanceOf(AwardAccessError);
+  });
+  it("serializes competing batches and rejects incomplete direct SQL release",async()=>{
+    const definition=await award(),recipient=await participant();
+    const batches=await Promise.all([createAwardBatchWithDatabase(pool,founder,definition.id,"regular"),createAwardBatchWithDatabase(pool,founder,definition.id,"regular")]);
+    for(const b of batches) { await addAwardCandidateWithDatabase(pool,founder,String(b.id),recipient); await editedCandidate(String(b.id),recipient); }
+    const competing=await Promise.allSettled(batches.map(b=>finalizeAwardBatchWithDatabase(pool,founder,String(b.id))));
+    expect(competing.filter(r=>r.status==="fulfilled")).toHaveLength(1); expect(competing.filter(r=>r.status==="rejected")).toHaveLength(1);
+    const other=await participant(),draft=String((await createAwardBatchWithDatabase(pool,founder,definition.id,"regular")).id);
+    await addAwardCandidateWithDatabase(pool,founder,draft,other); await editedCandidate(draft,other);
+    await expect(pool.query("INSERT INTO award_instances(award_id,participant_id,awarded_by_participant_id,reason,personal_address,batch_id) VALUES ($1,$2,$3,'Contribution','Private memory',$4)",[definition.id,other,founder,draft])).rejects.toThrow("before finalization");
+    await expect(pool.query("UPDATE award_batches SET status='finalized',finalized_by_participant_id=$2 WHERE id=$1",[draft,founder])).rejects.toThrow("matching offers");
+    await expect(finalizeAwardBatchWithDatabase(pool,founder,String((await createAwardBatchWithDatabase(pool,founder,definition.id,"regular")).id))).rejects.toThrow("reason");
+  });
+  it("awards share trait filters without guardian delivery eligibility",async()=>{
+    const recipient=await participant("left"),city=`Audience-${randomUUID()}`;
+    await pool.query("UPDATE participants SET residence_name=$2,residence_type='город',residence_country='Россия' WHERE id=$1",[recipient,city]);
+    const filters={city:JSON.stringify([city.toLowerCase(),"город","россия"]),membership:"left",verification:"unverified"};
+    expect((await selectParticipantAudienceWithDatabase(pool,filters,"awards")).audience.map(p=>p.id)).toEqual([recipient]);
+    expect((await selectParticipantAudienceWithDatabase(pool,filters,"guardian")).audience).toEqual([]);
+  });
   beforeAll(async () => {
     const url = new URL(databaseUrl!);
     if (url.hostname !== "127.0.0.1" || url.pathname !== "/awards_tests") throw new Error("Use isolated local awards_tests database");
@@ -76,7 +154,7 @@ describe.skipIf(!databaseUrl)("award foundation on real PostgreSQL", () => {
   it("applies the migration through checksum machinery without altering existing profiles/events", async () => {
     expect((await pool.query("SELECT display_name FROM participants WHERE id=$1", [legacyParticipant])).rows[0].display_name).toBe("Existing profile");
     expect((await pool.query("SELECT event_type FROM events WHERE participant_id=$1", [legacyParticipant])).rows).toEqual([{ event_type: "participant.logged_in" }]);
-    expect((await pool.query("SELECT count(*)::int AS count FROM schema_migrations")).rows[0].count).toBe(42);
+    expect((await pool.query("SELECT count(*)::int AS count FROM schema_migrations")).rows[0].count).toBe(43);
   });
   it("establishes both award kinds, stores actual founder/version, and rejects duplicate slug", async () => {
     for (const kind of ["historical", "open"] as const) {

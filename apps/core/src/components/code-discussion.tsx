@@ -22,6 +22,7 @@ function CommentCard({ comment, replies, section, viewerId, isAdmin }: {
     <li className={comment.parentId ? "codeComment codeReply" : "codeComment"} id={`comment-${comment.id}`}>
       <div className="codeCommentMeta">
         <ParticipantName participantId={comment.authorId}
+          awardBadges={comment.awardBadges}
           verificationPoints={comment.verificationPoints} positiveCount={comment.positiveCount}>{comment.authorName}</ParticipantName>
         <LocalDateTime value={comment.createdAt.toISOString()} />
         {comment.pinned ? <span className="codePinned">Закреплено</span> : null}

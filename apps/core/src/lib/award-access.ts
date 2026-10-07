@@ -1,6 +1,6 @@
 import { founderParticipantId } from "./config";
 
-export type AwardCapability = "award.establish" | "award.offer";
+export type AwardCapability = "award.establish" | "award.offer" | "award.batch.create" | "award.batch.edit" | "award.batch.finalize";
 
 export class AwardAccessError extends Error {
   constructor(message = "Award authority required") {
@@ -11,7 +11,7 @@ export class AwardAccessError extends Error {
 
 // Replace this policy when institutional authority is transferred. Recorded authors stay unchanged.
 export function hasAwardCapability(participantId: string, capability: AwardCapability): boolean {
-  if (capability !== "award.establish" && capability !== "award.offer") return false;
+  if (!["award.establish", "award.offer", "award.batch.create", "award.batch.edit", "award.batch.finalize"].includes(capability)) return false;
   const founder = founderParticipantId();
   return founder !== null && participantId.toLowerCase() === founder;
 }

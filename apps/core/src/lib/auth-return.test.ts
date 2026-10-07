@@ -7,9 +7,11 @@ describe("safeAuthReturnPath", () => {
   it("allows /need and canonical Signal card paths only", () => {
     expect(safeAuthReturnPath("/need")).toBe("/need");
     expect(safeAuthReturnPath(`/exchange/${id}`)).toBe(`/exchange/${id}`);
+    expect(safeAuthReturnPath(`/award-offers/${id}`)).toBe(`/award-offers/${id}`);
   });
   it.each([null, undefined, "", "/", "/profile", "//evil.example", "https://evil.example", `/exchange/${id}/x`,
-    `/exchange/${id}?x=1`, "/exchange/not-a-uuid", `/exchange/${id}\n`, `//exchange/${id}`])("rejects %s", (value) => {
+    `/exchange/${id}?x=1`, "/exchange/not-a-uuid", `/exchange/${id}\n`, `//exchange/${id}`,
+    `/award-offers/${id}/../../profile`, `/award-offers/${id}?next=https://evil.example`, `/award-offers/${id}\n`, `//award-offers/${id}`])("rejects %s", (value) => {
     expect(safeAuthReturnPath(value)).toBeNull();
   });
 });

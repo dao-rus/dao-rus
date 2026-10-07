@@ -1,3 +1,4 @@
+import { getAwardBadges } from "@/lib/award-views";
 import Link from "next/link";
 import type { Metadata } from "next";
 import { redirect } from "next/navigation";
@@ -66,6 +67,7 @@ export default async function ParticipantsPage({ searchParams }: ParticipantsPag
     readInterfaceTexts(),
     community ? listCommunityPosts(community) : Promise.resolve([]),
   ]);
+  const awardBadges = await getAwardBadges(participants.map(p => p.participantId));
   const members = community && q
     ? await listParticipantsDirectory("", directoryFilters)
     : participants;
@@ -143,7 +145,7 @@ export default async function ParticipantsPage({ searchParams }: ParticipantsPag
                   <TelegramAvatar participantId={participant.participantId} displayName={participant.displayName}
                     avatarUrl={participant.avatarUrl} hasTelegramPhoto={participant.hasTelegramPhoto} />
                   <div>
-                    <strong><ParticipantName participantId={participant.participantId}
+                    <strong><ParticipantName awardBadges={awardBadges[participant.participantId]} participantId={participant.participantId}
                       verificationPoints={participant.verificationPoints} positiveCount={participant.positiveCount}>{participant.displayName}</ParticipantName></strong>
                     {!community ? <><span className="muted">
                       {participant.telegramUsername

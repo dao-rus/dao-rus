@@ -268,3 +268,5 @@ describe("/participants", () => {
     expect(textContent(page)).toContain("У меня есть");
   });
 });
+
+vi.mock("@/lib/award-views", () => ({ getAwardBadges: vi.fn().mockResolvedValue({}), getOwnAwardOffers: vi.fn().mockResolvedValue([]) }));

@@ -1,3 +1,4 @@
+import { getAwardBadges } from "@/lib/award-views";
 import Link from "next/link";
 import type { Metadata } from "next";
 import { CodeDiscussion } from "../../components/code-discussion";
@@ -17,7 +18,9 @@ export default async function CodePage({ searchParams }: CodePageProps) {
   const sort = parseCodeSort(params.sort);
   let openSection: string | null = null;
   try { openSection = parseCodeSection(params.section); } catch { /* All discussions start collapsed. */ }
-  const comments = await listCodeComments(viewer?.id ?? null);
+  const rawComments = await listCodeComments(viewer?.id ?? null);
+  const badges = await getAwardBadges(rawComments.map(c => c.authorId));
+  const comments = rawComments.map(c => ({...c, awardBadges: badges[c.authorId]}));
   const isAdmin = viewer ? hasPrototypeAdminAccess(viewer.id) : false;
 
   return (

@@ -1,3 +1,4 @@
+import { getAwardBadges } from "@/lib/award-views";
 import Link from "next/link";
 import type { Metadata } from "next";
 import { redirect } from "next/navigation";
@@ -30,6 +31,7 @@ export default async function ProposalsPage({ searchParams }: ProposalsPageProps
 
   const [params, proposals] = await Promise.all([searchParams, listProposals()]);
   const indicators = await getParticipantIndicators([...new Set(proposals.map((proposal) => proposal.authorParticipantId))]);
+  const badges = await getAwardBadges(proposals.map(p => p.authorParticipantId));
   const createMessage = params.proposal_create
     ? createMessages[params.proposal_create]
     : null;
@@ -82,9 +84,10 @@ export default async function ProposalsPage({ searchParams }: ProposalsPageProps
               {proposals.map((proposal) => (
                 <li key={proposal.id}>
                   <div className="proposalMeta">
-                    <Link href={`/profile/${proposal.authorParticipantId}`}>
-                      {proposal.authorDisplayName}
-                    </Link>
+                    <ParticipantName participantId={proposal.authorParticipantId}
+                      verificationPoints={indicators.get(proposal.authorParticipantId)?.verificationPoints ?? 0}
+                      positiveCount={indicators.get(proposal.authorParticipantId)?.positiveCount ?? 0}
+                      awardBadges={badges[proposal.authorParticipantId]}>{proposal.authorDisplayName}</ParticipantName>
                     <span>
                       <LocalDateTime value={proposal.createdAt.toISOString()} />
                     </span>

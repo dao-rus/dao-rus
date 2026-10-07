@@ -2,12 +2,14 @@
 
 import { useId, useState } from "react";
 import Link from "next/link";
+import type { AwardBadge } from "../lib/award-views";
 
 type ParticipantNameProps = {
   participantId: string;
   children: string;
   verificationPoints: number;
   positiveCount: number;
+  awardBadges?: AwardBadge[];
 };
 
 function Index({ value, kind, label, explanation }: {
@@ -26,10 +28,13 @@ function Index({ value, kind, label, explanation }: {
   );
 }
 
-export function ParticipantName({ participantId, children, verificationPoints, positiveCount }: ParticipantNameProps) {
+export function ParticipantName({ participantId, children, verificationPoints, positiveCount, awardBadges = [] }: ParticipantNameProps) {
   return (
     <span className="participantName">
       <Link href={`/profile/${participantId}`}>{children}</Link>
+      {awardBadges.map(badge => <Link key={badge.id} href={`/awards/${badge.slug}`} title={badge.name} className="awardBadge">
+        <img src={badge.imageUrl} alt={badge.name} width={18} height={18}/>
+      </Link>)}
       <Index value={verificationPoints} kind="verification" label="Вес верификации"
         explanation={`Вес верификации: ${verificationPoints}. Сейчас это число действующих подтверждений от верифицированных участников.`} />
       <Index value={positiveCount} kind="reputation" label="Репутация: положительные сигналы"

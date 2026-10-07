@@ -1,3 +1,7 @@
+import { getOwnAwardOffers, getAwardBadges } from "@/lib/award-views";
+import { hasAwardCapability } from "@/lib/award-access";
+import { OwnAwards, AwardNotice } from "../../components/award-content";
+import { ParticipantName } from "../../components/participant-name";
 import Link from "next/link";
 import type { Metadata } from "next";
 import { redirect } from "next/navigation";
@@ -45,7 +49,7 @@ const matchableVisibilityOptions = ["public", "members", "match_only", "private"
 const residenceTypeOptions = ["город", "п.г.т.", "деревня", "село"] as const;
 
 type ProfilePageProps = {
-  searchParams: Promise<{ profile_update?: string; about_update?: string; onboarding_reward?: string }>;
+  searchParams: Promise<{ profile_update?: string; about_update?: string; award_update?: string; onboarding_reward?: string }>;
 };
 
 const updateMessages: Record<string, string> = {
@@ -79,6 +83,7 @@ export default async function ProfilePage({ searchParams }: ProfilePageProps) {
   ]);
   const forumAnnouncement = await import("../../lib/newcomer-announcement")
     .then((module) => module.readForumAnnouncementChoice(participant.id)).catch(() => null);
+  const [awardOffers, awardBadges] = await Promise.all([getOwnAwardOffers(participant.id), getAwardBadges([participant.id])]);
   const hasAdminAccess = hasPrototypeAdminAccess(participant.id);
   const receptionConfig = telegramReceptionConfig();
   const receptionUsername = receptionConfig.token && receptionConfig.webhookSecret &&
@@ -98,7 +103,7 @@ export default async function ProfilePage({ searchParams }: ProfilePageProps) {
               avatarUrl={participant.avatarUrl} hasTelegramPhoto={participant.hasTelegramPhoto} />
             <div>
               <div className="eyebrow">{texts["profile.eyebrow"]}</div>
-              <h1>{participant.displayName}</h1>
+              <h1><ParticipantName participantId={participant.id} verificationPoints={verification?.verificationPoints ?? 0} positiveCount={reputation.positiveCount} awardBadges={awardBadges[participant.id]}>{participant.displayName}</ParticipantName></h1>
               <p className="muted">
                 {participant.telegramUsername ? `@${participant.telegramUsername}` : "Вы вошли через Telegram"}
               </p>
@@ -112,6 +117,7 @@ export default async function ProfilePage({ searchParams }: ProfilePageProps) {
             {receptionUsername ? <a className="button secondary" href={`https://t.me/${receptionUsername}?start=core`}>
               {texts["profile.reception_link"]}
             </a> : null}
+            {hasAwardCapability(participant.id,"award.establish") ? <Link className="button secondary" href="/admin/awards">{texts["award.title"]}</Link> : null}
             {hasAdminAccess ? <Link className="button secondary" href="/admin">Управление</Link> : null}
             <form action="/api/auth/logout" method="post">
               <button className="button secondary" type="submit">Выйти</button>
@@ -119,6 +125,7 @@ export default async function ProfilePage({ searchParams }: ProfilePageProps) {
           </div>
         </div>
 
+        <AwardNotice notice={params.award_update} texts={texts}/><OwnAwards offers={awardOffers} texts={texts}/>
         <form id="profile-form" className="profileEdit" action="/api/profile" method="post">
           <label htmlFor="display-name">Отображаемое имя</label>
           <div>

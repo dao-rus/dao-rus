@@ -5,6 +5,7 @@ export const CODE_SECTIONS = ["dao-code-1", "dao-code-2", "dao-code-3", "dao-cod
 export type CodeSection = (typeof CODE_SECTIONS)[number];
 export type CodeSort = "latest" | "top";
 export type CodeComment = {
+  awardBadges?: import("./award-views").AwardBadge[];
   id: string;
   section: CodeSection;
   parentId: string | null;

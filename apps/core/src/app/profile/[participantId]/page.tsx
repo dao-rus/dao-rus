@@ -1,3 +1,4 @@
+import { getAwardBadges } from "@/lib/award-views";
 import Link from "next/link";
 import type { Metadata } from "next";
 import { notFound, redirect } from "next/navigation";
@@ -64,6 +65,7 @@ export default async function SubjectProfilePage({ params, searchParams }: Subje
       : Promise.resolve(null),
   ]);
 
+  const awardBadges = await getAwardBadges([profile.subjectId]);
   const ownProfile = viewer.id === profile.subjectId;
   const admin = hasPrototypeAdminAccess(viewer.id);
   const formattedReward = rewardAmount ? formatDarusAmount(rewardAmount) : null;
@@ -96,7 +98,7 @@ export default async function SubjectProfilePage({ params, searchParams }: Subje
             <div>
               <div className="eyebrow">Профиль</div>
               <h1>{profile.hasLoggedIn ? (
-                <ParticipantName participantId={profile.subjectId}
+                <ParticipantName awardBadges={awardBadges[profile.subjectId]} participantId={profile.subjectId}
                   verificationPoints={profile.verificationPoints} positiveCount={reputation.positiveCount}>{profile.displayName}</ParticipantName>
               ) : "Человек ещё не вошёл в Ядро"}</h1>
               {profile.hasLoggedIn && profile.telegramUsername ? <p className="muted">{`@${profile.telegramUsername}`}</p> : null}

@@ -19,3 +19,5 @@ describe("/code", () => {
     expect(html).not.toContain('action="/api/code/comments"');
   });
 });
+
+vi.mock("@/lib/award-views", () => ({ getAwardBadges: vi.fn().mockResolvedValue({}), getOwnAwardOffers: vi.fn().mockResolvedValue([]) }));

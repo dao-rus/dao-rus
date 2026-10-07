@@ -1,4 +1,5 @@
 import { AwardAccessError, requireAwardCapability } from "./award-access";
+import { randomUUID } from "node:crypto";
 
 export { AwardAccessError } from "./award-access";
 export type AwardKind = "historical" | "open";
@@ -21,6 +22,7 @@ export type EstablishAwardInput = {
   slug: unknown; name: unknown; imageUrl: unknown; establishedOn: unknown;
   description: unknown; criterion: unknown; publicAddress: unknown; kind: unknown;
   historicalCutoffAt?: unknown;
+  images?: { original: Buffer; thumbnail: Buffer };
 };
 export type OfferAwardInput = { awardId: string; participantId: string; reason: unknown; personalAddress?: unknown };
 type QueryResult = { rowCount: number | null; rows: Array<Record<string, unknown>> };
@@ -42,11 +44,11 @@ export class AwardTransitionError extends Error {
 }
 
 const uuidPattern = /^[0-9a-f]{8}(?:-[0-9a-f]{4}){3}-[0-9a-f]{12}$/i;
-function id(value: unknown): string {
+export function id(value: unknown): string {
   if (typeof value !== "string" || !uuidPattern.test(value)) throw new AwardValidationError("Invalid Participant/Award UUID");
   return value.toLowerCase();
 }
-function text(value: unknown, field: string, max: number, allowEmpty = false): string {
+export function text(value: unknown, field: string, max: number, allowEmpty = false): string {
   if (typeof value !== "string") throw new AwardValidationError(`${field} must be text`);
   const normalized = value.trim();
   if ((!allowEmpty && !normalized) || normalized.length > max) throw new AwardValidationError(`Invalid ${field}`);
@@ -80,7 +82,7 @@ function cutoff(value: unknown): Date | null {
   return date;
 }
 const optionalDate = (value: unknown) => value == null ? null : new Date(value as string | Date);
-function awardFromRow(row: Record<string, unknown>): Award {
+export function awardFromRow(row: Record<string, unknown>): Award {
   return {
     id: String(row.id), slug: String(row.slug), name: String(row.name), imageUrl: String(row.image_url),
     establishedOn: String(row.established_on), description: String(row.description), criterion: String(row.criterion),
@@ -89,7 +91,7 @@ function awardFromRow(row: Record<string, unknown>): Award {
     charterVersion: Number(row.charter_version), createdAt: new Date(row.created_at as string | Date),
   };
 }
-function instanceFromRow(row: Record<string, unknown>): AwardInstance {
+export function instanceFromRow(row: Record<string, unknown>): AwardInstance {
   return {
     id: String(row.id), awardId: String(row.award_id), participantId: String(row.participant_id),
     awardedByParticipantId: String(row.awarded_by_participant_id), reason: String(row.reason),
@@ -107,7 +109,7 @@ export function awardInstancePublicity(instance: Pick<AwardInstance, "status" | 
   };
 }
 
-async function transaction<T>(database: AwardDatabase, work: (client: AwardDatabaseClient) => Promise<T>): Promise<T> {
+export async function transaction<T>(database: AwardDatabase, work: (client: AwardDatabaseClient) => Promise<T>): Promise<T> {
   const client = await database.connect();
   try {
     await client.query("BEGIN");
@@ -132,15 +134,17 @@ export async function establishAwardWithDatabase(database: AwardDatabase, actorI
   if (input.kind !== "historical" && input.kind !== "open") throw new AwardValidationError("Invalid award kind");
   const historicalCutoffAt = cutoff(input.historicalCutoffAt);
   if (input.kind === "open" && historicalCutoffAt) throw new AwardValidationError("An open award has no historical cutoff");
-  const values = [slug, text(input.name, "name", 200), imageUrl(input.imageUrl), calendarDate(input.establishedOn),
+  const awardId = randomUUID();
+  const values = [slug, text(input.name, "name", 200), input.images ? `/api/award-images/${awardId}/original` : imageUrl(input.imageUrl), calendarDate(input.establishedOn),
     text(input.description, "description", 10000), text(input.criterion, "criterion", 10000),
-    text(input.publicAddress, "public address", 10000), input.kind, historicalCutoffAt, actor, AWARD_CHARTER_VERSION];
+    text(input.publicAddress, "public address", 10000), input.kind, historicalCutoffAt, actor, AWARD_CHARTER_VERSION,
+    awardId, input.images?.original ?? null, input.images?.thumbnail ?? null];
   return transaction(database, async client => {
     await requireParticipant(client, actor);
     const result = await client.query(
       `INSERT INTO awards(slug, name, image_url, established_on, description, criterion, public_address,
-         kind, historical_cutoff_at, founder_participant_id, charter_version)
-       VALUES ($1, $2, $3, $4::date, $5, $6, $7, $8, $9, $10::uuid, $11)
+         kind, historical_cutoff_at, founder_participant_id, charter_version, id, image_data, thumbnail_data)
+       VALUES ($1, $2, $3, $4::date, $5, $6, $7, $8, $9, $10::uuid, $11, $12, $13, $14)
        ON CONFLICT (slug) DO NOTHING RETURNING *, established_on::text AS established_on`, values);
     if (!result.rowCount) throw new AwardConflictError("Award slug already exists");
     return awardFromRow(result.rows[0]);
