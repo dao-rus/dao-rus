@@ -6,7 +6,7 @@ import type { InterfaceTextValues } from "../lib/interface-texts";
 import { UserText } from "./user-text";
 import { SignalPreview } from "./signal-preview";
 
-type Result = { signalId: string; typeTitle: string; label: string; description: string | null; owner: { id: string; displayName: string } | null; href: string };
+type Result = { signalId: string; typeTitle: string; label: string; description: string | null; owner: { id: string; displayName: string } | null; href: string; badge?: string | null };
 function message(texts: InterfaceTextValues, code?: string) {
   if (code === "out_of_scope" || code === "suspicious_prompt") return texts[`angel.${code}`];
   if (code === "rate_limit") return texts["angel.rate_limit"];
@@ -36,7 +36,7 @@ export function AngelSearch({ texts }: { texts: InterfaceTextValues }) {
     {results ? <div className="exchangeCards"><h2>{texts["angel.search_results"]}</h2>
       {results.length ? results.map((result) => <SignalPreview key={result.signalId} href={result.href}
         label={result.label} description={result.description} kicker={result.typeTitle}
-        author={result.owner ? result.owner.displayName : null} />) : <p className="muted">{texts["angel.no_results"]}</p>}
+        author={result.owner ? result.owner.displayName : null} badge={result.badge ?? undefined} />) : <p className="muted">{texts["angel.no_results"]}</p>}
     </div> : null}
   </section>;
 }

@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { getCurrentParticipant } from "../../../../lib/session";
 import { readInterfaceTexts } from "../../../../lib/interface-texts";
 import { listSignalTypes, searchNetworkSignals } from "../../../../lib/signals";
-import { signalHref, signalTypePresentation } from "../../../../lib/signal-presentation";
+import { signalBadge, signalHref, signalTypePresentation } from "../../../../lib/signal-presentation";
 import { AngelValidationError, angelScopeGate, interpretAngelSearch, normalizeAngelText, searchFromIntent } from "../../../../lib/angel";
 import { getAngelProvider } from "../../../../lib/angel-openai";
 import { allowAngelRequest } from "../../../../lib/angel-audit";
@@ -37,7 +37,7 @@ export async function POST(request: NextRequest) {
       typeTitle: signalTypePresentation(catalog.find((type) => type.key === signal.typeKey)!, texts).name,
       label: signal.label, description: signal.description,
       owner: signal.author ? { id: signal.author.id, displayName: signal.author.name } : null,
-      href: signalHref(signal.id),
+      href: signalHref(signal.id), badge: signalBadge(signal.visibility, texts) ?? null,
     })) });
   } catch (error) {
     return angelFailureResponse(error, participant.id, "search_exchange");

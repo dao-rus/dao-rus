@@ -61,6 +61,21 @@ export function signalVisibilityOptions(typeKey: string): SignalVisibility[] {
   return ["members", "public", "match_only", "private", "circle",
     ...(typeKey === "need" || typeKey === "have" ? ["network_blind" as const] : [])];
 }
+// Three reader-facing audiences. Anonymous records are visible to members, so they read as members-only;
+// private and circle have no reader and are named precisely only to their author.
+export type SignalAudience = "public" | "members" | "match";
+export function signalAudience(visibility: SignalVisibility): SignalAudience | null {
+  if (visibility === "public") return "public";
+  if (visibility === "members" || visibility === "network_blind") return "members";
+  return visibility === "match_only" ? "match" : null;
+}
+// Pale corner note in lists: nothing for records open to everyone.
+export function signalBadge(visibility: SignalVisibility, texts: InterfaceTextValues, owner = false): string | undefined {
+  const audience = signalAudience(visibility);
+  if (audience === "public") return undefined;
+  if (audience) return texts[`signal.audience_${audience}`];
+  return owner ? texts[`signal.visibility_${visibility}` as InterfaceTextKey] : undefined;
+}
 export function defaultSignalVisibility(typeKey: string): SignalVisibility {
   return typeKey === "dating" ? "match_only" : "members";
 }

@@ -8,7 +8,8 @@ type Labels = {
   copied: string; failed: string;
 };
 
-export function SignalShareAction({ payload, labels }: { payload: SignalSharePayload; labels: Labels }) {
+// copyOnly: a members-only record is passed around inside the DAO by its link alone; outside it opens nothing.
+export function SignalShareAction({ payload, labels, copyOnly = false }: { payload: SignalSharePayload; labels: Labels; copyOnly?: boolean }) {
   const [open, setOpen] = useState(false);
   const [notice, setNotice] = useState("");
   const links = signalShareLinks(payload);
@@ -24,6 +25,10 @@ export function SignalShareAction({ payload, labels }: { payload: SignalSharePay
     const success = await copySignalShareUrl(navigator.clipboard?.writeText.bind(navigator.clipboard), payload.url);
     setNotice(success ? labels.copied : labels.failed);
   }
+  if (copyOnly) return <div className="signalShareAction">
+    <button className="button secondary" type="button" onClick={copy}>{labels.copy}</button>
+    {notice ? <span className="muted" role="status">{notice}</span> : null}
+  </div>;
   return <div className="signalShareAction">
     <button className="button secondary" type="button" onClick={() => { setNotice(""); setOpen((value) => !value); }} aria-expanded={open}>{labels.share}</button>
     {open ? <div className="signalShareMenu">

@@ -15,9 +15,9 @@ vi.mock("../../../lib/interface-texts", async (original) => ({
   ...await original<typeof import("../../../lib/interface-texts")>(), readInterfaceTexts: mocks.texts,
 }));
 vi.mock("../../../components/core-navigation", () => ({ CoreNavigation: () => <nav>Core menu</nav> }));
-vi.mock("../../../components/signal-share-action", () => ({ SignalShareAction: ({ payload, labels }: {
-  payload: { label: string; description: string | null; url: string }; labels: { share: string };
-}) => <button data-share-url={payload.url} data-share-label={payload.label}
+vi.mock("../../../components/signal-share-action", () => ({ SignalShareAction: ({ payload, labels, copyOnly }: {
+  payload: { label: string; description: string | null; url: string }; labels: { share: string }; copyOnly?: boolean;
+}) => <button data-share-url={payload.url} data-copy-only={String(Boolean(copyOnly))} data-share-label={payload.label}
   data-share-description={payload.description ?? ""}>{labels.share}</button> }));
 vi.mock("next/navigation", () => ({ notFound: () => { throw new Error("notFound"); } }));
 
@@ -46,6 +46,13 @@ beforeEach(() => {
 });
 
 describe("canonical Signal card", () => {
+  it.each([["public", "Видно всем", "false"], ["members", "Только ДАО", "true"], ["network_blind", "Только ДАО", "true"]] as const)(
+    "tells a reader that a %s record is «%s» and offers the full share menu only for public ones", async (visibility, note, copyOnly) => {
+      mocks.signal.mockResolvedValue({ ...signal, visibility });
+      const output = await html();
+      expect(output).toContain(`${note} · `);
+      expect(output).toContain(`data-copy-only="${copyOnly}"`);
+    });
   it("shows a permitted member card with separate label, description, author and reaction", async () => {
     const output = await html();
     expect(mocks.signal).toHaveBeenCalledWith("viewer", id);

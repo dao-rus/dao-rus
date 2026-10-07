@@ -6,7 +6,7 @@ import { getCurrentParticipant } from "@/lib/session";
 import { readInterfaceTexts } from "@/lib/interface-texts";
 import { listRelayEncounters } from "@/lib/relay";
 import { listHiddenSignals, listNetworkSignals, listParticipantSignals, listSignalTypes } from "../../lib/signals";
-import { orderSignalTypes, selectSignalType, signalHref, signalTypePresentation } from "../../lib/signal-presentation";
+import { orderSignalTypes, selectSignalType, signalBadge, signalHref, signalTypePresentation } from "../../lib/signal-presentation";
 import { AngelSearch } from "../../components/angel-search";
 import { UserText } from "../../components/user-text";
 import { SignalPreview } from "../../components/signal-preview";
@@ -74,7 +74,8 @@ export default async function ExchangePage({
               const type = catalog.find((entry) => entry.key === signal.typeKey);
               return <SignalPreview key={signal.id} href={signalHref(signal.id)} label={signal.label} description={signal.description}
                 kicker={type ? signalTypePresentation(type, texts).navigationName : undefined}
-                author={signal.author && signal.visibility !== "network_blind" ? signal.author.name : null}>
+                author={signal.author && signal.visibility !== "network_blind" ? signal.author.name : null}
+                badge={signalBadge(signal.visibility, texts)}>
                 <form action="/api/signals/card" method="post">
                   <input type="hidden" name="action" value="unhide" />
                   <input type="hidden" name="signal_id" value={signal.id} />
@@ -94,7 +95,7 @@ export default async function ExchangePage({
             {ownCloser.length ? <><h3>{texts["exchange.closer_own_title"]}</h3>
               <div className="exchangeCards">
                 {ownCloser.map((signal) => <SignalPreview key={signal.id} href={signalHref(signal.id)} label={signal.label}
-                  description={signal.description} meta={ownCloserMeta(signal)} />)}
+                  description={signal.description} meta={ownCloserMeta(signal)} badge={signalBadge(signal.visibility, texts, true)} />)}
               </div></> : null}
             <h3>{texts["closer.matches_title"]}</h3>
             {/* A match carries no author and is not a link: the record itself stays unreachable by URL. */}
@@ -118,7 +119,8 @@ export default async function ExchangePage({
               {signals.length ? signals.map((signal) => (
                 <SignalPreview key={signal.id} href={signalHref(signal.id)} label={signal.label}
                   description={signal.description}
-                  author={signal.author && signal.visibility !== "network_blind" ? signal.author.name : null}>
+                  author={signal.author && signal.visibility !== "network_blind" ? signal.author.name : null}
+                badge={signalBadge(signal.visibility, texts)}>
                   {signal.mine ? (
                     <span className="muted">{texts["signal.mine"]}</span>
                   ) : signal.visibility === "network_blind" && (selected?.key === "need" || selected?.key === "have") ? (

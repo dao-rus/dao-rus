@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { interfaceTextFields, type InterfaceTextValues } from "./interface-texts";
-import { defaultSignalVisibility, signalHref, signalTypePresentation, signalVisibilityOptions } from "./signal-presentation";
+import { signalAudience, signalBadge, defaultSignalVisibility, signalHref, signalTypePresentation, signalVisibilityOptions } from "./signal-presentation";
 
 describe("canonical Signal URL", () => {
   it("builds the UUID permalink without type, label slug or owner", () => {
@@ -34,5 +34,22 @@ describe("Closer (dating) visibility policy", () => {
     expect(signalVisibilityOptions("dating")).toEqual(["match_only", "private"]);
     expect(defaultSignalVisibility("dating")).toBe("match_only");
     expect(defaultSignalVisibility("need")).toBe("members");
+  });
+});
+
+describe("who can see a record, in three reader-facing words", () => {
+  const texts = Object.fromEntries(interfaceTextFields.map((field) => [field.key, field.defaultValue])) as InterfaceTextValues;
+  it("maps six visibility modes to three audiences", () => {
+    expect((["public", "members", "network_blind", "match_only", "private", "circle"] as const).map(signalAudience))
+      .toEqual(["public", "members", "members", "match", null, null]);
+  });
+  it("puts no note on public records and names private ones only to their author", () => {
+    expect(signalBadge("public", texts)).toBeUndefined();
+    expect(signalBadge("public", texts, true)).toBeUndefined();
+    expect(signalBadge("members", texts)).toBe("Только ДАО");
+    expect(signalBadge("network_blind", texts)).toBe("Только ДАО");
+    expect(signalBadge("match_only", texts, true)).toBe("Только при совпадении");
+    expect(signalBadge("private", texts)).toBeUndefined();
+    expect(signalBadge("private", texts, true)).toBe("Только мне");
   });
 });

@@ -1,7 +1,7 @@
 import Link from "next/link";
 import type { Signal, SignalType } from "../lib/signals";
 import type { InterfaceTextValues } from "../lib/interface-texts";
-import { groupProfileSignals, signalHref, signalTypePresentation } from "../lib/signal-presentation";
+import { groupProfileSignals, signalBadge, signalHref, signalTypePresentation } from "../lib/signal-presentation";
 import { SignalPreview } from "./signal-preview";
 
 export function ProfileSignals({ signals, types, texts, owner = false }: {
@@ -13,7 +13,7 @@ export function ProfileSignals({ signals, types, texts, owner = false }: {
       <h4>{signalTypePresentation(type, texts).name}</h4>
       <ul className="profileItems signalItems">{entries.map((signal) => <SignalPreview as="li" key={signal.id}
         href={signalHref(signal.id)} label={signal.label} description={signal.description}
-        meta={owner ? texts[`signal.visibility_${signal.visibility}`] : undefined}>
+        badge={signalBadge(signal.visibility, texts, owner)}>
         {owner ? <div className="actions">
           <Link className="button secondary compact" href={`/exchange/new?signal=${signal.id}`}>
             {texts[signal.legacyBody ? "signal.refine" : "signal.edit"]}</Link>

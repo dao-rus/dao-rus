@@ -10,7 +10,7 @@ import { readPublicSignalReactionCount, readSignalReactionState } from "../../..
 import { getCurrentParticipant } from "../../../lib/session";
 import { getGuestShareableSignal, getSignal, isSignalHidden, listSignalTypes, readSignalViews } from "../../../lib/signals";
 import { SignalViewBeacon } from "../../../components/signal-view-beacon";
-import { signalHref, signalTypePresentation } from "../../../lib/signal-presentation";
+import { signalAudience, signalHref, signalTypePresentation } from "../../../lib/signal-presentation";
 import { UserText } from "../../../components/user-text";
 
 export const dynamic = "force-dynamic";
@@ -28,10 +28,10 @@ function CardBody({ type, label, description, author }: {
   </div>;
 }
 
-function Share({ id, label, description, texts }: {
-  id: string; label: string; description: string | null; texts: InterfaceTextValues;
+function Share({ id, label, description, texts, copyOnly }: {
+  id: string; label: string; description: string | null; texts: InterfaceTextValues; copyOnly?: boolean;
 }) {
-  return <SignalShareAction
+  return <SignalShareAction copyOnly={copyOnly}
     payload={{ label, description, url: new URL(signalHref(id), appBaseUrl()).toString() }}
     labels={{ share: texts["signal.share"], telegram: texts["signal.share_telegram"],
       vk: texts["signal.share_vk"], ok: texts["signal.share_ok"],
@@ -84,6 +84,7 @@ export default async function SignalPage({ params }: CardProps) {
   const active = signal.status === "active";
   // Share only links others can open: public (guests), members, or blind (members, via Relay).
   const shareable = active && ["public", "members", "network_blind"].includes(signal.visibility);
+  const audience = signalAudience(signal.visibility);
   const respondBlind = !signal.mine && active && signal.visibility === "network_blind"
     && (signal.typeKey === "need" || signal.typeKey === "have");
 
@@ -94,7 +95,7 @@ export default async function SignalPage({ params }: CardProps) {
     {signal.mine ? <p className="muted signalCardState">
       {texts[`signal.visibility_${signal.visibility}`]} · {texts[`signal.status_${signal.status}`]}
     </p> : null}
-    <p className="signalCardViews">{texts["signal.views"]}: {views}</p>
+    <p className="signalCardViews">{!signal.mine && audience ? `${texts[`signal.audience_${audience}`]} · ` : ""}{texts["signal.views"]}: {views}</p>
     {hiddenByViewer ? <p className="muted">{texts["signal.hidden_note"]}</p> : null}
     {!signal.mine && active ? <SignalViewBeacon signalId={signal.id} /> : null}
     {active ? <div className="signalActionBar">
@@ -128,7 +129,8 @@ export default async function SignalPage({ params }: CardProps) {
         <input type="hidden" name="action" value={hiddenByViewer ? "unhide" : "hide"} />
         <button className="button secondary" type="submit">{texts[hiddenByViewer ? "signal.unhide" : "signal.hide"]}</button>
       </form> : null}
-      {shareable ? <Share id={signal.id} label={signal.label} description={signal.description} texts={texts} /> : null}
+      {shareable ? <Share id={signal.id} label={signal.label} description={signal.description} texts={texts}
+        copyOnly={audience !== "public"} /> : null}
     </div> : null}
     <Link className="signalBackLink" href="/exchange">{texts["signal.back_exchange"]}</Link>
   </article></main>;

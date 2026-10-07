@@ -786,5 +786,7 @@ div.userText > :last-child { margin-bottom: 0; }
 .signalPreviewDescription > p, .signalPreviewDescription > ul { display: inline; margin: 0; }
 .signalPreviewKicker, .signalPreviewAuthor { color: var(--muted); font-size: 13px; }
 .userTextLink { text-decoration: none; color: inherit; }
+.signalPreviewFooter { display: flex; justify-content: space-between; align-items: baseline; gap: 12px; }
+.signalPreviewBadge { margin-left: auto; color: var(--muted); font-size: 12px; opacity: .75; white-space: nowrap; }
 .signalPreviewActions { position: relative; z-index: 1; display: flex; flex-wrap: wrap; align-items: center; gap: 8px; padding: 0 16px 14px; }
 .signalPreviewActions form { margin: 0; }
