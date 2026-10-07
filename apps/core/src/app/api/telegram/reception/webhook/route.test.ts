@@ -53,6 +53,27 @@ describe("Reception webhook", () => {
     expect(mocks.checkForumAndInvite).toHaveBeenCalledWith("42", "start");
   });
 
+  it("acknowledges every authenticated update, so one refused update can never stall the forum's replies", async () => {
+    // A long forum post arrives escaped: 4096 Cyrillic letters are about 25 KB. It used to be answered with 400.
+    const longPost = { update_id: 10, message: { chat: { id: -1001234567890, type: "supergroup" }, from: { id: 7 }, message_id: 1,
+      text: "я".repeat(4096), reply_to_message: { message_id: 2, text: "ж".repeat(4096) } } };
+    const escaped = JSON.stringify(longPost).replace(/[\u0400-\u04ff]/g, (char) => "\\u" + char.charCodeAt(0).toString(16).padStart(4, "0"));
+    expect(escaped.length).toBeGreaterThan(40_000);
+    const raw = (body: string) => POST(new NextRequest("http://localhost/api/telegram/reception/webhook", {
+      method: "POST", headers: { "X-Telegram-Bot-Api-Secret-Token": "test-secret" }, body }));
+    const long = await raw(escaped);
+    expect(long.status).toBe(200);
+    expect(mocks.relayReceptionUpdate).toHaveBeenCalledTimes(1);
+    for (const body of ["not json", "[]", "null", "x".repeat(600_000)]) {
+      const response = await raw(body);
+      expect(response.status).toBe(200);
+      expect(await response.json()).toEqual({ ok: true, status: "ignored" });
+    }
+    expect(mocks.relayReceptionUpdate).toHaveBeenCalledTimes(1);
+    // Only a wrong secret is refused.
+    expect((await POST(request(longPost, "wrong"))).status).toBe(401);
+  });
+
   it("gives the bot a voice only where a person is waiting for one", async () => {
     const start = (text: string) => POST(request({ message: { chat: { id: 42, type: "private" }, from: { id: 42 }, text } }));
     await start("/start");

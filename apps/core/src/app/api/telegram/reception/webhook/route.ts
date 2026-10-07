@@ -21,17 +21,20 @@ export async function POST(request: NextRequest) {
   if (!sameSecret(request.headers.get("x-telegram-bot-api-secret-token"), webhookSecret)) {
     return new NextResponse("Unauthorized", { status: 401 });
   }
+  // An authenticated update is always acknowledged. Telegram retries anything that is not 2xx and
+  // holds back later updates of the same chat meanwhile, so one refused update (for instance a long
+  // forum post) would silently stall every reply written in the forum after it.
+  const ignored = () => NextResponse.json({ ok: true, status: "ignored" });
   let update: unknown;
   try {
     const body = await request.text();
-    if (body.length > 20_000) return new NextResponse("Invalid update", { status: 400 });
+    // Telegram escapes non-Latin text, so a full-length message with the message it replies to is tens of kilobytes.
+    if (body.length > 512_000) return ignored();
     update = JSON.parse(body);
   } catch {
-    return new NextResponse("Invalid update", { status: 400 });
+    return ignored();
   }
-  if (!update || typeof update !== "object" || Array.isArray(update)) {
-    return new NextResponse("Invalid update", { status: 400 });
-  }
+  if (!update || typeof update !== "object" || Array.isArray(update)) return ignored();
   const message = "message" in update && update.message && typeof update.message === "object"
     ? update.message as Record<string, unknown> : null;
   const chat = message?.chat && typeof message.chat === "object"
