@@ -39,17 +39,9 @@ COPY --from=builder --chown=nextjs:nodejs /app/.next/static ./.next/static
 COPY --chown=nextjs:nodejs package.json package-lock.json tsconfig.json ./
 COPY --chown=nextjs:nodejs migrations ./migrations
 COPY --chown=nextjs:nodejs scripts ./scripts
-COPY --chown=nextjs:nodejs \
-  src/lib/db.ts \
-  src/lib/migration-integrity.ts \
-  src/lib/telegram-roster.ts \
-  src/lib/telegram-participant.ts \
-  src/lib/telegram-forum-roster-import.ts \
-  src/lib/telegram-departure-archive.ts \
-  src/lib/telegram-departure-review-html.ts \
-  src/lib/config.ts \
-  src/lib/notification-delivery.ts \
-  ./src/lib/
+# Operator scripts run with tsx inside this image and import application modules,
+# so the whole library is shipped rather than a hand-kept list of files.
+COPY --chown=nextjs:nodejs src/lib ./src/lib
 
 COPY --chown=nextjs:nodejs tools/telegram/departure_identity_query.sql ./tools/telegram/departure_identity_query.sql
 
