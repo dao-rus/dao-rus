@@ -3,6 +3,7 @@ import { readFileSync, readdirSync } from "node:fs";
 import { Pool } from "pg";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { applyMigration, migrationFile } from "./migration-integrity";
+import { markRewardShownWithDatabase, readPendingRewardWithDatabase } from "./reward-announcements";
 import { readSignalReactionStateWithDatabase, setSignalReactionWithDatabase } from "./signal-reactions";
 import { archiveSignalWithDatabase, countSignalViewWithDatabase, createSignalWithDatabase, getGuestShareableSignalWithDatabase,
   getSignalWithDatabase, isSignalHiddenWithDatabase, listHiddenSignalsWithDatabase, listNetworkSignalsWithDatabase,
@@ -177,5 +178,42 @@ describe.skipIf(!databaseUrl)("Signal card sharing and reactions on PostgreSQL",
     const columns = await pool.query(
       "SELECT column_name FROM information_schema.columns WHERE table_schema = $1 AND table_name = 'signal_view_counts' ORDER BY 1", [schema]);
     expect(columns.rows.map((row) => row.column_name)).toEqual(["signal_id", "views"]);
+  });
+  it("shows a reward that came while the author was away once, and only to its owner", async () => {
+    const author = await person(), friend = await person();
+    const need = await make(author, "Нужен попутчик", "members", "need");
+    expect(await readPendingRewardWithDatabase(pool, author)).toBeNull();
+    await setSignalReactionWithDatabase(pool, friend, need, true);
+    const pending = await readPendingRewardWithDatabase(pool, author);
+    expect(pending?.amount).toBe("0,2");
+    expect(await readPendingRewardWithDatabase(pool, friend)).toBeNull();
+    // Nobody else can use it up, and a made-up or malformed id does nothing.
+    expect(await markRewardShownWithDatabase(pool, friend, pending!.id)).toBe(false);
+    expect(await markRewardShownWithDatabase(pool, author, randomUUID())).toBe(false);
+    expect(await markRewardShownWithDatabase(pool, author, "x")).toBe(false);
+    expect(await readPendingRewardWithDatabase(pool, author)).toEqual(pending);
+    expect(await markRewardShownWithDatabase(pool, author, pending!.id)).toBe(true);
+    expect(await markRewardShownWithDatabase(pool, author, pending!.id)).toBe(false);
+    expect(await readPendingRewardWithDatabase(pool, author)).toBeNull();
+    // Showing it never touches the ledger itself.
+    expect((await pool.query("SELECT count(*)::int AS n FROM darus_ledger WHERE participant_id=$1", [author])).rows[0].n).toBe(1);
+  });
+
+  it("finds records by word stem and by any of the words, best match first, within the same visibility", async () => {
+    const author = await person(), reader = await person();
+    const both = await make(author, "Юрист по земельным вопросам, Тверь", "members", "skill");
+    const one = await make(author, "Ищу хорошего юриста", "members", "need");
+    const secret = await make(author, "Личный юрист", "private", "skill");
+    const blind = await make(author, "Юристы нужны", "match_only", "need");
+    const ids = async (terms: string[], typeKeys: string[] = []) =>
+      (await searchNetworkSignalsWithDatabase(pool, reader, { typeKeys, terms })).map((signal) => signal.id)
+        .filter((id) => [both, one, secret, blind].includes(id));
+    expect(await ids(["юриста"])).toEqual([one, both]);
+    expect(await ids(["юристу", "вопросы"])).toEqual([both, one]);
+    expect(await ids(["юрист", "Самара"])).toEqual([one, both]);
+    // A type named by the interpreter raises matching records but excludes none.
+    expect(await ids(["юрист"], ["skill"])).toEqual([both, one]);
+    expect(await ids(["трактор"])).toEqual([]);
+    expect(await ids(["100%"])).toEqual([]);
   });
 });

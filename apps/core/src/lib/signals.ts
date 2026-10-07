@@ -218,27 +218,34 @@ export async function readSignalViewsWithDatabase(database: SignalReader, signal
 
 export type NetworkSignalSearch = { typeKeys: string[]; terms: string[] };
 
-// This is deliberately a small, explainable PostgreSQL search. It starts from the
-// same network visibility predicate as browse, so search cannot become a direct-URL
-// or AI-assisted bypass for private, closed, circle, or match-only Signals.
+// A small, explainable PostgreSQL search. It starts from the same network visibility predicate
+// as browse, so search cannot become a direct-URL or AI-assisted bypass for private, closed,
+// circle, or match-only records. A record is found when at least one term matches; more matched
+// terms rank higher. A term matches as a literal fragment or by its word stem, so «юриста»
+// finds «юрист». Types named by the interpreter only raise a record, they no longer exclude.
 export async function searchNetworkSignalsWithDatabase(
   database: SignalReader, viewerId: string, search: NetworkSignalSearch,
 ): Promise<NetworkSignal[]> {
   const typeKeys = search.typeKeys.map(normalizeSignalTypeKey);
-  const terms = search.terms.map((term) => normalizeBoundedText(term, "Search term", 120).replace(/[!%_]/g, "!$&"));
+  const raw = search.terms.map((term) => normalizeBoundedText(term, "Search term", 120));
+  const patterns = raw.map((term) => term.replace(/[!%_]/g, "!$&"));
   const result = await database.query(
-    `SELECT ${contentColumns}, ${networkIdentityColumns}
-       FROM profile_signals s
-       JOIN participants author ON author.id = s.participant_id
-      WHERE ${visibleActiveSignalSql("network")} AND ${notHiddenByViewer}
-        AND (cardinality($2::text[]) = 0 OR s.kind = ANY($2::text[]))
-        AND (cardinality($3::text[]) = 0 OR NOT EXISTS (
-          SELECT 1 FROM unnest($3::text[]) AS term
-           WHERE s.label NOT ILIKE '%' || term || '%' ESCAPE '!'
-             AND COALESCE(s.description, '') NOT ILIKE '%' || term || '%' ESCAPE '!'
-        ))
-      ORDER BY s.created_at DESC, s.id DESC LIMIT 100`,
-    [viewerId, typeKeys, terms],
+    `SELECT * FROM (
+       SELECT ${contentColumns}, ${networkIdentityColumns},
+              (SELECT count(*) FROM unnest($3::text[], $4::text[]) AS term(pattern, word)
+                WHERE s.label ILIKE '%' || term.pattern || '%' ESCAPE '!'
+                   OR COALESCE(s.description, '') ILIKE '%' || term.pattern || '%' ESCAPE '!'
+                   OR to_tsvector('russian', s.label || ' ' || COALESCE(s.description, ''))
+                      @@ plainto_tsquery('russian', term.word)) AS matched_terms,
+              (s.kind = ANY($2::text[])) AS matched_type
+         FROM profile_signals s
+         JOIN participants author ON author.id = s.participant_id
+        WHERE ${visibleActiveSignalSql("network")} AND ${notHiddenByViewer}
+          AND (cardinality($3::text[]) > 0 OR cardinality($2::text[]) = 0 OR s.kind = ANY($2::text[]))
+     ) found
+     WHERE cardinality($3::text[]) = 0 OR matched_terms > 0
+     ORDER BY matched_terms DESC, matched_type DESC, created_at DESC, id DESC LIMIT 100`,
+    [viewerId, typeKeys, patterns, raw],
   );
   return result.rows.map(networkSignalFromRow);
 }

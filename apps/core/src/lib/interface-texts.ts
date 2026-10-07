@@ -211,6 +211,7 @@ const interfaceTextFieldDefinitions = [
   { section: "Ближе", key: "closer.notify_action", label: "Уведомление: кнопка", defaultValue: "Открыть", multiline: false },
   { section: "Обмен", key: "exchange.closer_intro", label: "«Ближе»: как устроен раздел", defaultValue: "Опишите, кого вы хотите найти, и выберите цель и город. Запись скрыта от других участников, и никто из них не видит, что вы сюда писали.\n\nКогда цель и город двух записей совпадут, оба автора одновременно увидят записи друг друга без имён. Любой из двоих может начать анонимный разговор и по ходу решить, раскрываться или нет.", multiline: true, pageLabel: "Обмен", pageHref: "/exchange?type=dating" },
   { section: "Обмен", key: "exchange.closer_own_title", label: "«Ближе»: заголовок своих записей", defaultValue: "Ваши записи", multiline: false, pageLabel: "Обмен", pageHref: "/exchange?type=dating" },
+  { section: "Обмен", key: "reward.record_responded", label: "Награда: подпись, когда запись отозвалась", defaultValue: "Ваша запись отозвалась", multiline: false },
   { section: "Обмен", key: "exchange.sort_new", label: "Сортировка: новые", defaultValue: "Новые", multiline: false },
   { section: "Обмен", key: "exchange.sort_top", label: "Сортировка: по лайкам", defaultValue: "Топ", multiline: false },
   { section: "Обмен", key: "exchange.sort_label", label: "Сортировка: подпись", defaultValue: "Порядок записей", multiline: false },

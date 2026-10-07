@@ -5,6 +5,9 @@ import { useEffect, useRef, useState } from "react";
 type DarusRewardCelebrationProps = {
   entryId: string;
   amount: string;
+  caption?: string;
+  // Tell the server once the animation was shown, for rewards that wait for the owner's next visit.
+  announce?: boolean;
 };
 
 export function claimDarusRewardAnimation(
@@ -17,7 +20,7 @@ export function claimDarusRewardAnimation(
   return true;
 }
 
-export function DarusRewardCelebration({ entryId, amount }: DarusRewardCelebrationProps) {
+export function DarusRewardCelebration({ entryId, amount, caption = "За подтверждение личности", announce = false }: DarusRewardCelebrationProps) {
   const [visible, setVisible] = useState(false);
   const initialized = useRef(false);
 
@@ -31,6 +34,11 @@ export function DarusRewardCelebration({ entryId, amount }: DarusRewardCelebrati
         // The visual feedback still works when browser storage is unavailable.
       }
       if (shouldAnimate) setVisible(true);
+      if (announce) {
+        const body = new FormData();
+        body.set("entry_id", entryId);
+        fetch("/api/rewards/shown", { method: "POST", body, keepalive: true }).catch(() => {});
+      }
 
       const url = new URL(window.location.href);
       url.searchParams.delete("verification_reward");
@@ -39,7 +47,7 @@ export function DarusRewardCelebration({ entryId, amount }: DarusRewardCelebrati
 
     const timeout = window.setTimeout(() => setVisible(false), 2200);
     return () => window.clearTimeout(timeout);
-  }, [entryId]);
+  }, [entryId, announce]);
 
   if (!visible) return null;
   return (
@@ -47,7 +55,7 @@ export function DarusRewardCelebration({ entryId, amount }: DarusRewardCelebrati
       <span className="darusRewardMarker"><span className="darusCoin">D</span> +{amount} DARUS</span>
       <div className="darusRewardToast">
         <span className="darusCoin">D</span>
-        <div><strong>+{amount} DARUS</strong><small>За подтверждение личности</small></div>
+        <div><strong>+{amount} DARUS</strong><small>{caption}</small></div>
       </div>
     </div>
   );

@@ -178,18 +178,19 @@ describe("universal Signal types and reads", () => {
     const db = database([{ ...row, mine: false, author_id: "owner", author_name: "Автор" }]);
     await searchNetworkSignalsWithDatabase(db, "viewer", { typeKeys: ["future_type"], terms: ["Ядро", "Условия"] });
     const [sql, values] = db.query.mock.calls[0];
-    expect(values).toEqual(["viewer", ["future_type"], ["Ядро", "Условия"]]);
+    expect(values).toEqual(["viewer", ["future_type"], ["Ядро", "Условия"], ["Ядро", "Условия"]]);
     expect(sql).toContain("s.status = 'active'");
     expect(sql).toContain("s.visibility IN ('public', 'members', 'network_blind')");
     expect(sql).toContain("s.kind = ANY($2::text[])");
-    expect(sql).toContain("s.label NOT ILIKE");
+    expect(sql).toContain("s.label ILIKE");
+    expect(sql).toContain("plainto_tsquery('russian', term.word)");
     expect(sql).not.toContain("private"); expect(sql).not.toContain("match_only"); expect(sql).not.toContain("circle");
   });
   it("escapes LIKE metacharacters literally including the chosen escape character", async () => {
     const db = database([]);
     await searchNetworkSignalsWithDatabase(db, "viewer", { typeKeys: [], terms: ["%", "_", "!", "100% SQL_admin!", "normal phrase"] });
     const [sql, values] = db.query.mock.calls[0];
-    expect(values).toEqual(["viewer", [], ["!%", "!_", "!!", "100!% SQL!_admin!!", "normal phrase"]]);
+    expect(values).toEqual(["viewer", [], ["!%", "!_", "!!", "100!% SQL!_admin!!", "normal phrase"], ["%", "_", "!", "100% SQL_admin!", "normal phrase"]]);
     expect(sql.match(/ESCAPE '!'/g)).toHaveLength(2);
   });
 
