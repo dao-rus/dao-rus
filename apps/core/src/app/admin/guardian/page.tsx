@@ -51,7 +51,8 @@ export default async function GuardianPage({ searchParams }: { searchParams: Pro
   return <main className="shell"><section className="card profile">
     <CoreNavigation />
     <div className="profileHeader"><div><div className="eyebrow">DAO Core</div><h1>Хранитель</h1></div>
-      <Link className="button secondary" href="/admin">К управлению</Link></div>
+      <div className="actions"><Link className="button secondary" href="/admin/guardian/forum">Форум и маршруты</Link>
+        <Link className="button secondary" href="/admin">К управлению</Link></div></div>
     <h2>{texts["guardian.state_title"]}</h2>
     <table className="registryTable"><tbody>{summary.map(row => <tr key={row.key}>
       <td>{labels(row.key)}</td><td><strong>{row.count}</strong></td>

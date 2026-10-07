@@ -35,6 +35,12 @@ export async function POST(request: NextRequest) {
       return profileRedirect(result.changed ? "updated" : "unchanged");
     }
     const result = await saveProfile(participant.id, formData.get("display_name"), bio, visibility, residence);
+    // The checkbox is only rendered for newcomers; its marker tells an unchecked box from an absent one.
+    if (formData.get("announce_in_forum_present") === "1") {
+      const [{ setForumAnnouncementWithDatabase }, { pool }] = await Promise.all([import("../../../lib/newcomer-announcement"), import("../../../lib/db")]);
+      await setForumAnnouncementWithDatabase(pool, participant.id, formData.get("announce_in_forum") === "on");
+    }
+    await (await import("../../../lib/guardian-forum-actions")).afterProfileChanged(participant.id);
     return profileRedirect(result.changed ? "updated" : "unchanged", result.reward?.id);
   } catch (error) {
     if (error instanceof DisplayNameValidationError) {

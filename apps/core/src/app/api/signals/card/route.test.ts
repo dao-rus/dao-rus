@@ -1,7 +1,11 @@
 import { NextRequest } from "next/server";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
-const mocks = vi.hoisted(() => ({ participant: vi.fn(), reaction: vi.fn(), view: vi.fn(), hide: vi.fn() }));
+const mocks = vi.hoisted(() => ({ participant: vi.fn(), reaction: vi.fn(), view: vi.fn(), hide: vi.fn(),
+  forumDeps: vi.fn(), open: vi.fn(), notify: vi.fn() }));
+vi.mock("../../../../lib/guardian-forum-actions", () => ({ forumDeps: mocks.forumDeps }));
+vi.mock("../../../../lib/signal-discussion", () => ({ openDiscussion: mocks.open }));
+vi.mock("../../../../lib/notifications", () => ({ createNotification: mocks.notify }));
 vi.mock("../../../../lib/session", () => ({ getCurrentParticipant: mocks.participant }));
 vi.mock("../../../../lib/signal-reactions", () => ({ setSignalReaction: mocks.reaction,
   SignalReactionUnavailableError: class extends Error {} }));
@@ -52,6 +56,34 @@ describe("Signal card member actions", () => {
     expect((await POST(request("hide"))).status).toBe(404);
     mocks.participant.mockResolvedValue(null);
     expect((await POST(request("hide"))).status).toBe(401);
+  });
+  it("opens a forum discussion for the session participant and tells the author once, without the record's text", async () => {
+    const deps = { texts: { "forum.notify_discussion": "Вашу запись обсуждают в форуме.", "forum.discussion_open": "Открыть запись" } };
+    mocks.forumDeps.mockResolvedValue(deps); mocks.notify.mockResolvedValue("n");
+    mocks.open.mockResolvedValue({ status: "open", link: "https://t.me/c/1/2/3", created: true, authorId: "author" });
+    const first = await POST(request("discuss"));
+    expect(mocks.open).toHaveBeenCalledWith(deps, "member", id);
+    expect(first.headers.get("location")).toBe("https://t.me/c/1/2/3");
+    expect(mocks.notify).toHaveBeenCalledTimes(1);
+    expect(mocks.notify.mock.calls[0][0]).toEqual({ participantId: "author", notificationType: "exchange.discussion_opened", sourceType: "system",
+      text: "Вашу запись обсуждают в форуме.", actionUrl: `/exchange/${id}`, actionLabel: "Открыть запись", queueTelegram: true });
+    mocks.open.mockResolvedValue({ status: "open", link: "https://t.me/c/1/2/3", created: false, authorId: null });
+    await POST(request("discuss"));
+    expect(mocks.notify).toHaveBeenCalledTimes(1);
+  });
+  it("answers a discussion that cannot be opened without revealing why, and survives a Telegram failure", async () => {
+    mocks.forumDeps.mockResolvedValue({ texts: {} });
+    mocks.open.mockResolvedValue({ status: "unavailable" });
+    expect((await POST(request("discuss"))).status).toBe(404);
+    mocks.forumDeps.mockResolvedValue(null);
+    expect((await POST(request("discuss"))).status).toBe(404);
+    mocks.forumDeps.mockResolvedValue({ texts: {} });
+    mocks.open.mockResolvedValue({ status: "pending" });
+    expect((await POST(request("discuss"))).headers.get("location")).toBe(`http://localhost:3000/exchange/${id}?discussion=pending`);
+    mocks.open.mockRejectedValue(new Error("Telegram down"));
+    expect((await POST(request("discuss"))).headers.get("location")).toBe(`http://localhost:3000/exchange/${id}?discussion=failed`);
+    mocks.participant.mockResolvedValue(null);
+    expect((await POST(request("discuss"))).status).toBe(401);
   });
   it("no longer accepts external-share policy actions", async () => {
     expect((await POST(request("share_enable", { confirm_external_share: "yes" }))).status).toBe(400);

@@ -32,6 +32,30 @@ export async function POST(request: NextRequest) {
     else url.searchParams.set("type", signal!.typeKey);
     return NextResponse.redirect(url, 303);
   }
+  if (action === "discuss") {
+    const card = new URL(signalHref(id), appBaseUrl());
+    try {
+      const { forumDeps } = await import("../../../../lib/guardian-forum-actions");
+      const { openDiscussion } = await import("../../../../lib/signal-discussion");
+      const deps = await forumDeps();
+      const result = deps ? await openDiscussion(deps, participant.id, id) : { status: "unavailable" as const };
+      if (result.status === "open") {
+        if (result.created && result.authorId) {
+          const { createNotification } = await import("../../../../lib/notifications");
+          await createNotification({ participantId: result.authorId, notificationType: "exchange.discussion_opened", sourceType: "system",
+            text: deps!.texts["forum.notify_discussion"], actionUrl: signalHref(id), actionLabel: deps!.texts["forum.discussion_open"],
+            queueTelegram: true }).catch((error) => console.error("Discussion notification failed", error));
+        }
+        return NextResponse.redirect(result.link, 303);
+      }
+      if (result.status === "unavailable") return new NextResponse("Not found", { status: 404 });
+      card.searchParams.set("discussion", "pending");
+    } catch (error) {
+      console.error("Forum discussion failed", error);
+      card.searchParams.set("discussion", "failed");
+    }
+    return NextResponse.redirect(card, 303);
+  }
   try {
     if (action === "react_add" || action === "react_remove") {
       await setSignalReaction(participant.id, id, action === "react_add");

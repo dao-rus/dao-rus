@@ -61,11 +61,16 @@ export async function POST(request: NextRequest) {
         formData.get("visibility"),
       );
     } else if (action === "archive_signal") {
-      await archiveProfileSignal(participant.id, requiredId(formData.get("signal_id")));
+      const signalId = requiredId(formData.get("signal_id"));
+      await archiveProfileSignal(participant.id, signalId);
+      await (await import("../../../../lib/guardian-forum-actions")).afterSignalChanged(signalId);
     } else {
       return profileRedirect("invalid");
     }
 
+    if (action === "add_interest" || action === "remove_interest") {
+      await (await import("../../../../lib/guardian-forum-actions")).afterProfileChanged(participant.id);
+    }
     return profileRedirect("updated", reward?.id);
   } catch (error) {
     if (error instanceof ProfileAboutValidationError) {

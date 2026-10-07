@@ -2,9 +2,10 @@
 
 import { useEffect, useState, type ReactNode } from "react";
 import { useRouter } from "next/navigation";
+import { startTarget } from "../../lib/mini-app-start";
 
 type TelegramWindow = Window & {
-  Telegram?: { WebApp?: { initData?: string; ready?: () => void } };
+  Telegram?: { WebApp?: { initData?: string; initDataUnsafe?: { start_param?: string }; ready?: () => void } };
 };
 
 export function telegramEntryMode(initData: string | undefined): "mini_app" | "browser" {
@@ -40,6 +41,9 @@ export function NeedAuthGate({
         });
         if (!response.ok) throw new Error("Mini App login failed");
         if (active) {
+          // Opened from a Guardian button: continue to the page that button pointed at.
+          const target = startTarget(window.location.search, telegramWindow.Telegram?.WebApp?.initDataUnsafe?.start_param);
+          if (target) { window.location.replace(target); return; }
           router.refresh();
           setMode("browser");
         }

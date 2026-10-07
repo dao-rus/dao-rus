@@ -118,6 +118,21 @@ export function telegramActionUrl(actionUrl: string | null, baseUrl: string): st
   return new URL(actionUrl, base).toString();
 }
 
+// Internal actions go through the Mini App entry page, which signs the person in and continues to
+// the target. Any doubt (switch off, external link, settings unreadable) keeps the ordinary link.
+export async function miniAppActionUrl(database: Pick<DeliveryDatabase, "query">, actionUrl: string | null, baseUrl: string): Promise<string | null> {
+  if (!actionUrl || !actionUrl.startsWith("/")) return null;
+  try {
+    const { encodeStartPath } = await import("./mini-app-start");
+    const { featureEnabled, readGuardianSettingsWithDatabase } = await import("./guardian-forum");
+    if (!featureEnabled(await readGuardianSettingsWithDatabase(database), "notification_mini_app")) return null;
+    const url = new URL("/need", baseUrl);
+    if (url.protocol !== "https:") return null;
+    url.searchParams.set("start", encodeStartPath(actionUrl));
+    return url.toString();
+  } catch { return null; }
+}
+
 export async function sendTelegramDelivery(
   token: string,
   chatId: number,
@@ -125,6 +140,7 @@ export async function sendTelegramDelivery(
   actionUrl: string | null,
   actionLabel: string | null,
   request: typeof fetch = fetch,
+  webAppUrl: string | null = null,
 ): Promise<DeliveryOutcome> {
   try {
     const response = await request(`https://api.telegram.org/bot${token}/sendMessage`, {
@@ -133,7 +149,10 @@ export async function sendTelegramDelivery(
       body: JSON.stringify({
         chat_id: chatId,
         text,
-        ...(actionUrl ? { reply_markup: { inline_keyboard: [[{ text: actionLabel ?? "Открыть", url: actionUrl }]] } } : {}),
+        // In a private chat the action can open Core inside Telegram instead of the browser.
+        ...(actionUrl ? { reply_markup: { inline_keyboard: [[webAppUrl
+          ? { text: actionLabel ?? "Открыть", web_app: { url: webAppUrl } }
+          : { text: actionLabel ?? "Открыть", url: actionUrl }]] } } : {}),
       }),
       signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS),
     });
@@ -216,7 +235,8 @@ export async function processNextNotificationDelivery(
       }
       if (actionUrl !== undefined) {
         if (!await markAttempt(database, delivery.id)) return { id: delivery.id, status: "unknown", errorCode: "claim_expired" };
-        outcome = await sendTelegramDelivery(token, chatId, delivery.text, actionUrl, delivery.actionLabel, request);
+        outcome = await sendTelegramDelivery(token, chatId, delivery.text, actionUrl, delivery.actionLabel, request,
+          await miniAppActionUrl(database, delivery.actionUrl, appBaseUrl()));
       }
     }
   }

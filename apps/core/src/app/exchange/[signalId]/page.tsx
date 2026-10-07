@@ -15,7 +15,7 @@ import { UserText } from "../../../components/user-text";
 
 export const dynamic = "force-dynamic";
 
-type CardProps = { params: Promise<{ signalId: string }> };
+type CardProps = { params: Promise<{ signalId: string }>; searchParams?: Promise<{ discussion?: string }> };
 
 function CardBody({ type, label, description, author }: {
   type: string; label: string; description: string | null; author: ReactNode;
@@ -39,6 +39,18 @@ function Share({ id, label, description, texts, copyOnly }: {
       copied: texts["signal.share_copied"], failed: texts["signal.share_failed"] }} />;
 }
 
+// The button exists only where a discussion can actually be opened: feature on, topic set, record named and open.
+async function discussionState(signal: { id: string; typeKey: string; visibility: Parameters<typeof signalAudience>[0]; status: string }) {
+  const { discussionEligible, discussionTopic, readDiscussionLinkWithDatabase } = await import("../../../lib/signal-discussion");
+  if (!discussionEligible(signal)) return null;
+  const [{ readGuardianSettings, forumInternalId }, { telegramBotToken, telegramReceptionConfig }, { pool }] = await Promise.all([
+    import("../../../lib/guardian-forum"), import("../../../lib/config"), import("../../../lib/db")]);
+  const forumChatId = telegramReceptionConfig().forumChatId;
+  if (!telegramBotToken() || !forumInternalId(forumChatId)) return null;
+  if (!discussionTopic(await readGuardianSettings(), signal.typeKey)) return null;
+  return { link: await readDiscussionLinkWithDatabase(pool, signal.id, forumChatId) };
+}
+
 export async function generateMetadata({ params }: CardProps): Promise<Metadata> {
   const { signalId } = await params;
   const guestSignal = await getGuestShareableSignal(signalId);
@@ -51,7 +63,7 @@ export async function generateMetadata({ params }: CardProps): Promise<Metadata>
   } };
 }
 
-export default async function SignalPage({ params }: CardProps) {
+export default async function SignalPage({ params, searchParams }: CardProps) {
   const { signalId } = await params;
   const viewer = await getCurrentParticipant();
   if (!viewer) {
@@ -85,6 +97,9 @@ export default async function SignalPage({ params }: CardProps) {
   // Share only links others can open: public (guests), members, or blind (members, via Relay).
   const shareable = active && ["public", "members", "network_blind"].includes(signal.visibility);
   const audience = signalAudience(signal.visibility);
+  // A card must open even if the forum settings cannot be read; it then simply has no discussion button.
+  const discussion = await discussionState(signal).catch(() => null);
+  const discussionNotice = (await searchParams)?.discussion;
   const respondBlind = !signal.mine && active && signal.visibility === "network_blind"
     && (signal.typeKey === "need" || signal.typeKey === "have");
 
@@ -98,6 +113,8 @@ export default async function SignalPage({ params }: CardProps) {
     <p className="signalCardViews">{!signal.mine && audience ? `${texts[`signal.audience_${audience}`]} · ` : ""}{texts["signal.views"]}: {views}</p>
     {hiddenByViewer ? <p className="muted">{texts["signal.hidden_note"]}</p> : null}
     {!signal.mine && active ? <SignalViewBeacon signalId={signal.id} /> : null}
+    {discussionNotice === "pending" || discussionNotice === "failed"
+      ? <p className={discussionNotice === "failed" ? "formError" : "formNotice"} role="status">{texts[`signal.discuss_${discussionNotice}`]}</p> : null}
     {active ? <div className="signalActionBar">
       {signal.mine ? <>
         <Link className="button secondary" href={`/exchange/new?signal=${signal.id}`}>
@@ -124,6 +141,12 @@ export default async function SignalPage({ params }: CardProps) {
           title={reaction.reacted ? texts["signal.reaction_remove"] : texts["signal.reaction_like"]}>
           ♥ {reaction.count}</button>
       </form> : null}
+      {discussion?.link ? <a className="button secondary" href={discussion.link}>{texts["signal.discuss"]}</a>
+        : discussion ? <form action="/api/signals/card" method="post">
+          <input type="hidden" name="signal_id" value={signal.id} />
+          <input type="hidden" name="action" value="discuss" />
+          <button className="button secondary" type="submit">{texts["signal.discuss"]}</button>
+        </form> : null}
       {!signal.mine ? <form action="/api/signals/card" method="post">
         <input type="hidden" name="signal_id" value={signal.id} />
         <input type="hidden" name="action" value={hiddenByViewer ? "unhide" : "hide"} />

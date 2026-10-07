@@ -39,6 +39,7 @@ export async function POST(request: NextRequest) {
     const matchedBefore = closer && id ? await listCloserCounterpartIds(participant.id, String(id)) : undefined;
     const result = id ? { signal: await updateSignal(participant.id, String(id), input) }
       : await createSignal(participant.id, { ...input, typeKey });
+    if (id) await (await import("../../../lib/guardian-forum-actions")).afterSignalChanged(result.signal.id);
     if (closerKeys) {
       await notifyCloser(await setCloserKeys(participant.id, result.signal.id, closerKeys, matchedBefore),
         "match", `/exchange?type=${CLOSER_TYPE_KEY}`);

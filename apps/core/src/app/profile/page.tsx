@@ -77,6 +77,8 @@ export default async function ProfilePage({ searchParams }: ProfilePageProps) {
     listParticipantSignals(participant.id, participant.id),
     listSignalTypes(),
   ]);
+  const forumAnnouncement = await import("../../lib/newcomer-announcement")
+    .then((module) => module.readForumAnnouncementChoice(participant.id)).catch(() => null);
   const hasAdminAccess = hasPrototypeAdminAccess(participant.id);
   const receptionConfig = telegramReceptionConfig();
   const receptionUsername = receptionConfig.token && receptionConfig.webhookSecret &&
@@ -153,6 +155,11 @@ export default async function ProfilePage({ searchParams }: ProfilePageProps) {
                 defaultValue={about?.residence?.country ?? "Россия"} placeholder="Страна" aria-label="Страна" />
             </div>
             <p className="muted privacyHint">Место жительства необязательно. Оставьте название пустым, если не хотите его указывать. Указанное место видно только вошедшим участникам.</p>
+            {forumAnnouncement ? <label className="interfaceReset">
+              <input type="hidden" form="profile-form" name="announce_in_forum_present" value="1" />
+              <input type="checkbox" form="profile-form" name="announce_in_forum" defaultChecked={forumAnnouncement.announce} />
+              {texts["profile.announce_in_forum"]}
+            </label> : null}
             <button className="button primary" type="submit" form="profile-form">Сохранить профиль</button>
             {updateMessage ? (
               <p className={params.profile_update === "empty_name" || params.profile_update === "invalid" ? "formError" : "formNotice"}>{updateMessage}</p>
