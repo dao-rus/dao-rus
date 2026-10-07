@@ -69,10 +69,9 @@ export function signalAudience(visibility: SignalVisibility): SignalAudience | n
   if (visibility === "members" || visibility === "network_blind") return "members";
   return visibility === "match_only" ? "match" : null;
 }
-// Pale corner note in lists: nothing for records open to everyone.
+// Pale corner note in lists. Every record carries one, so its absence never reads as "mode unknown".
 export function signalBadge(visibility: SignalVisibility, texts: InterfaceTextValues, owner = false): string | undefined {
   const audience = signalAudience(visibility);
-  if (audience === "public") return undefined;
   if (audience) return texts[`signal.audience_${audience}`];
   return owner ? texts[`signal.visibility_${visibility}` as InterfaceTextKey] : undefined;
 }

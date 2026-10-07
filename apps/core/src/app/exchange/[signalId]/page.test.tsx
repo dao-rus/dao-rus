@@ -46,7 +46,7 @@ beforeEach(() => {
 });
 
 describe("canonical Signal card", () => {
-  it.each([["public", "Видно всем", "false"], ["members", "Только ДАО", "true"], ["network_blind", "Только ДАО", "true"]] as const)(
+  it.each([["public", "Для всех", "false"], ["members", "Только ДАО", "true"], ["network_blind", "Только ДАО", "true"]] as const)(
     "tells a reader that a %s record is «%s» and offers the full share menu only for public ones", async (visibility, note, copyOnly) => {
       mocks.signal.mockResolvedValue({ ...signal, visibility });
       const output = await html();

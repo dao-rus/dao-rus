@@ -43,9 +43,9 @@ describe("who can see a record, in three reader-facing words", () => {
     expect((["public", "members", "network_blind", "match_only", "private", "circle"] as const).map(signalAudience))
       .toEqual(["public", "members", "members", "match", null, null]);
   });
-  it("puts no note on public records and names private ones only to their author", () => {
-    expect(signalBadge("public", texts)).toBeUndefined();
-    expect(signalBadge("public", texts, true)).toBeUndefined();
+  it("labels every record a reader can meet and names private ones only to their author", () => {
+    expect(signalBadge("public", texts)).toBe("Для всех");
+    expect(signalBadge("public", texts, true)).toBe("Для всех");
     expect(signalBadge("members", texts)).toBe("Только ДАО");
     expect(signalBadge("network_blind", texts)).toBe("Только ДАО");
     expect(signalBadge("match_only", texts, true)).toBe("Только при совпадении");

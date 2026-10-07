@@ -63,7 +63,7 @@ const interfaceTextFieldDefinitions = [
   { section: "Ангел", key: "angel.suspicious_prompt", label: "Отказ Ангела при подозрительном запросе", defaultValue: "Этот запрос не может быть обработан. Похоже, вы вышли за рамки допустимого. Случайно или намеренно — вот в чём вопрос.", multiline: true },
   { section: "Ангел", key: "angel.unavailable", label: "Ошибка Ангела", defaultValue: "Ангел сейчас не смог обработать запрос. Можно продолжить вручную.", multiline: false },
   { section: "Ангел", key: "angel.rate_limit", label: "Лимит Ангела", defaultValue: "Ангелу нужна короткая передышка. Попробуйте немного позже.", multiline: false },
-  { section: "Сигналы", key: "signal.audience_public", label: "Кому видна запись: всем", defaultValue: "Видно всем", multiline: false, pageLabel: "Обмен", pageHref: "/exchange" },
+  { section: "Сигналы", key: "signal.audience_public", label: "Кому видна запись: всем", defaultValue: "Для всех", multiline: false, pageLabel: "Обмен", pageHref: "/exchange" },
   { section: "Сигналы", key: "signal.audience_members", label: "Кому видна запись: только ДАО", defaultValue: "Только ДАО", multiline: false, pageLabel: "Обмен", pageHref: "/exchange" },
   { section: "Сигналы", key: "signal.audience_match", label: "Кому видна запись: только при совпадении", defaultValue: "Только при совпадении", multiline: false, pageLabel: "Обмен", pageHref: "/exchange" },
   { section: "Сигналы", key: "signal.visibility_public", label: "Всем", defaultValue: "Всем", multiline: false },
