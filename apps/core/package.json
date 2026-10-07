@@ -13,6 +13,7 @@
     "telegram:roster:import": "tsx scripts/import-telegram-roster.ts",
     "telegram:forum:import": "tsx scripts/import-telegram-forum-roster.ts",
     "telegram:departures:import": "tsx scripts/import-telegram-departures.ts",
+    "introductions:import": "tsx scripts/import-introductions.ts",
     "notifications:worker": "node --import tsx scripts/notification-worker.ts"
   },
   "dependencies": {
