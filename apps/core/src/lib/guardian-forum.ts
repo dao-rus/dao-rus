@@ -3,7 +3,8 @@ import { SignalValidationError, type SignalDatabase, type SignalReader } from ".
 
 // Guardian's routes between Core and the Telegram forum. Every function has a switch
 // in /admin/guardian/forum; an unset switch means "on".
-export const GUARDIAN_FEATURES = ["exchange_discussion", "forum_buttons", "newcomer_announcements", "notification_mini_app"] as const;
+export const GUARDIAN_FEATURES = ["exchange_discussion", "forum_buttons", "newcomer_announcements", "notification_mini_app",
+  "reception_greeting", "reception_welcome"] as const;
 export type GuardianFeature = (typeof GUARDIAN_FEATURES)[number];
 export type GuardianSettings = Map<string, string>;
 export type ForumButton = { text: string; url: string };

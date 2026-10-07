@@ -42,15 +42,21 @@ export async function POST(request: NextRequest) {
       (message.text === "/start" || message.text === "/start core") &&
       typeof from?.id === "number" && Number.isSafeInteger(from.id) && chat.id === from.id) {
     await checkForumAndInvite(String(from.id), "start");
+    // A bare "Запустить" from someone outside the forum is the door: invite them to introduce themselves.
+    if (message.text === "/start") await (await import("../../../../../lib/reception-voice")).onReceptionStart(String(from.id));
     return NextResponse.json({ ok: true });
   }
   if (message) {
     // Keep the update queued at Telegram if the relay was not configured yet.
     if (!token || !topicId) return new NextResponse("Reception relay is not configured", { status: 503 });
     const status = await relayReceptionUpdate(update);
+    if (status === "sent" && chat?.type === "private" && typeof chat.id === "number") {
+      await (await import("../../../../../lib/reception-voice")).onReceptionRelayed(String(chat.id));
+    }
     return NextResponse.json({ ok: true, status });
   }
   if (await observeForumMemberUpdate(update) === "observed") {
+    await (await import("../../../../../lib/reception-voice")).onForumMemberUpdate(update);
     await (await import("../../../../../lib/guardian-forum-actions")).afterForumMemberUpdate(update);
   }
   return NextResponse.json({ ok: true });

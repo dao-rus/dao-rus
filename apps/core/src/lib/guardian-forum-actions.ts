@@ -8,7 +8,9 @@ async function deps() {
   if (!forum) return null;
   const [{ pool }, { appBaseUrl }, settings, { values: texts }] = await Promise.all([
     import("./db"), import("./config"), readGuardianSettings(), readInterfaceTexts()]);
-  return { database: pool, bot: forum.bot, forumChatId: forum.forumChatId, settings, texts, baseUrl: appBaseUrl() };
+  const receptionTopicId = Number((await import("./config")).telegramReceptionConfig().topicId);
+  return { database: pool, bot: forum.bot, forumChatId: forum.forumChatId, settings, texts, baseUrl: appBaseUrl(),
+    receptionTopicId: Number.isSafeInteger(receptionTopicId) && receptionTopicId > 0 ? receptionTopicId : undefined };
 }
 export async function forumDeps() { return deps(); }
 

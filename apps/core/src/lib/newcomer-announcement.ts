@@ -1,11 +1,29 @@
-import { coreButtonUrl, featureEnabled, topicFor, type ForumBot, type GuardianSettings } from "./guardian-forum";
+import { coreButtonUrl, featureEnabled, forumInternalId, topicFor, type ForumBot, type GuardianSettings } from "./guardian-forum";
 import type { InterfaceTextValues } from "./interface-texts";
 import type { SignalDatabase, SignalReader } from "./signals";
 
 // Guardian introduces a newcomer in the forum once they have told Core a city or an interest.
 // Only what other participants already see in the profile is announced, only for people who
 // joined after the feature appeared, and never against the person's own switch.
-export type NewcomerDeps = { database: SignalDatabase; bot: ForumBot; settings: GuardianSettings; texts: InterfaceTextValues; baseUrl: string };
+export type NewcomerDeps = { database: SignalDatabase; bot: ForumBot; settings: GuardianSettings; texts: InterfaceTextValues; baseUrl: string;
+  // Present when the reception relay is configured: lets the announcement link to the person's own introduction.
+  forumChatId?: string; receptionTopicId?: number };
+
+// The first message the person sent through the reception bot, as relayed into the reception topic.
+async function introductionLink(deps: NewcomerDeps, participantId: string): Promise<string | null> {
+  const internal = forumInternalId(deps.forumChatId);
+  if (!internal || !deps.receptionTopicId) return null;
+  const result = await deps.database.query(
+    `SELECT r.forum_message_id FROM reception_relay_updates r
+       JOIN external_identities identity ON identity.provider = 'telegram' AND identity.external_user_id = r.private_chat_id::text
+      WHERE identity.participant_id = $1::uuid AND r.direction = 'private_to_forum' AND r.status = 'sent'
+        AND r.forum_message_id IS NOT NULL AND r.forum_chat_id::text = $2
+      ORDER BY r.created_at, r.update_id LIMIT 1`, [participantId, deps.forumChatId]);
+  if (!result.rowCount) return null;
+  // The General topic has no topic segment in its links.
+  const topic = deps.receptionTopicId === 1 ? "" : `${deps.receptionTopicId}/`;
+  return `https://t.me/c/${internal}/${topic}${Number(result.rows[0].forum_message_id)}`;
+}
 
 export async function isNewcomerWithDatabase(database: SignalReader, participantId: string): Promise<boolean> {
   const result = await database.query(
@@ -50,6 +68,8 @@ export async function syncNewcomerAnnouncement(deps: NewcomerDeps, participantId
     { text: deps.texts["forum.newcomer_profile"], url: coreButtonUrl(`/profile/${participantId}`, deps.settings, deps.baseUrl) },
     { text: deps.texts["forum.newcomer_nearby"], url: coreButtonUrl("/nearby", deps.settings, deps.baseUrl) },
   ];
+  const introduction = await introductionLink(deps, participantId);
+  if (introduction) buttons.push({ text: deps.texts["forum.newcomer_introduction"], url: introduction });
   if (messageId) {
     await deps.bot.edit(messageId, text, buttons);
     await deps.database.query("UPDATE newcomer_announcements SET hidden = false, updated_at = now() WHERE participant_id = $1::uuid", [participantId]);

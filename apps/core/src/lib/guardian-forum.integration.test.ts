@@ -13,6 +13,7 @@ import { isNewcomerWithDatabase, setForumAnnouncementWithDatabase, syncNewcomerA
 import { openDiscussion, readDiscussionLinkWithDatabase, syncDiscussion } from "./signal-discussion";
 import { archiveSignalWithDatabase, createSignalWithDatabase, updateSignalWithDatabase } from "./signals";
 import { encodeStartPath } from "./mini-app-start";
+import { acknowledgeIntroduction, greetOnStart, joinedUserId, welcomeAfterJoining } from "./reception-voice";
 
 const databaseUrl = process.env.GUARDIAN_FORUM_TEST_DATABASE_URL;
 const schema = `guardian_forum_test_${randomUUID().replaceAll("-", "")}`;
@@ -216,5 +217,75 @@ describe.skipIf(!databaseUrl)("Guardian forum routes on real PostgreSQL", () => 
     expect(await miniAppActionUrl(pool, "/x", "http://localhost:3000")).toBeNull();
     await pool.query("INSERT INTO guardian_settings(key, value) VALUES ('feature.notification_mini_app', 'off')");
     expect(await miniAppActionUrl(pool, "/exchange?type=dating", baseUrl)).toBeNull();
+  });
+
+  it("lets the reception bot greet, acknowledge once and welcome once", async () => {
+    const said: Array<{ to: string; text: string; button?: { text: string; url: string } }> = [];
+    let refuse = false;
+    const send = async (to: string, text: string, button?: { text: string; url: string }) => { if (refuse) throw new Error("403"); said.push({ to, text, button }); };
+    const base = { settings: topics, texts, send };
+    const off = { settings: settingsOf({ "feature.reception_greeting": "off", "feature.reception_welcome": "off" }), texts, send };
+
+    expect(await greetOnStart({ ...base, isMember: async () => false }, "501")).toBe(true);
+    expect(said.at(-1)).toEqual({ to: "501", button: undefined, text: "Приветствуем! Если Вы ознакомились с кодексом Руси и готовы вступить в ДАО Русь, расскажите немного о себе: возраст, социальный портрет, где живете и чем занимаетесь." });
+    expect(await greetOnStart({ ...base, isMember: async () => true }, "501")).toBe(false);
+    expect(await greetOnStart({ ...base, isMember: async () => { throw new Error("telegram"); } }, "501")).toBe(true);
+    expect(await greetOnStart({ ...off, isMember: async () => false }, "501")).toBe(false);
+
+    const relay = (update: number, chat: number, direction = "private_to_forum", status = "sent") => pool.query(
+      `INSERT INTO reception_relay_updates(update_id, direction, forum_chat_id, private_chat_id, private_message_id, forum_message_id, status)
+       VALUES ($1::bigint, $2, -1001725482832, $3, $1::bigint, $1::bigint + 7000, $4)`, [update, direction, chat, status]);
+    const count = said.length;
+    await relay(1, 601);
+    expect(await acknowledgeIntroduction({ ...base, database: pool }, "601")).toBe(true);
+    expect(said.at(-1)).toMatchObject({ to: "601", text: "Спасибо, рассказ передан участникам. Ответим здесь же." });
+    await relay(2, 601);
+    expect(await acknowledgeIntroduction({ ...base, database: pool }, "601")).toBe(false);
+    // Replies relayed back to the person and failed relays do not count as their introduction.
+    await relay(3, 602, "forum_to_private"); await relay(4, 602, "private_to_forum", "failed");
+    expect(await acknowledgeIntroduction({ ...base, database: pool }, "602")).toBe(false);
+    await relay(5, 603);
+    expect(await acknowledgeIntroduction({ ...off, database: pool }, "603")).toBe(false);
+    expect(said).toHaveLength(count + 1);
+
+    const joinDeps = { ...base, database: pool, baseUrl };
+    expect(await welcomeAfterJoining(joinDeps, "701")).toBe(true);
+    expect(said.at(-1)).toEqual({ to: "701", text: "Добро пожаловать в ДАО Русь! Укажите город и пару интересов, чтобы вас нашли земляки и единомышленники.",
+      button: { text: "Открыть профиль", url: `https://t.me/DaoRusBot?startapp=${encodeStartPath("/profile")}` } });
+    expect(await Promise.all(Array.from({ length: 5 }, () => welcomeAfterJoining(joinDeps, "701")))).toEqual([false, false, false, false, false]);
+    expect(await welcomeAfterJoining({ ...off, database: pool, baseUrl }, "702")).toBe(false);
+    // Someone who never started the bot cannot be written to; nothing is recorded, so a later join may try again.
+    refuse = true;
+    await expect(welcomeAfterJoining(joinDeps, "703")).rejects.toThrow("403");
+    refuse = false;
+    expect(await welcomeAfterJoining(joinDeps, "703")).toBe(true);
+
+    const change = (oldStatus: string, newStatus: string, extra: object = {}) => ({ chat_member: {
+      old_chat_member: { status: oldStatus }, new_chat_member: { status: newStatus, user: { id: 801, is_bot: false, ...extra } } } });
+    expect(joinedUserId(change("left", "member"))).toBe("801");
+    expect(joinedUserId(change("kicked", "administrator"))).toBe("801");
+    expect(joinedUserId(change("member", "left"))).toBeNull();
+    expect(joinedUserId(change("member", "administrator"))).toBeNull();
+    expect(joinedUserId(change("left", "member", { is_bot: true }))).toBeNull();
+    expect(joinedUserId({ message: {} })).toBeNull();
+  });
+
+  it("links a newcomer's announcement to their own introduction in the reception topic", async () => {
+    const newcomer = await person("Мария Новая"), stranger = await person("Без рассказа");
+    await pool.query("UPDATE participants SET residence_name='Уфа', residence_type='город', residence_country='Россия' WHERE id = ANY($1::uuid[])", [[newcomer, stranger]]);
+    await pool.query("INSERT INTO external_identities(participant_id, provider, provider_subject, external_user_id) VALUES ($1, 'telegram', 'tg:901', '901'), ($2, 'telegram', 'tg:902', '902')", [newcomer, stranger]);
+    await pool.query(`INSERT INTO reception_relay_updates(update_id, direction, forum_chat_id, private_chat_id, private_message_id, forum_message_id, status, created_at) VALUES
+      (9001, 'private_to_forum', -1001725482832, 901, 1, 4411, 'sent', now() - interval '2 days'),
+      (9002, 'private_to_forum', -1001725482832, 901, 2, 4412, 'sent', now() - interval '1 day'),
+      (9003, 'forum_to_private', -1001725482832, 901, 3, 4400, 'sent', now() - interval '3 days'),
+      (9004, 'private_to_forum', -1009999999999, 901, 4, 4300, 'sent', now() - interval '4 days')`);
+    const withReception = { ...deps(), receptionTopicId: 77 };
+    expect(await syncNewcomerAnnouncement(withReception, newcomer)).toBe("announced");
+    expect(forum.calls.at(-1)!.buttons.at(-1)).toEqual({ text: "Представление", url: "https://t.me/c/1725482832/77/4411" });
+    expect(await syncNewcomerAnnouncement(withReception, stranger)).toBe("announced");
+    expect(forum.calls.at(-1)!.buttons.map((button) => button.text)).toEqual(["Профиль", "Кто рядом"]);
+    // Without a configured reception topic the announcement simply has no such button.
+    expect(await syncNewcomerAnnouncement(deps(), newcomer)).toBe("updated");
+    expect(forum.calls.at(-1)!.buttons.map((button) => button.text)).toEqual(["Профиль", "Кто рядом"]);
   });
 });

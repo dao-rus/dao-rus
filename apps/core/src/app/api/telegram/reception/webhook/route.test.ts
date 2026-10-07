@@ -5,7 +5,10 @@ const mocks = vi.hoisted(() => ({
   checkForumAndInvite: vi.fn(),
   observeForumMemberUpdate: vi.fn(),
   relayReceptionUpdate: vi.fn(),
+  start: vi.fn(), relayed: vi.fn(), joined: vi.fn(), announce: vi.fn(),
 }));
+vi.mock("../../../../../lib/reception-voice", () => ({ onReceptionStart: mocks.start, onReceptionRelayed: mocks.relayed, onForumMemberUpdate: mocks.joined }));
+vi.mock("../../../../../lib/guardian-forum-actions", () => ({ afterForumMemberUpdate: mocks.announce }));
 
 vi.mock("@/lib/config", () => ({
   telegramReceptionConfig: () => ({
@@ -48,6 +51,33 @@ describe("Reception webhook", () => {
       chat: { id: 42, type: "private" }, from: { id: 42 }, text: "/start core",
     } }))).status).toBe(200);
     expect(mocks.checkForumAndInvite).toHaveBeenCalledWith("42", "start");
+  });
+
+  it("gives the bot a voice only where a person is waiting for one", async () => {
+    const start = (text: string) => POST(request({ message: { chat: { id: 42, type: "private" }, from: { id: 42 }, text } }));
+    await start("/start");
+    expect(mocks.start).toHaveBeenCalledWith("42");
+    mocks.start.mockClear();
+    await start("/start core");
+    expect(mocks.start).not.toHaveBeenCalled();
+    // An introduction relayed from a private chat is acknowledged; a member's reply relayed back is not.
+    await POST(request({ update_id: 5, message: { chat: { id: 42, type: "private" }, from: { id: 42 }, message_id: 7, text: "О себе" } }));
+    expect(mocks.relayed).toHaveBeenCalledWith("42");
+    mocks.relayed.mockClear();
+    await POST(request({ update_id: 6, message: { chat: { id: -1001234567890, type: "supergroup" }, from: { id: 7 }, message_id: 9, text: "Ответ" } }));
+    mocks.relayReceptionUpdate.mockResolvedValue("failed");
+    await POST(request({ update_id: 7, message: { chat: { id: 42, type: "private" }, from: { id: 42 }, message_id: 8, text: "Ещё" } }));
+    expect(mocks.relayed).not.toHaveBeenCalled();
+    // Membership updates reach the welcome and the newcomer announcement only when Core observed them.
+    const update = { chat_member: { chat: { id: -1001234567890 } } };
+    await POST(request(update));
+    expect(mocks.joined).toHaveBeenCalledWith(update);
+    expect(mocks.announce).toHaveBeenCalledWith(update);
+    mocks.joined.mockClear(); mocks.announce.mockClear();
+    mocks.observeForumMemberUpdate.mockResolvedValue("ignored");
+    await POST(request(update));
+    expect(mocks.joined).not.toHaveBeenCalled();
+    expect(mocks.announce).not.toHaveBeenCalled();
   });
 
   it("passes membership updates to Core and never invokes invitation from a group message", async () => {
