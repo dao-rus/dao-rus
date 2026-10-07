@@ -12,6 +12,8 @@ export type ParticipantDirectoryEntry = {
   positiveCount: number;
   signalCounts: Record<LegacyProfileSignalKind, number>;
   residence: Residence | null;
+  // The first known moment the person entered the DAO forum.
+  joinedAt?: Date | null;
 };
 
 export type DirectorySort = "name" | "verification" | "reputation" | "core" | "joined";
@@ -36,8 +38,7 @@ export async function listParticipantsDirectoryWithDatabase(
   const orderBy = filters.sort === "verification" ? "verification_points DESC, "
     : filters.sort === "reputation" ? "positive_count DESC, "
     // Longest in the DAO first; people whose join date history does not reach go last.
-    : filters.sort === "joined" ? `(SELECT min(COALESCE((joined.payload->>'observed_at')::timestamptz, joined.created_at))
-        FROM events joined WHERE joined.participant_id = participant.id AND joined.event_type = 'forum.joined') ASC NULLS LAST, ` : "";
+    : filters.sort === "joined" ? "joined_at ASC NULLS LAST, " : "";
   const coreOnly = filters.sort === "core" ? `AND EXISTS (
           SELECT 1 FROM events core_login
            WHERE core_login.participant_id = participant.id
@@ -67,6 +68,9 @@ export async function listParticipantsDirectoryWithDatabase(
               WHERE reputation.subject_participant_id = participant.id
                 AND reputation.dimension = 'interaction_quality'
                 AND reputation.signal_type = 'positive' AND reputation.revoked_at IS NULL) AS positive_count,
+            (SELECT min(COALESCE((joined.payload->>'observed_at')::timestamptz, joined.created_at))
+               FROM events joined WHERE joined.participant_id = participant.id
+                AND joined.event_type = 'forum.joined') AS joined_at,
             signal_counts.need_count, signal_counts.can_count,
             signal_counts.want_count, signal_counts.have_count
        FROM participants participant
@@ -144,6 +148,7 @@ export async function listParticipantsDirectoryWithDatabase(
       need: Number(row.need_count ?? 0), can: Number(row.can_count ?? 0),
       want: Number(row.want_count ?? 0), have: Number(row.have_count ?? 0),
     },
+    joinedAt: row.joined_at ? new Date(String(row.joined_at)) : null,
     residence: row.residence_name && row.residence_type && row.residence_country
       ? {
           name: String(row.residence_name),

@@ -90,7 +90,7 @@ describe("/participants", () => {
       "participants.sort_label": "Сортировка:", "participants.sort_name": "Имя",
       "participants.sort_verification": "Топ-верификация",
       "participants.sort_reputation": "Топ-репутация",
-      "participants.sort_joined": "Стаж",
+      "participants.sort_joined": "Дата вступления",
       "participants.sort_core": "Ядро",
     } });
     mocks.listCommunityPosts.mockResolvedValue([]);
@@ -143,7 +143,8 @@ describe("/participants", () => {
     expect(text).not.toContain("Telegram ID");
     expect(text).not.toContain("Статус в ДАО");
     expect(text).not.toContain("Последний раз в Telegram");
-    expect(hrefs(page)).toContain(`/profile/${participantId}`);
+    // The name itself links to the profile (ParticipantName); the separate button is gone.
+    expect(textContent(page)).not.toContain("Открыть профиль");
     expect(hrefs(page)).not.toContain("/admin/participants");
   });
 

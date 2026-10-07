@@ -230,7 +230,7 @@ export default async function ProfilePage({ searchParams }: ProfilePageProps) {
           </div>
           <div><dt>Статус</dt><dd>{statusLabels[participant.membershipStatus] ?? participant.membershipStatus}</dd></div>
           {forumJoinedAt
-            ? <div><dt>{texts["profile.forum_since"]}</dt><dd><LocalDateTime value={forumJoinedAt.toISOString()} /></dd></div>
+            ? <div><dt>{texts["profile.forum_since"]}</dt><dd><LocalDateTime dateOnly value={forumJoinedAt.toISOString()} /></dd></div>
             : <div><dt>Дата регистрации</dt><dd><LocalDateTime value={participant.createdAt.toISOString()} /></dd></div>}
         </dl>
 

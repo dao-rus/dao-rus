@@ -183,7 +183,7 @@ const interfaceTextFieldDefinitions = [
   { section: "Сеть", key: "participants.sort_name", label: "Сортировка по имени", defaultValue: "Имя", multiline: false },
   { section: "Сеть", key: "participants.sort_verification", label: "Сортировка по верификации", defaultValue: "Топ-верификация", multiline: false },
   { section: "Сеть", key: "participants.sort_reputation", label: "Сортировка по репутации", defaultValue: "Топ-репутация", multiline: false },
-  { section: "Сеть", key: "participants.sort_joined", label: "Сортировка по дате вступления", defaultValue: "Стаж", multiline: false },
+  { section: "Сеть", key: "participants.sort_joined", label: "Сортировка по дате вступления", defaultValue: "Дата вступления", multiline: false },
   { section: "Сеть", key: "participants.sort_core", label: "Показать вошедших в Ядро", defaultValue: "Ядро", multiline: false },
   { section: "Рядом", key: "nearby.title", label: "Заголовок и кнопка раздела", defaultValue: "Рядом", multiline: false },
   { section: "Рядом", key: "nearby.lead", label: "Подзаголовок", defaultValue: "Участники ДАО по месту жительства.", multiline: false },

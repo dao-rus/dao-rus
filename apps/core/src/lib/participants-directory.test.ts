@@ -47,6 +47,7 @@ describe("participants directory", () => {
         hasTelegramPhoto: false,
         verificationPoints: 2, positiveCount: 3,
         signalCounts: { need: 0, can: 0, want: 0, have: 0 },
+        joinedAt: null,
         residence: null,
       },
       {
@@ -58,6 +59,7 @@ describe("participants directory", () => {
         hasTelegramPhoto: false,
         verificationPoints: 0, positiveCount: 0,
         signalCounts: { need: 0, can: 0, want: 0, have: 0 },
+        joinedAt: null,
         residence: null,
       },
     ]);

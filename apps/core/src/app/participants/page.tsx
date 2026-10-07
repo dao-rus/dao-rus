@@ -176,10 +176,8 @@ export default async function ParticipantsPage({ searchParams }: ParticipantsPag
                     })}
                   </div>
                 ) : null}
-                {!community ? <div className="participantDirectoryActions">
-                  <Link className="button secondary" href={`/profile/${participant.participantId}`}>
-                    Открыть профиль
-                  </Link>
+                {!community && participant.joinedAt ? <div className="participantDirectoryActions">
+                  <small className="muted">{texts["profile.forum_since"]} <LocalDateTime dateOnly value={participant.joinedAt.toISOString()} /></small>
                 </div> : null}
               </li>
             ))}
