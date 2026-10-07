@@ -8,7 +8,7 @@ import {
   getProfileAboutWithDatabase, getVisibleProfileAboutWithDatabase, listSignalTypesWithDatabase,
 } from "./profile-about";
 import {
-  consentRelayRevealWithDatabase, createRelayEncounterWithDatabase, getRelayEncounterWithDatabase,
+  consentRelayRevealWithDatabase, createRelayEncounterWithDatabase, respondToSignalWithDatabase, getRelayEncounterWithDatabase,
   listExchangeSignalsWithDatabase, sendRelayMessageWithDatabase, listRelayMessagesWithDatabase,
 } from "./relay";
 import {
@@ -243,6 +243,23 @@ describe.skipIf(!databaseUrl)("Exchange A1 on real PostgreSQL", () => {
     await setSignalReactionWithDatabase(pool, fans[3], blind, true);
     await createRelayEncounterWithDatabase(pool, fans[4], blind);
     expect(await rewardCount(blindOwner)).toBe(1);
+  });
+
+  it("keeps one anonymous dialog per responder and record, also under a double click", async () => {
+    const owner = await participant(), one = await participant(), two = await participant();
+    const blind = (await createProfileSignalWithDatabase(pool, owner, { kind: "have", label: "Мастерская", visibility: "network_blind" })).id;
+    const clicks = await Promise.all(Array.from({ length: 6 }, () => respondToSignalWithDatabase(pool, one, blind)));
+    expect(new Set(clicks.map((click) => click.encounterId)).size).toBe(1);
+    expect(clicks.filter((click) => click.created)).toHaveLength(1);
+    expect(clicks.find((click) => click.created)).toMatchObject({ authorId: owner });
+    const other = await respondToSignalWithDatabase(pool, two, blind);
+    expect(other.created).toBe(true);
+    expect(other.encounterId).not.toBe(clicks[0].encounterId);
+    expect((await pool.query("SELECT count(*)::int AS n FROM relay_encounters WHERE signal_id=$1", [blind])).rows[0].n).toBe(2);
+    // After a cancelled dialog the same person may start again; that is a new dialog, not a duplicate.
+    await pool.query("UPDATE relay_encounters SET status='cancelled' WHERE id=$1", [clicks[0].encounterId]);
+    expect(await respondToSignalWithDatabase(pool, one, blind)).toMatchObject({ created: true });
+    await expect(respondToSignalWithDatabase(pool, owner, blind)).rejects.toThrow();
   });
 
   it("preserves visibility, active-only reads and archive ownership for structured signals", async () => {

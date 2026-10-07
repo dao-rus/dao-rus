@@ -4,7 +4,7 @@ import { getCurrentParticipant } from "@/lib/session";
 import {
   cancelRelayEncounter,
   consentRelayReveal,
-  createRelayEncounter,
+  respondToSignal,
   RelayAccessError,
   RelayValidationError,
   sendRelayMessage,
@@ -14,6 +14,20 @@ import { CloserUnavailableError, openCloserDialog } from "../../../lib/closer";
 import { notifyCloser } from "../../../lib/closer-notify";
 
 export const runtime = "nodejs";
+
+// Content-free and best-effort; one unread notice is enough however many people answer meanwhile.
+async function notifyRelayResponse(authorId: string, encounterId: string) {
+  try {
+    const [{ pool }, { createNotification }, { readInterfaceTexts }] = await Promise.all([
+      import("../../../lib/db"), import("../../../lib/notifications"), import("../../../lib/interface-texts")]);
+    const unread = await pool.query(
+      "SELECT 1 FROM notifications WHERE participant_id = $1::uuid AND notification_type = 'relay.response' AND read_at IS NULL LIMIT 1", [authorId]);
+    if (unread.rowCount) return;
+    const { values: texts } = await readInterfaceTexts();
+    await createNotification({ participantId: authorId, notificationType: "relay.response", sourceType: "system", queueTelegram: true,
+      text: texts["relay.notify_response"], actionUrl: "/relay/" + encounterId, actionLabel: texts["relay.notify_action"] });
+  } catch (error) { console.error("Relay response notification failed", error); }
+}
 
 function redirectTo(path: string) {
   return NextResponse.redirect(new URL(path, appBaseUrl()), 303);
@@ -27,8 +41,12 @@ export async function POST(request: NextRequest) {
 
   try {
     if (action === "respond") {
-      const encounterId = await createRelayEncounter(participant.id, form.get("signal_id"));
-      return redirectTo("/relay/" + encounterId);
+      const response = await respondToSignal(participant.id, form.get("signal_id"));
+      // The author learns that someone answered, never who: identities open only by mutual consent.
+      if (response.created && response.authorId) {
+        await notifyRelayResponse(response.authorId, response.encounterId);
+      }
+      return redirectTo("/relay/" + response.encounterId);
     }
     if (action === "closer_respond") {
       const dialog = await openCloserDialog(participant.id, form.get("my_signal_id"), form.get("signal_id"));

@@ -3,6 +3,7 @@ import {
   cancelRelayEncounterWithDatabase,
   consentRelayRevealWithDatabase,
   createRelayEncounterWithDatabase,
+  respondToSignalWithDatabase,
   getRelayEncounterWithDatabase,
   listExchangeSignalsWithDatabase,
   listRelayMessagesWithDatabase,
@@ -45,21 +46,29 @@ describe("Blind Match privacy and Relay access", () => {
     const database = databaseWith(async () => ({ rowCount: 0, rows: [] }));
     await expect(createRelayEncounterWithDatabase(database, author, signal))
       .rejects.toThrow("unavailable");
-    const sql = database.query.mock.calls[0][0];
+    const sql = database.query.mock.calls.at(-1)![0];
     expect(sql).toContain("s.participant_id <> $2::uuid");
     expect(sql).toContain("s.status = 'active'");
     expect(sql).toContain("s.visibility = 'network_blind'");
     expect(sql).toContain("FOR UPDATE OF s");
   });
 
-  it("creates independent encounters for responses to one active signal", async () => {
-    let count = 0;
-    const database = databaseWith(async () => ({
-      rowCount: 1, rows: [{ id: count++ === 0 ? encounter : outsider }],
-    }));
+  it("creates a separate dialog for each responder, and returns a responder to their existing one", async () => {
+    const dialogs = new Map<string, string>();
+    const database = databaseWith(async (sql, values) => {
+      const key = String(values?.[1]);
+      if (sql.includes("SELECT id FROM relay_encounters")) {
+        return dialogs.has(key) ? { rowCount: 1, rows: [{ id: dialogs.get(key) }] } : { rowCount: 0, rows: [] };
+      }
+      dialogs.set(key, key === responder ? encounter : outsider);
+      return { rowCount: 1, rows: [{ id: dialogs.get(key), author_id: author }] };
+    });
+    expect(await respondToSignalWithDatabase(database, responder, signal)).toEqual({ encounterId: encounter, created: true, authorId: author });
+    expect(await respondToSignalWithDatabase(database, outsider, signal)).toEqual({ encounterId: outsider, created: true, authorId: author });
+    // The same person pressing "respond" again is led back, and the author is not told twice.
+    expect(await respondToSignalWithDatabase(database, responder, signal)).toEqual({ encounterId: encounter, created: false, authorId: null });
     expect(await createRelayEncounterWithDatabase(database, responder, signal)).toBe(encounter);
-    expect(await createRelayEncounterWithDatabase(database, outsider, signal)).toBe(outsider);
-    expect(database.query).toHaveBeenCalledTimes(2);
+    expect(database.query.mock.calls.filter(([sql]) => sql.includes("INSERT INTO relay_encounters"))).toHaveLength(2);
   });
 
   it("returns no encounter or messages for an outsider and forbids outsider messages", async () => {

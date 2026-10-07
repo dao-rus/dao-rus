@@ -60,10 +60,17 @@ export async function listExchangeSignalsWithDatabase(
   }));
 }
 
-export async function createRelayEncounterWithDatabase(
-  database: RelayDatabase, responderId: string, signalIdValue: unknown,
-): Promise<string> {
-  const signalId = requiredUuid(signalIdValue);
+// One dialog per responder and record: a second press on "respond" returns to the dialog that
+// already exists instead of starting another one, which would look to the author like a new person.
+export type RelayResponse = { encounterId: string; created: boolean; authorId: string | null };
+type RelayClient = RelayDatabase & { release(): void };
+
+async function respond(database: RelayDatabase, responderId: string, signalId: string): Promise<RelayResponse> {
+  const existing = await database.query(
+    `SELECT id FROM relay_encounters
+      WHERE signal_id = $1::uuid AND responder_id = $2::uuid AND status IN ('active', 'revealed')
+      ORDER BY created_at, id LIMIT 1`, [signalId, responderId]);
+  if (existing.rowCount) return { encounterId: String(existing.rows[0].id), created: false, authorId: null };
   const result = await database.query(
     `INSERT INTO relay_encounters(signal_id, author_id, responder_id)
      SELECT s.id, s.participant_id, $2::uuid
@@ -74,11 +81,36 @@ export async function createRelayEncounterWithDatabase(
         AND s.kind IN ('need', 'have')
         AND s.participant_id <> $2::uuid
       FOR UPDATE OF s
-      RETURNING id`,
+      RETURNING id, author_id`,
     [signalId, responderId],
   );
   if (!result.rowCount) throw new RelayAccessError();
-  return String(result.rows[0].id);
+  return { encounterId: String(result.rows[0].id), created: true, authorId: String(result.rows[0].author_id) };
+}
+
+export async function respondToSignalWithDatabase(
+  database: RelayDatabase & { connect?: () => Promise<RelayClient> }, responderId: string, signalIdValue: unknown,
+): Promise<RelayResponse> {
+  const signalId = requiredUuid(signalIdValue);
+  if (typeof database.connect !== "function") return respond(database, responderId, signalId);
+  // The lock serializes a double click, so "look, then create" cannot produce two dialogs.
+  const client = await database.connect();
+  try {
+    await client.query("BEGIN");
+    await client.query("SELECT pg_advisory_xact_lock(hashtext($1))", [`relay:${signalId}:${responderId}`]);
+    const response = await respond(client, responderId, signalId);
+    await client.query("COMMIT");
+    return response;
+  } catch (error) {
+    try { await client.query("ROLLBACK"); } catch { /* Preserve the original error. */ }
+    throw error;
+  } finally { client.release(); }
+}
+
+export async function createRelayEncounterWithDatabase(
+  database: RelayDatabase, responderId: string, signalIdValue: unknown,
+): Promise<string> {
+  return (await respondToSignalWithDatabase(database, responderId, signalIdValue)).encounterId;
 }
 
 const encounterSelect = `SELECT e.id, e.status, s.kind, s.body,
@@ -206,6 +238,8 @@ export const listExchangeSignals = (viewerId: string, kind: SignalTypeKey) =>
   listExchangeSignalsWithDatabase(pool, viewerId, kind);
 export const createRelayEncounter = (responderId: string, signalId: unknown) =>
   createRelayEncounterWithDatabase(pool, responderId, signalId);
+export const respondToSignal = (responderId: string, signalId: unknown) =>
+  respondToSignalWithDatabase(pool as never, responderId, signalId);
 export const listRelayEncounters = (viewerId: string, archive: boolean) =>
   listRelayEncountersWithDatabase(pool, viewerId, archive);
 export const getRelayEncounter = (viewerId: string, encounterId: unknown) =>

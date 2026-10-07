@@ -231,6 +231,8 @@ const interfaceTextFieldDefinitions = [
   { section: "Обмен", key: "exchange.add_have", label: "Добавить Есть", defaultValue: "Добавить «У меня есть»", multiline: false },
   { section: "Мне нужно", key: "need.title", label: "Заголовок", defaultValue: "Что вам нужно?", multiline: false },
   { section: "Мне нужно", key: "need.lead", label: "Вводный текст", defaultValue: "Опишите потребность своими словами. Запись появится в вашем профиле.", multiline: true },
+  { section: "Диалоги", key: "relay.notify_response", label: "Уведомление автору об отклике", defaultValue: "На вашу запись откликнулись.", multiline: false },
+  { section: "Диалоги", key: "relay.notify_action", label: "Уведомление об отклике: кнопка", defaultValue: "Открыть диалог", multiline: false },
   { section: "Диалоги", key: "relay.list_title", label: "Заголовок списка", defaultValue: "Диалоги", multiline: false },
   { section: "Диалоги", key: "relay.archive_title", label: "Заголовок архива", defaultValue: "Архив диалогов", multiline: false, pageLabel: "Архив диалогов", pageHref: "/relay?archive=1" },
   { section: "Диалоги", key: "relay.dialog_title", label: "Заголовок диалога", defaultValue: "Диалог", multiline: false, pageLabel: "Диалог", pageHref: undefined },

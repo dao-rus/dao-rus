@@ -13,7 +13,7 @@ const mocks = vi.hoisted(() => ({
 vi.mock("@/lib/config", () => ({ appBaseUrl: () => "https://core.daorus.org" }));
 vi.mock("@/lib/session", () => ({ getCurrentParticipant: mocks.participant }));
 vi.mock("@/lib/relay", () => ({
-  createRelayEncounter: mocks.respond,
+  respondToSignal: mocks.respond,
   sendRelayMessage: mocks.message,
   consentRelayReveal: mocks.consent,
   cancelRelayEncounter: mocks.cancel,
@@ -47,7 +47,7 @@ describe("Relay form adapter", () => {
   });
 
   it("creates a private encounter and opens its dialog", async () => {
-    mocks.respond.mockResolvedValue(encounterId);
+    mocks.respond.mockResolvedValue({ encounterId, created: false, authorId: null });
     const response = await POST(request({ action: "respond", signal_id: "signal-id" }));
     expect(mocks.respond).toHaveBeenCalledWith(participantId, "signal-id");
     expect(response.status).toBe(303);
@@ -68,6 +68,12 @@ describe("Relay form adapter", () => {
     const denied = await POST(request({ action: "closer_respond", my_signal_id: "mine", signal_id: "theirs" }));
     expect(denied.status).toBe(404);
     expect(denied.headers.get("location")).toBeNull();
+  });
+
+  it("leads back to an existing dialog without creating or announcing anything new", async () => {
+    mocks.respond.mockResolvedValue({ encounterId, created: false, authorId: null });
+    const response = await POST(request({ action: "respond", signal_id: "signal-id" }));
+    expect(response.headers.get("location")).toBe("https://core.daorus.org/relay/" + encounterId);
   });
 
   it("rejects a self-response, closed signal, or foreign encounter without exposing a path", async () => {
