@@ -37,6 +37,7 @@ export default async function GuardianDeparturesPage() {
       {" · "}{event.participantId ? <Link href={`/profile/${event.participantId}`}>{departureName(event) ?? texts["guardian.profile_unavailable"]}</Link> : texts["guardian.profile_unavailable"]}
       {event.archivedDisplayName && event.archivedDisplayName !== departureName(event) ? <> · {event.archivedDisplayName}</> : null}
       {handle(event) ? <> · {handle(event)}</> : null}
+      {event.joinedAt ? <> · {texts["profile.forum_since"]} {event.joinedAt.toLocaleDateString("ru-RU", { timeZone: "Europe/Moscow", dateStyle: "long" })}</> : null}
       {" · "}{texts[event.type === "forum.left" ? "guardian.departure_left" : "guardian.departure_removed"]}
     </li>)}</ul> : <p className="muted">{texts["guardian.departures_empty"]}</p>}
   </section></main>;

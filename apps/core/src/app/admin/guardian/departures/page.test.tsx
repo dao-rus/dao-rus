@@ -50,6 +50,15 @@ describe("Guardian full departure chronology", () => {
     expect(content).toContain("Имя со скриншота · @shot");
     expect(content).not.toContain("Участник форума");
   });
+  it("shows the arrival date when it is known", async () => {
+    mocks.history.mockResolvedValue({ total: 2, last30Days: 0, events: [
+      { id: "2", participantId: "a", displayName: "Знаем", joinedAt: new Date("2023-10-14T12:00:00Z"), type: "forum.left", observedAt: new Date("2026-10-05T10:00:00Z") },
+      { id: "1", participantId: "b", displayName: "Не знаем", joinedAt: null, type: "forum.left", observedAt: new Date("2026-10-04T10:00:00Z") },
+    ] });
+    const content = text(await Page()).replace(/\s+/gu, " ");
+    expect(content).toContain("В ДАО с 14 октября 2023 г.");
+    expect(content.match(/В ДАО с/gu)).toHaveLength(1);
+  });
   it("renders empty history", async () => {
     mocks.history.mockResolvedValue({ total: 0, last30Days: 0, events: [] });
     expect(text(await Page())).toContain("Зарегистрированных убытий пока нет.");

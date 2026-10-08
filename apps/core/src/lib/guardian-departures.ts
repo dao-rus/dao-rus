@@ -5,6 +5,8 @@ export type GuardianDeparture = {
   archivedUsername: string | null; archivedDisplayName: string | null;
   // What the person is known by now, for profiles still named by the placeholder.
   telegramUsername?: string | null; telegramOwnName?: string | null;
+  // Earliest known arrival to the forum; null when the Core has no record of it.
+  joinedAt?: Date | null;
 };
 
 export async function getGuardianDeparturesWithDatabase(database: Database) {
@@ -12,6 +14,9 @@ export async function getGuardianDeparturesWithDatabase(database: Database) {
     `SELECT event.id, event.participant_id, participant.display_name, event.event_type,
             telegram.username AS telegram_username,
             NULLIF(btrim(concat_ws(' ', telegram.first_name, telegram.last_name)), '') AS telegram_own_name,
+            (SELECT min(COALESCE((joined.payload->>'observed_at')::timestamptz, joined.created_at))
+               FROM events joined WHERE joined.participant_id = event.participant_id
+                AND joined.event_type = 'forum.joined') AS joined_at,
             event.payload->>'archived_username' AS archived_username,
             event.payload->>'archived_display_name' AS archived_display_name,
             COALESCE((event.payload->>'observed_at')::timestamptz, event.created_at) AS observed_at,
@@ -32,6 +37,7 @@ export async function getGuardianDeparturesWithDatabase(database: Database) {
       archivedDisplayName: row.archived_display_name == null ? null : String(row.archived_display_name),
       telegramUsername: row.telegram_username == null || !String(row.telegram_username).trim() ? null : String(row.telegram_username),
       telegramOwnName: row.telegram_own_name == null ? null : String(row.telegram_own_name),
+      joinedAt: row.joined_at == null ? null : new Date(String(row.joined_at)),
       observedAt: new Date(String(row.observed_at)), type: row.event_type as GuardianDeparture["type"],
     })),
   };
