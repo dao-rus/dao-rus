@@ -271,39 +271,53 @@ export async function observeForumMemberUpdate(
   return result ? "observed" : "ignored";
 }
 
-// Whoever joins the forum is visible to its members by name there, so Core shows the same name
-// instead of a nameless placeholder. Only empty fields are filled: a later login knows better,
-// and a name the person chose in Core is never replaced.
+// Core shows a person who has not logged in only under the name they gave themselves in Telegram.
+// A name from the MTProto roster is the exporter's own contact label for that person (Telegram returns
+// contact names to the account that saved them), so it must never become a public display name.
+// Login sets the name from the person's own profile; a name chosen in Core is never touched.
+const OWN_NAME = `COALESCE(NULLIF(btrim(concat_ws(' ', identity.first_name, identity.last_name)), ''),
+  NULLIF(btrim(identity.username), ''), 'Участник форума')`;
+const NAME_FROM_OWN_TELEGRAM = `FROM external_identities identity
+  WHERE identity.participant_id = p.id AND identity.provider = 'telegram'
+    AND NOT p.display_name_chosen_in_core
+    AND NOT EXISTS (SELECT 1 FROM events login WHERE login.participant_id = p.id AND login.event_type = 'participant.logged_in')
+    AND p.display_name IS DISTINCT FROM ${OWN_NAME}`;
+
+export async function useOwnTelegramNames(
+  database: Pick<ForumDatabase, "query">, apply: boolean, telegramUserId?: string,
+): Promise<number> {
+  const only = telegramUserId ? " AND identity.external_user_id = $1" : "";
+  const values = telegramUserId ? [telegramUserId] : [];
+  const result = apply
+    ? await database.query(`UPDATE participants p SET display_name = ${OWN_NAME}, updated_at = now() ${NAME_FROM_OWN_TELEGRAM}${only}`, values)
+    : await database.query(`SELECT count(*)::integer AS count FROM participants p, LATERAL (SELECT 1 ${NAME_FROM_OWN_TELEGRAM}${only}) own`, values);
+  return apply ? result.rowCount ?? 0 : Number(result.rows[0]?.count ?? 0);
+}
+
 export async function rememberForumMemberName(
   database: ForumDatabase, userId: string, user: Record<string, unknown> | null,
 ): Promise<void> {
   const text = (value: unknown) => typeof value === "string" && value.trim() ? value.trim().slice(0, 128) : null;
   const firstName = text(user?.first_name), lastName = text(user?.last_name), username = text(user?.username);
-  const name = [firstName, lastName].filter(Boolean).join(" ") || username;
-  if (!name) return;
+  if (!firstName && !lastName && !username) return;
+  // Only empty fields: a later login knows better.
   await database.query(
-    `WITH named AS (
-       UPDATE external_identities identity
-          SET username = COALESCE(identity.username, $2), first_name = COALESCE(identity.first_name, $3),
-              last_name = COALESCE(identity.last_name, $4), updated_at = now()
-        WHERE identity.provider = 'telegram' AND identity.external_user_id = $1
-          AND (identity.username IS NULL OR identity.first_name IS NULL)
-       RETURNING identity.participant_id)
-     UPDATE participants p SET display_name = $5, updated_at = now()
-       FROM named WHERE p.id = named.participant_id
-        AND NOT p.display_name_chosen_in_core AND p.display_name = 'Участник форума'`,
-    [userId, username, firstName, lastName, name],
+    `UPDATE external_identities identity
+        SET username = COALESCE(identity.username, $2), first_name = COALESCE(identity.first_name, $3),
+            last_name = COALESCE(identity.last_name, $4), updated_at = now()
+      WHERE identity.provider = 'telegram' AND identity.external_user_id = $1
+        AND (identity.username IS NULL OR (identity.first_name IS NULL AND identity.last_name IS NULL))`,
+    [userId, username, firstName, lastName],
   );
+  await useOwnTelegramNames(database, true, userId);
 }
 
-// One-off: forum members whose own Telegram name Core never saw (joined before names were remembered,
-// or known only from a roster whose names may be the exporter's contact labels). The reception bot,
-// a forum administrator, reads the name each person set; only empty fields are filled, and the
-// display name changes only while it is still the placeholder.
+// One-off: the reception bot, a forum administrator, reads the name each forum member set in Telegram
+// where Core never saw it, then every profile without a login is shown under its own Telegram name.
 export async function backfillForumMemberNames(
   database: ForumDatabase, apply: boolean,
   fetchUser?: (userId: string) => Promise<Record<string, unknown> | null>,
-): Promise<{ placeholders: number; named: number; unavailable: number }> {
+): Promise<{ placeholders: number; named: number; unavailable: number; renamed: number }> {
   const { token, forumChatId } = telegramReceptionConfig();
   const read = fetchUser ?? (async (userId: string) => {
     if (!token || !forumChatId) throw new Error("Reception bot is not configured");
@@ -313,11 +327,10 @@ export async function backfillForumMemberNames(
   const pending = await database.query(
     `SELECT identity.external_user_id FROM participants p
        JOIN external_identities identity ON identity.participant_id = p.id AND identity.provider = 'telegram'
-       JOIN participant_forum_onboarding forum ON forum.participant_id = p.id AND forum.forum_status = 'joined'
       WHERE identity.external_user_id IS NOT NULL
         AND identity.first_name IS NULL AND identity.last_name IS NULL
       ORDER BY p.created_at`);
-  const result = { placeholders: pending.rows.length, named: 0, unavailable: 0 };
+  const result = { placeholders: pending.rows.length, named: 0, unavailable: 0, renamed: 0 };
   for (const [index, row] of pending.rows.entries()) {
     // Stay well under the Bot API's per-bot request rate.
     if (index && !fetchUser) await new Promise((resolve) => setTimeout(resolve, 60));
@@ -327,5 +340,7 @@ export async function backfillForumMemberNames(
     result.named++;
     if (apply) await rememberForumMemberName(database, String(row.external_user_id), user);
   }
+  // Whoever stays unread falls back to @username or the placeholder: a roster name is never kept.
+  result.renamed = await useOwnTelegramNames(database, apply);
   return result;
 }

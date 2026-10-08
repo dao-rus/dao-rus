@@ -202,9 +202,10 @@ describe("forum onboarding", () => {
       chat: { id: -1001234567890 }, date: 1790858400 + id, old_chat_member: { status: old },
       new_chat_member: { status, user: { id: 42, first_name: " Анна ", last_name: "Иванова", username: "anna" } } } });
     await observeForumMemberUpdate(update(1, "left", "member"), database);
-    const named = query.mock.calls.filter(([sql]) => String(sql).includes("SET display_name"));
-    expect(named).toHaveLength(1);
-    expect(named[0][1]).toEqual(["42", "anna", "Анна", "Иванова", "Анна Иванова"]);
+    const identity = query.mock.calls.filter(([sql]) => String(sql).includes("UPDATE external_identities identity"));
+    expect(identity).toHaveLength(1);
+    expect(identity[0][1]).toEqual(["42", "anna", "Анна", "Иванова"]);
+    expect(query.mock.calls.filter(([sql]) => String(sql).includes("SET display_name"))).toHaveLength(1);
     await observeForumMemberUpdate(update(2, "member", "left"), database);
     expect(query.mock.calls.filter(([sql]) => String(sql).includes("SET display_name"))).toHaveLength(1);
   });

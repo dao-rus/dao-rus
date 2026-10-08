@@ -132,37 +132,47 @@ describe.skipIf(!databaseUrl)("introduction import on real PostgreSQL", () => {
     await pool.query("UPDATE participants SET display_name = 'Вера из Ядра', display_name_chosen_in_core = true WHERE id = $1", [known.id]);
     await join(Number(known.telegram), { first_name: "Другое", username: "other" });
     expect(await shown(Number(known.telegram))).toMatchObject({ display_name: "Вера из Ядра", username: "vera", first_name: "Вера" });
+    // A roster contact label is replaced by the person's own name as soon as they come back through the door.
+    const labelled = await person();
+    await pool.query("UPDATE participants SET display_name = 'Мой смешной контакт' WHERE id = $1", [labelled.id]);
+    await join(Number(labelled.telegram), { first_name: "Пётр", last_name: "Сидоров" });
+    expect((await shown(Number(labelled.telegram))).display_name).toBe("Пётр Сидоров");
   });
 
-  it("backfills names only for placeholder profiles in the forum", async () => {
+  it("never keeps a roster contact label as a public name: own Telegram name, else @username, else the placeholder", async () => {
     process.env.TELEGRAM_FORUM_CHAT_ID = "-1001725482832";
     const { backfillForumMemberNames } = await import("./telegram-forum-onboarding");
-    const inForum = (id: string) => pool.query("INSERT INTO participant_forum_onboarding(participant_id, forum_status, observed_at) VALUES ($1, 'joined', now())", [id]);
-    const nameless = await person(), gone = await person(), outside = await person(), chosen = await person();
-    await Promise.all([inForum(nameless.id), inForum(gone.id), inForum(chosen.id)]);
+    const nameless = await person(), labelled = await person(), chosen = await person(), loggedIn = await person();
+    const setName = (id: string, name: string) => pool.query("UPDATE participants SET display_name = $2 WHERE id = $1", [id, name]);
+    // What an MTProto roster import left behind before October 2: the exporter's own label for a contact.
+    await setName(labelled.id, "Сантехник Вася (смешной)");
+    await pool.query("UPDATE external_identities SET username = 'vasya_real' WHERE participant_id = $1", [labelled.id]);
+    await setName(chosen.id, "Имя, выбранное в Ядре");
     await pool.query("UPDATE participants SET display_name_chosen_in_core = true WHERE id = $1", [chosen.id]);
+    await setName(loggedIn.id, "Имя со входа");
+    await pool.query("INSERT INTO events(event_type, participant_id, payload) VALUES ('participant.logged_in', $1, '{}')", [loggedIn.id]);
     const asked: string[] = [];
     const fetchUser = async (userId: string) => { asked.push(userId);
-      return userId === nameless.telegram ? { id: Number(userId), first_name: "Глеб", username: "gleb" }
+      return userId === nameless.telegram ? { id: Number(userId), first_name: "Глеб", last_name: "Орлов", username: "gleb" }
         : userId === chosen.telegram ? { id: Number(userId), first_name: "Настоящее", last_name: "Имя" } : null; };
     const name = async (id: string) => String((await pool.query("SELECT display_name FROM participants WHERE id = $1", [id])).rows[0].display_name);
+
     const dry = await backfillForumMemberNames(pool, false, fetchUser);
-    expect(dry.named).toBe(2);
-    expect(await name(nameless.id)).toBe("Участник форума");
-    asked.length = 0;
-    const applied = await backfillForumMemberNames(pool, true, fetchUser);
-    expect(applied).toMatchObject({ named: 2 });
-    expect(applied.unavailable).toBeGreaterThanOrEqual(1);
-    expect(asked).toContain(gone.telegram);
-    expect(asked).not.toContain(outside.telegram);
-    // A name chosen in Core stays; the person's own Telegram name is still recorded beside it.
-    expect(asked).toContain(chosen.telegram);
-    expect(await name(chosen.id)).toBe("Участник форума");
+    expect(dry.named).toBeGreaterThanOrEqual(2);
+    expect(dry.renamed).toBeGreaterThanOrEqual(1);
+    expect(await name(labelled.id)).toBe("Сантехник Вася (смешной)");
+
+    await backfillForumMemberNames(pool, true, fetchUser);
+    expect(await name(nameless.id)).toBe("Глеб Орлов");
+    expect(await name(labelled.id)).toBe("vasya_real");
+    expect(await name(chosen.id)).toBe("Имя, выбранное в Ядре");
+    expect(await name(loggedIn.id)).toBe("Имя со входа");
     expect((await pool.query("SELECT first_name, last_name FROM external_identities WHERE participant_id = $1", [chosen.id])).rows[0])
       .toEqual({ first_name: "Настоящее", last_name: "Имя" });
-    expect(await name(nameless.id)).toBe("Глеб");
-    expect(await name(gone.id)).toBe("Участник форума");
-    expect((await backfillForumMemberNames(pool, true, fetchUser)).named).toBe(0);
+    expect(asked).toContain(labelled.telegram);
+    const again = await backfillForumMemberNames(pool, true, fetchUser);
+    expect(again.renamed).toBe(0);
+    expect(await name(labelled.id)).toBe("vasya_real");
   });
 
   it("tells how a person left exactly: silently from the forum, by decision from the DAO, or not at all", async () => {
