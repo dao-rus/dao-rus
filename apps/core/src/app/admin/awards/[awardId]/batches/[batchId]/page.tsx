@@ -1,9 +1,9 @@
-import Link from "next/link";
 import { notFound } from "next/navigation";
 import { requireAwardAdmin, awardRouteId } from "@/lib/award-admin";
 import { pool } from "@/lib/db";
 import { readInterfaceTexts } from "@/lib/interface-texts";
 import { selectParticipantAudienceWithDatabase, audienceConditions, type AudienceFilters } from "@/lib/participant-audience";
+import { AdminCrumbs } from "@/components/admin-crumbs";
 import { AwardNotice } from "@/components/award-content";
 import { AwardLink } from "@/components/award-link";
 import { UserText } from "@/components/user-text";
@@ -33,7 +33,7 @@ export default async function AwardBatchPage({ params, searchParams }: {
     const options = draft ? await selectParticipantAudienceWithDatabase(pool, {}, "awards") : null;
     const canFinalize = candidates.rows.some(c => c.status === "included") && candidates.rows.every(c => c.status === "excluded" || (!c.instance_id && String(c.reason).trim()));
     const hidden = (action: string) => <><input type="hidden" name="batchId" value={batchId}/><input type="hidden" name="action" value={action}/></>;
-    return <main className="shell"><section className="card"><Link href={`/admin/awards/${awardId}`}>{batch.name}</Link>
+    return <main className="shell"><section className="card"><AdminCrumbs href="/admin/awards" trail={[{ label: batch.name, href: `/admin/awards/${awardId}` }, { label: texts[`award.${batch.kind as "regular" | "remint"}`] }]}/>
     <h1>{texts[`award.${batch.kind as "regular" | "remint"}`]} · {texts[`award.${draft ? "draft" : "finalized"}`]}</h1>
     <p><LocalDateTime value={batch.created_at.toISOString()}/>{batch.finalized_at ? <> · <LocalDateTime value={batch.finalized_at.toISOString()}/></> : null}</p>
     <AwardNotice notice={query.award_update} texts={texts}/>

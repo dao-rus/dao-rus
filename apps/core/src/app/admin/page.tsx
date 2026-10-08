@@ -1,7 +1,7 @@
 import Link from "next/link";
 import type { Metadata } from "next";
 import { redirect } from "next/navigation";
-import { hasPrototypeAdminAccess } from "@/lib/config";
+import { visibleAdminGroups } from "../../lib/admin-access";
 import { CoreNavigation } from "../../components/core-navigation";
 import { getCurrentParticipant } from "@/lib/session";
 
@@ -11,7 +11,8 @@ export const metadata: Metadata = { title: "Управление" };
 export default async function AdminPage() {
   const participant = await getCurrentParticipant();
   if (!participant) redirect("/");
-  if (!hasPrototypeAdminAccess(participant.id)) redirect("/profile");
+  const groups = visibleAdminGroups(participant.id);
+  if (groups.length === 0) redirect("/profile");
   return (
     <main className="shell">
       <section className="card profile">
@@ -20,14 +21,18 @@ export default async function AdminPage() {
           <div><div className="eyebrow">DAO Core</div><h1>Управление</h1></div>
           <Link className="button secondary" href="/profile">К профилю</Link>
         </div>
-        <nav className="actions" aria-label="Разделы управления">
-          <Link className="button secondary" href="/admin/participants">Реестр ДАО</Link>
-          <Link className="button secondary" href="/admin/interface">Тексты интерфейса</Link>
-          <Link className="button secondary" href="/admin/closer">Цели «Ближе»</Link>
-          <Link className="button secondary" href="/admin/rewards">Тарифы DARUS</Link>
-          <Link className="button secondary" href="/admin/reputation">История репутации</Link>
-          <Link className="button secondary" href="/admin/guardian">Хранитель</Link>
-        </nav>
+        {groups.map((group) => (
+          <section className="adminGroup" key={group.key} aria-labelledby={`admin-group-${group.key}`}>
+            <h2 id={`admin-group-${group.key}`}>{group.title}</h2>
+            <ul>
+              {group.sections.map((section) => (
+                <li key={section.href}>
+                  <Link href={section.href}><strong>{section.title}</strong><span>{section.hint}</span></Link>
+                </li>
+              ))}
+            </ul>
+          </section>
+        ))}
       </section>
     </main>
   );

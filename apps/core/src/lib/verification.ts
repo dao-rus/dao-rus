@@ -476,6 +476,40 @@ export async function addVerificationRootWithDatabase(
   }
 }
 
+export type VerificationRootEntry = {
+  subjectId: string;
+  displayName: string;
+  addedAt: Date;
+  addedByName: string | null;
+};
+
+// Admin-only list of the people the verification graph starts from, oldest first.
+export async function listVerificationRootsWithDatabase(database: VerificationDatabase): Promise<VerificationRootEntry[]> {
+  const client = await database.connect();
+  try {
+    const result = await client.query(
+      `SELECT root.subject_id, subject.display_name, root.created_at, adder.display_name AS added_by_name
+         FROM verification_roots root
+         JOIN participants subject ON subject.id = root.subject_id
+         LEFT JOIN participants adder ON adder.id = root.added_by_participant_id
+        ORDER BY root.created_at, root.subject_id`,
+    );
+    return result.rows.map((row) => ({
+      subjectId: String(row.subject_id),
+      displayName: String(row.display_name),
+      addedAt: new Date(String(row.created_at)),
+      addedByName: row.added_by_name === null ? null : String(row.added_by_name),
+    }));
+  } finally {
+    client.release();
+  }
+}
+
+export async function listVerificationRoots() {
+  const { pool } = await import("./db");
+  return listVerificationRootsWithDatabase(pool);
+}
+
 export async function createVerificationAttestation(
   verifierSubjectId: string,
   subjectId: string,

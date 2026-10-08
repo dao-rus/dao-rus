@@ -1,5 +1,5 @@
 import { getOwnAwardOffers, getAwardBadges } from "@/lib/award-views";
-import { hasAwardCapability } from "@/lib/award-access";
+import { hasAnyAdminSection } from "../../lib/admin-access";
 import { OwnAwards, AwardNotice } from "../../components/award-content";
 import { ParticipantName } from "../../components/participant-name";
 import Link from "next/link";
@@ -9,7 +9,7 @@ import { LocalDateTime } from "@/components/local-date-time";
 import { CoreNavigation } from "../../components/core-navigation";
 import { TelegramAvatar } from "@/components/telegram-avatar";
 import { getActivitySummary } from "@/lib/activity";
-import { hasPrototypeAdminAccess, telegramReceptionConfig } from "@/lib/config";
+import { telegramReceptionConfig } from "@/lib/config";
 import { readInterfaceTexts } from "@/lib/interface-texts";
 import {
   getMembershipHistory,
@@ -86,7 +86,7 @@ export default async function ProfilePage({ searchParams }: ProfilePageProps) {
   const forumAnnouncement = await import("../../lib/newcomer-announcement")
     .then((module) => module.readForumAnnouncementChoice(participant.id)).catch(() => null);
   const [awardOffers, awardBadges] = await Promise.all([getOwnAwardOffers(participant.id), getAwardBadges([participant.id])]);
-  const hasAdminAccess = hasPrototypeAdminAccess(participant.id);
+  const hasAdminAccess = hasAnyAdminSection(participant.id);
   const receptionConfig = telegramReceptionConfig();
   const receptionUsername = receptionConfig.token && receptionConfig.webhookSecret &&
     receptionConfig.forumChatId && receptionConfig.forumInviteUrl
@@ -119,7 +119,6 @@ export default async function ProfilePage({ searchParams }: ProfilePageProps) {
             {receptionUsername ? <a className="button secondary" href={`https://t.me/${receptionUsername}?start=core`}>
               {texts["profile.reception_link"]}
             </a> : null}
-            {hasAwardCapability(participant.id,"award.establish") ? <Link className="button secondary" href="/admin/awards">{texts["award.title"]}</Link> : null}
             {hasAdminAccess ? <Link className="button secondary" href="/admin">Управление</Link> : null}
             <form action="/api/auth/logout" method="post">
               <button className="button secondary" type="submit">Выйти</button>

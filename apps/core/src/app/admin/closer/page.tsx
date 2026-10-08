@@ -1,7 +1,7 @@
-import Link from "next/link";
 import type { Metadata } from "next";
 import { redirect } from "next/navigation";
 import { hasPrototypeAdminAccess } from "@/lib/config";
+import { AdminCrumbs } from "../../../components/admin-crumbs";
 import { CoreNavigation } from "../../../components/core-navigation";
 import { getCurrentParticipant } from "@/lib/session";
 import { listCloserGoals } from "@/lib/closer";
@@ -24,12 +24,11 @@ export default async function CloserGoalsPage({ searchParams }: { searchParams: 
         <CoreNavigation />
         <div className="profileHeader">
           <div>
-            <div className="eyebrow">DAO Core</div>
+            <AdminCrumbs href="/admin/closer" />
             <h1>Цели «Ближе»</h1>
             <p className="muted">По цели ищутся совпадения. Цель нельзя удалить: отключённая перестаёт предлагаться
               и участвовать в подборе, а записи с ней сохраняются. «Спрашивать пол» добавляет в форму поля «Я» и «Ищу».</p>
           </div>
-          <Link className="button secondary" href="/admin">К управлению</Link>
         </div>
         {message ? <p className={params.closer_update === "invalid" ? "formError" : "formNotice"}>{message}</p> : null}
         <form className="interfaceForm" action="/api/admin/closer" method="post">

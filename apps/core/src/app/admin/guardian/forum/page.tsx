@@ -1,7 +1,7 @@
-import Link from "next/link";
 import type { Metadata } from "next";
 import { redirect } from "next/navigation";
 import { hasPrototypeAdminAccess, telegramBotToken, telegramReceptionConfig } from "@/lib/config";
+import { AdminCrumbs } from "../../../../components/admin-crumbs";
 import { CoreNavigation } from "../../../../components/core-navigation";
 import { getCurrentParticipant } from "@/lib/session";
 import { readInterfaceTexts } from "@/lib/interface-texts";
@@ -46,11 +46,10 @@ export default async function GuardianForumPage({ searchParams }: { searchParams
         <CoreNavigation />
         <div className="profileHeader">
           <div>
-            <div className="eyebrow">DAO Core · Хранитель</div>
+            <AdminCrumbs href="/admin/guardian/forum" />
             <h1>Форум и маршруты</h1>
             <p className="muted">Что Хранитель делает между Ядром и форумом. Каждую функцию можно выключить; уже опубликованные сообщения при этом остаются.</p>
           </div>
-          <Link className="button secondary" href="/admin/guardian">К Хранителю</Link>
         </div>
         {ready ? null : <p className="formError">На сервере не заданы токен бота Хранителя или номер форума (TELEGRAM_BOT_TOKEN, TELEGRAM_FORUM_CHAT_ID). Публикация в форум не работает.</p>}
         {message ? <p className={params.forum_update === "invalid" || params.forum_update === "test_failed" ? "formError" : "formNotice"} role="status">

@@ -33,13 +33,16 @@ describe("unified Guardian page", () => {
   it("renders exactly one composer and compact state/departure summaries without old blocks or profile warnings for signals", async () => {
     const page = await Page({ searchParams: Promise.resolve({}) }), content = text(page).replace(/\s+/gu, " ");
     expect(content).toContain("Состояние участников"); expect(content).toContain("Сообщение участникам");
-    expect(content).toContain("За последние 30 дней: 4"); expect(content).toContain("Всего зарегистрировано убытий: 40");
-    expect(content).toContain("Всего зарегистрировано прибытий: 25");
+    // Arrival and departure journals belong to «Люди»; this page is only the mailings.
+    for (const moved of ["За последние 30 дней", "Всего зарегистрировано убытий", "Всего зарегистрировано прибытий"]) expect(content).not.toContain(moved);
+    expect(mocks.arrivals).not.toHaveBeenCalled(); expect(mocks.departures).not.toHaveBeenCalled();
     for (const removed of ["Кампании Хранителя", "Аудитория технического уведомления", "История убытий:", "Без активного"]) expect(content).not.toContain(removed);
     const elements = nodes(page), composers = elements.filter(n => typeof n.type === "function" && n.type.name === "GuardianMessageComposer");
     expect(composers).toHaveLength(1); expect(composers[0].props.audiences).toHaveLength(12);
     const links = elements.filter(n => n.props.href).map(n => n.props.href as string);
-    expect(links).toContain("/admin/guardian/departures"); expect(links).toContain("/admin/guardian/arrivals"); expect(links.filter(l => l.includes("#guardian-composer"))).toHaveLength(5);
+    expect(links).not.toContain("/admin/guardian/departures"); expect(links).not.toContain("/admin/guardian/arrivals");
+    expect(elements.some(n => typeof n.type === "function" && n.type.name === "AdminCrumbs" && n.props.href === "/admin/guardian")).toBe(true);
+    expect(links.filter(l => l.includes("#guardian-composer"))).toHaveLength(5);
     expect(links.some(l => l.includes("preset=core_login_prompt"))).toBe(true);
   });
   it("opens the requested state in the same composer and presets default login to Telegram only", async () => {

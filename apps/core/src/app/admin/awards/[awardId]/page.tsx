@@ -4,6 +4,7 @@ import { requireAwardAdmin, awardRouteId } from "@/lib/award-admin";
 import { getAwardWithDatabase } from "@/lib/awards";
 import { pool } from "@/lib/db";
 import { readInterfaceTexts } from "@/lib/interface-texts";
+import { AdminCrumbs } from "@/components/admin-crumbs";
 import { AwardContent, AwardNotice } from "@/components/award-content";
 import { LocalDateTime } from "@/components/local-date-time";
 export const dynamic = "force-dynamic";
@@ -25,7 +26,7 @@ export default async function AwardAdminPage({ params, searchParams }: {
         pool.query("SELECT * FROM award_batches WHERE award_id=$1 ORDER BY created_at DESC", [awardId]),
         pool.query("SELECT status,count(*)::int AS count FROM award_instances WHERE award_id=$1 GROUP BY status", [awardId]), readInterfaceTexts(), searchParams
     ]);
-    return <main className="shell"><section className="card"><Link href="/admin/awards">{texts["award.back"]}</Link>
+    return <main className="shell"><section className="card"><AdminCrumbs href="/admin/awards" trail={[{ label: award.name }]}/>
     <AwardNotice notice={query.award_update} texts={texts}/><AwardContent award={award} texts={texts}/>
     <p><Link href={`/awards/${award.slug}`}>{texts["award.publicPage"]}</Link></p>
     <ul>{counts.rows.map(row => <li key={row.status}>{texts[`award.${row.status as "offered" | "declined" | "accepted" | "rejected"}`]}: {row.count}</li>)}</ul>

@@ -1,7 +1,7 @@
-import Link from "next/link";
 import type { Metadata } from "next";
 import { redirect } from "next/navigation";
 import { hasPrototypeAdminAccess } from "@/lib/config";
+import { AdminCrumbs } from "../../../components/admin-crumbs";
 import { CoreNavigation } from "../../../components/core-navigation";
 import { getCurrentParticipant } from "@/lib/session";
 import { getCurrentRewardRule } from "@/lib/tokenization";
@@ -28,11 +28,10 @@ export default async function RewardsPage({ searchParams }: RewardsPageProps) {
         <CoreNavigation />
         <div className="profileHeader">
           <div>
-            <div className="eyebrow">DAO Core</div>
+            <AdminCrumbs href="/admin/rewards" />
             <h1>Тарифы DARUS</h1>
             <p className="muted">Действующая версия для новых подтверждений. Ранее начисленный DARUS не пересчитывается.</p>
           </div>
-          <Link className="button secondary" href="/admin">К управлению</Link>
         </div>
         {message ? <p className={params.reward_update === "invalid" ? "formError" : "formNotice"}>{message}</p> : null}
         <form className="interfaceForm" action="/api/admin/rewards" method="post">

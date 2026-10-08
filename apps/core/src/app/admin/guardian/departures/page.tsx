@@ -1,6 +1,7 @@
 import Link from "next/link";
 import type { Metadata } from "next";
 import { redirect } from "next/navigation";
+import { AdminCrumbs } from "../../../../components/admin-crumbs";
 import { CoreNavigation } from "../../../../components/core-navigation";
 import { hasPrototypeAdminAccess } from "@/lib/config";
 import { getCurrentParticipant } from "@/lib/session";
@@ -28,8 +29,8 @@ export default async function GuardianDeparturesPage() {
   const [departures, { values: texts }] = await Promise.all([getGuardianDepartures(), readInterfaceTexts()]);
   return <main className="shell"><section className="card profile">
     <CoreNavigation />
+    <AdminCrumbs href="/admin/guardian/departures" />
     <h1>{texts["guardian.departures_title"]}</h1>
-    <Link className="button secondary" href="/admin/guardian">{texts["guardian.back"]}</Link>
     <p>{texts["guardian.departures_recent"]} <strong>{departures.last30Days}</strong></p>
     <p>{texts["guardian.departures_total"]} <strong>{departures.total}</strong></p>
     {departures.events.length ? <ul>{departures.events.map(event => <li key={event.id}>

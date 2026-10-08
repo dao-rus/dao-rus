@@ -2,6 +2,7 @@ import Link from "next/link";
 import type { Metadata } from "next";
 import { redirect } from "next/navigation";
 import { hasPrototypeAdminAccess } from "@/lib/config";
+import { AdminCrumbs } from "../../../components/admin-crumbs";
 import { CoreNavigation } from "../../../components/core-navigation";
 import { interfaceTextFields, readInterfaceTexts } from "@/lib/interface-texts";
 import { getCurrentParticipant } from "@/lib/session";
@@ -40,11 +41,10 @@ export default async function InterfacePage({ searchParams }: InterfacePageProps
         <CoreNavigation texts={values} />
         <div className="profileHeader">
           <div>
-            <div className="eyebrow">Ядро</div>
+            <AdminCrumbs href="/admin/interface" />
             <h1>Тексты интерфейса</h1>
             <p className="muted">Пользовательские тексты разделов DAO Core. Галочка вернёт отдельное поле к значению по умолчанию.</p>
           </div>
-          <Link className="button secondary" href="/admin">К управлению</Link>
         </div>
 
         {message ? (

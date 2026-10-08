@@ -35,7 +35,7 @@ describe("Guardian full departure chronology", () => {
     expect(content).toContain("За последние 30 дней: 1"); expect(content).toContain("Всего зарегистрировано убытий: 2");
     expect(content).toContain("Архивное имя"); expect(content).toContain("@former");
     expect(content.indexOf("Новый")).toBeLessThan(content.indexOf("Текущее имя"));
-    expect(nodes(page).filter(n => n.props.href).map(n => n.props.href)).toEqual(["/admin/guardian", "/profile/new", "/profile/old"]);
+    expect(nodes(page).filter(n => n.props.href).map(n => n.props.href)).toEqual(["/admin/guardian/departures", "/profile/new", "/profile/old"]);
     expect(nodes(page).some(n => typeof n.type === "function" && n.type.name === "CoreNavigation")).toBe(true);
   });
   it("names a placeholder profile by what the person is actually known by", async () => {

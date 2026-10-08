@@ -2,6 +2,7 @@ import Link from "next/link";
 import type { Metadata } from "next";
 import { redirect } from "next/navigation";
 import { RegistryFieldEditor } from "@/components/registry-field-editor";
+import { AdminCrumbs } from "../../../components/admin-crumbs";
 import { CoreNavigation } from "../../../components/core-navigation";
 import { LocalDateTime } from "@/components/local-date-time";
 import { hasPrototypeAdminAccess } from "@/lib/config";
@@ -87,15 +88,12 @@ export default async function ParticipantRegistryPage({
         <CoreNavigation />
         <div className="profileHeader">
           <div>
-            <div className="eyebrow">Prototype admin · Participant Registry v0.1</div>
+            <AdminCrumbs href="/admin/participants" />
             <h1>Реестр участников</h1>
             <p className="muted">
               Telegram roster и ручные институциональные статусы. Найдено: {entries.length}.
             </p>
           </div>
-          <Link className="button secondary" href="/admin">
-            К управлению
-          </Link>
         </div>
 
         <p className="registryWarning">

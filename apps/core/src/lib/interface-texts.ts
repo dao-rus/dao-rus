@@ -148,7 +148,6 @@ const interfaceTextFieldDefinitions = [
   { section: "Хранитель", key: "guardian.arrival_joined", label: "Вступление в форум", defaultValue: "Вступил в форум", multiline: false, pageLabel: "История прибытия", pageHref: "/admin/guardian/arrivals" },
   { section: "Хранитель", key: "guardian.arrival_rejoined", label: "Возвращение в форум", defaultValue: "Вернулся в форум", multiline: false, pageLabel: "История прибытия", pageHref: "/admin/guardian/arrivals" },
   { section: "Хранитель", key: "guardian.profile_unavailable", label: "Недоступный профиль", defaultValue: "Профиль недоступен", multiline: false, pageLabel: "История убытия", pageHref: "/admin/guardian/departures" },
-  { section: "Хранитель", key: "guardian.back", label: "Вернуться к Хранителю", defaultValue: "К Хранителю", multiline: false, pageLabel: "История убытия", pageHref: "/admin/guardian/departures" },
   { section: "Хранитель", key: "guardian.broadcast_lead", label: "Аудитория сообщения", defaultValue: "Получатели будут проверены заново перед отправкой.", multiline: false },
   { section: "Хранитель", key: "guardian.message", label: "Поле сообщения", defaultValue: "Сообщение", multiline: false },
   { section: "Хранитель", key: "guardian.channel_core", label: "Канал Ядра", defaultValue: "Ядро", multiline: false },
@@ -346,7 +345,6 @@ const interfaceTextFieldDefinitions = [
   { section: "Награды", key: "award.never_logged_in", label: "Ещё не входили в Core", defaultValue: "Ещё не входили в Core", multiline: false },
   { section: "Награды", key: "award.authority", label: "Учредитель", defaultValue: "Учредитель", multiline: false },
   { section: "Награды", key: "award.count", label: "Всего", defaultValue: "Всего", multiline: false },
-  { section: "Награды", key: "award.back", label: "К реестру наград", defaultValue: "К реестру наград", multiline: false },
 ] as const;
 
 type PageContext = { pageLabel: string; pageHref?: string };

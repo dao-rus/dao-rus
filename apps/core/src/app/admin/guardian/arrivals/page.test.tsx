@@ -36,7 +36,7 @@ describe("Guardian full arrival chronology", () => {
     expect(content).toContain("@newbie"); expect(content).toContain("@back"); expect(content).not.toContain("@@back");
     expect(content).toContain("Вступил в форум"); expect(content).toContain("Вернулся в форум");
     expect(content.indexOf("Новый")).toBeLessThan(content.indexOf("Вернувшийся"));
-    expect(nodes(page).filter(n => n.props.href).map(n => n.props.href)).toEqual(["/admin/guardian", "/profile/new", "/profile/old"]);
+    expect(nodes(page).filter(n => n.props.href).map(n => n.props.href)).toEqual(["/admin/guardian/arrivals", "/profile/new", "/profile/old"]);
   });
   it("renders empty history", async () => {
     mocks.history.mockResolvedValue({ total: 0, last30Days: 0, events: [] });

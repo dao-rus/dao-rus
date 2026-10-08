@@ -2,6 +2,7 @@ import Link from "next/link";
 import type { Metadata } from "next";
 import { redirect } from "next/navigation";
 import { LocalDateTime } from "@/components/local-date-time";
+import { AdminCrumbs } from "../../../components/admin-crumbs";
 import { CoreNavigation } from "../../../components/core-navigation";
 import { hasPrototypeAdminAccess } from "@/lib/config";
 import { getReputationHistory } from "@/lib/reputation";
@@ -21,8 +22,7 @@ export default async function AdminReputationPage() {
       <section className="card profile">
         <CoreNavigation />
         <div className="profileHeader">
-          <div><div className="eyebrow">DAO Core</div><h1>История репутационных сигналов</h1></div>
-          <Link className="button secondary" href="/admin">К управлению</Link>
+          <div><AdminCrumbs href="/admin/reputation" /><h1>История репутационных сигналов</h1></div>
         </div>
         {history.length ? (
           <section className="activityHistory">
