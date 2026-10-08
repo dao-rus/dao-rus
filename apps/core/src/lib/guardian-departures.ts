@@ -3,17 +3,22 @@ export type GuardianDeparture = {
   id: string; participantId: string | null; displayName: string | null;
   observedAt: Date; type: "forum.left" | "forum.removed";
   archivedUsername: string | null; archivedDisplayName: string | null;
+  // What the person is known by now, for profiles still named by the placeholder.
+  telegramUsername?: string | null; telegramOwnName?: string | null;
 };
 
 export async function getGuardianDeparturesWithDatabase(database: Database) {
   const result = await database.query(
     `SELECT event.id, event.participant_id, participant.display_name, event.event_type,
+            telegram.username AS telegram_username,
+            NULLIF(btrim(concat_ws(' ', telegram.first_name, telegram.last_name)), '') AS telegram_own_name,
             event.payload->>'archived_username' AS archived_username,
             event.payload->>'archived_display_name' AS archived_display_name,
             COALESCE((event.payload->>'observed_at')::timestamptz, event.created_at) AS observed_at,
             COALESCE((event.payload->>'observed_at')::timestamptz, event.created_at)
               >= clock_timestamp() - interval '30 days' AS recent
        FROM events event LEFT JOIN participants participant ON participant.id = event.participant_id
+       LEFT JOIN external_identities telegram ON telegram.participant_id = event.participant_id AND telegram.provider = 'telegram'
       WHERE event.event_type IN ('forum.left', 'forum.removed')
       ORDER BY observed_at DESC, event.id DESC`,
   );
@@ -25,6 +30,8 @@ export async function getGuardianDeparturesWithDatabase(database: Database) {
       displayName: row.display_name == null ? null : String(row.display_name),
       archivedUsername: row.archived_username == null ? null : String(row.archived_username),
       archivedDisplayName: row.archived_display_name == null ? null : String(row.archived_display_name),
+      telegramUsername: row.telegram_username == null || !String(row.telegram_username).trim() ? null : String(row.telegram_username),
+      telegramOwnName: row.telegram_own_name == null ? null : String(row.telegram_own_name),
       observedAt: new Date(String(row.observed_at)), type: row.event_type as GuardianDeparture["type"],
     })),
   };

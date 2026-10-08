@@ -53,6 +53,7 @@ const textDefaults = Object.fromEntries(interfaceTextFields.map((field) => [fiel
 const rosterProfile = {
   subjectId: "20000000-0000-4000-8000-000000000002",
   displayName: "Имя из контактов экспортёра",
+  hasTelegramIdentity: true,
   hasLoggedIn: false,
   isVerified: false,
   isRoot: false,

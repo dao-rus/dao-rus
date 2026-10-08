@@ -38,6 +38,18 @@ describe("Guardian full departure chronology", () => {
     expect(nodes(page).filter(n => n.props.href).map(n => n.props.href)).toEqual(["/admin/guardian", "/profile/new", "/profile/old"]);
     expect(nodes(page).some(n => typeof n.type === "function" && n.type.name === "CoreNavigation")).toBe(true);
   });
+  it("names a placeholder profile by what the person is actually known by", async () => {
+    mocks.history.mockResolvedValue({ total: 3, last30Days: 3, events: [
+      { id: "3", participantId: "a", displayName: "Участник форума", telegramOwnName: "Ольга Т.", telegramUsername: "olga_t", type: "forum.left", observedAt: new Date("2026-10-05T10:00:00Z") },
+      { id: "2", participantId: "b", displayName: "Участник форума", telegramUsername: "only_handle", type: "forum.left", observedAt: new Date("2026-10-04T10:00:00Z") },
+      { id: "1", participantId: "c", displayName: "Участник форума", archivedDisplayName: "Имя со скриншота", archivedUsername: "@shot", type: "forum.left", observedAt: new Date("2026-10-03T10:00:00Z") },
+    ] });
+    const content = text(await Page()).replace(/\s+/gu, " ");
+    expect(content).toContain("Ольга Т. · @olga_t");
+    expect(content).toContain("@only_handle");
+    expect(content).toContain("Имя со скриншота · @shot");
+    expect(content).not.toContain("Участник форума");
+  });
   it("renders empty history", async () => {
     mocks.history.mockResolvedValue({ total: 0, last30Days: 0, events: [] });
     expect(text(await Page())).toContain("Зарегистрированных убытий пока нет.");

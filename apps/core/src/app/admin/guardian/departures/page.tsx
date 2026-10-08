@@ -4,11 +4,23 @@ import { redirect } from "next/navigation";
 import { CoreNavigation } from "../../../../components/core-navigation";
 import { hasPrototypeAdminAccess } from "@/lib/config";
 import { getCurrentParticipant } from "@/lib/session";
-import { getGuardianDepartures } from "../../../../lib/guardian-departures";
+import { getGuardianDepartures, type GuardianDeparture } from "../../../../lib/guardian-departures";
 import { readInterfaceTexts } from "../../../../lib/interface-texts";
 
 export const dynamic = "force-dynamic";
 export const metadata: Metadata = { title: "История убытия" };
+// The placeholder tells nothing about who left: fall back to anything the person is actually known by.
+const PLACEHOLDER = "Участник форума";
+function departureName(event: GuardianDeparture): string | null {
+  const own = event.displayName && event.displayName !== PLACEHOLDER ? event.displayName : null;
+  return own ?? event.telegramOwnName ?? event.archivedDisplayName
+    ?? (event.telegramUsername ? `@${event.telegramUsername}` : null) ?? event.archivedUsername ?? event.displayName;
+}
+function handle(event: GuardianDeparture): string | null {
+  const username = event.telegramUsername ? `@${event.telegramUsername}` : event.archivedUsername;
+  return username && username !== departureName(event) ? username : null;
+}
+
 export default async function GuardianDeparturesPage() {
   const participant = await getCurrentParticipant();
   if (!participant) redirect("/");
@@ -22,9 +34,9 @@ export default async function GuardianDeparturesPage() {
     <p>{texts["guardian.departures_total"]} <strong>{departures.total}</strong></p>
     {departures.events.length ? <ul>{departures.events.map(event => <li key={event.id}>
       <time dateTime={event.observedAt.toISOString()}>{event.observedAt.toLocaleString("ru-RU", { timeZone: "Europe/Moscow" })}</time>
-      {" · "}{event.participantId ? <Link href={`/profile/${event.participantId}`}>{event.displayName ?? event.archivedDisplayName ?? event.archivedUsername ?? texts["guardian.profile_unavailable"]}</Link> : texts["guardian.profile_unavailable"]}
-      {event.archivedDisplayName && event.archivedDisplayName !== event.displayName ? <> · {event.archivedDisplayName}</> : null}
-      {event.archivedUsername ? <> · {event.archivedUsername}</> : null}
+      {" · "}{event.participantId ? <Link href={`/profile/${event.participantId}`}>{departureName(event) ?? texts["guardian.profile_unavailable"]}</Link> : texts["guardian.profile_unavailable"]}
+      {event.archivedDisplayName && event.archivedDisplayName !== departureName(event) ? <> · {event.archivedDisplayName}</> : null}
+      {handle(event) ? <> · {handle(event)}</> : null}
       {" · "}{texts[event.type === "forum.left" ? "guardian.departure_left" : "guardian.departure_removed"]}
     </li>)}</ul> : <p className="muted">{texts["guardian.departures_empty"]}</p>}
   </section></main>;

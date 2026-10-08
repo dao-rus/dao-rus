@@ -89,9 +89,11 @@ export default async function SubjectProfilePage({ params, searchParams }: Subje
   } as Record<string, string>)[query.reputation_action] : null;
 
   // Before their own login a person is shown by the name they gave themselves in Telegram;
-  // a roster name may be the exporter's contact label and never appears here.
+  // a roster name may be the exporter's contact label and never appears here. A profile restored
+  // from the departures archive has no Telegram identity, and its name comes from public evidence.
   const shownName = profile.hasLoggedIn ? profile.displayName
-    : profile.telegramOwnName ?? (profile.telegramUsername ? `@${profile.telegramUsername}` : "Участник форума");
+    : profile.telegramOwnName ?? (!profile.hasTelegramIdentity ? profile.displayName
+      : profile.telegramUsername ? `@${profile.telegramUsername}` : "Участник форума");
   const initials = shownName.replace(/^@/, "").split(/\s+/).filter(Boolean).slice(0, 2)
     .map((part) => Array.from(part)[0]?.toLocaleUpperCase("ru-RU") ?? "").join("");
   const telegramUrl = profile.telegramUsername ? `https://t.me/${encodeURIComponent(profile.telegramUsername)}` : null;

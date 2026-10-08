@@ -15,6 +15,8 @@ export type VerificationProfile = {
   telegramName: string | null;
   // First and last name as the person set them in Telegram (login or Bot API), never a roster contact label.
   telegramOwnName: string | null;
+  // False for people reconstructed from the departures archive: their name came from public evidence.
+  hasTelegramIdentity: boolean;
   telegramUsername: string | null;
   telegramBio: string | null;
   avatarUrl: string | null;
@@ -121,6 +123,7 @@ function profileFromRow(row: Record<string, unknown>): VerificationProfile {
     displayName: String(row.display_name),
     telegramName: row.telegram_name ? String(row.telegram_name) : null,
     telegramOwnName: row.telegram_own_name ? String(row.telegram_own_name) : null,
+    hasTelegramIdentity: Boolean(row.has_telegram_identity),
     telegramUsername: row.telegram_username ? String(row.telegram_username) : null,
     telegramBio: row.telegram_bio ? String(row.telegram_bio) : null,
     avatarUrl: row.avatar_url ? String(row.avatar_url) : null,
@@ -149,6 +152,7 @@ export async function getVerificationProfileWithDatabase(
             subject.display_name,
             telegram.oidc_profile->>'name' AS telegram_name,
             NULLIF(btrim(concat_ws(' ', telegram.first_name, telegram.last_name)), '') AS telegram_own_name,
+            (telegram.id IS NOT NULL) AS has_telegram_identity,
             telegram.username AS telegram_username,
             telegram.bot_profile->>'bio' AS telegram_bio,
             telegram.avatar_url,
