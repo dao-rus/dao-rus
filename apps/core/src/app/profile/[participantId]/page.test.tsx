@@ -13,6 +13,7 @@ const mocks = vi.hoisted(() => ({
   hasPrototypeAdminAccess: vi.fn(),
   redirect: vi.fn(),
   notFound: vi.fn(),
+  getProfileTimeline: vi.fn(),
 }));
 
 vi.mock("next/navigation", () => ({ redirect: mocks.redirect, notFound: mocks.notFound }));
@@ -36,6 +37,8 @@ vi.mock("@/components/positive-experience-feedback", () => ({
 }));
 vi.mock("@/lib/config", () => ({ hasPrototypeAdminAccess: mocks.hasPrototypeAdminAccess }));
 vi.mock("@/components/telegram-avatar", () => ({ TelegramAvatar: () => null }));
+vi.mock("../../../components/local-date-time", () => ({ LocalDateTime: ({ value }: { value: string }) => value.slice(0, 10) }));
+vi.mock("../../../lib/profile-timeline", () => ({ getProfileTimeline: mocks.getProfileTimeline }));
 
 import SubjectProfilePage from "./page";
 import { ProfileSignals } from "../../../components/profile-signals";
@@ -43,6 +46,9 @@ import { UserText } from "../../../components/user-text";
 import { SignalPreview } from "../../../components/signal-preview";
 vi.mock("../../../lib/signals", () => ({ listParticipantSignals: mocks.signals, listSignalTypes: mocks.types }));
 vi.mock("../../../lib/interface-texts", () => ({ readInterfaceTexts: mocks.texts }));
+
+const { interfaceTextFields } = await vi.importActual<typeof import("../../../lib/interface-texts")>("../../../lib/interface-texts");
+const textDefaults = Object.fromEntries(interfaceTextFields.map((field) => [field.key, field.defaultValue]));
 
 const rosterProfile = {
   subjectId: "20000000-0000-4000-8000-000000000002",
@@ -102,7 +108,7 @@ describe("public subject profile name", () => {
     vi.clearAllMocks();
     mocks.signals.mockResolvedValue([]);
     mocks.types.mockResolvedValue([]);
-    mocks.texts.mockResolvedValue({ values: {} });
+    mocks.texts.mockResolvedValue({ values: textDefaults });
     mocks.getCurrentParticipant.mockResolvedValue({ id: "10000000-0000-4000-8000-000000000001" });
     mocks.hasPrototypeAdminAccess.mockReturnValue(false);
     mocks.getVerificationProfile.mockResolvedValue(rosterProfile);
@@ -113,6 +119,7 @@ describe("public subject profile name", () => {
       signals: [],
     });
     mocks.getReputationSummary.mockResolvedValue({ positiveCount: 2, viewerSignal: null });
+    mocks.getProfileTimeline.mockResolvedValue({ joinedAt: null, leftForumAt: null, leftDaoAt: null });
   });
 
   it("hides a roster name before the person's own login", async () => {
@@ -125,9 +132,28 @@ describe("public subject profile name", () => {
       searchParams: Promise.resolve({}),
     });
 
-    expect(textContent(page)).toContain("Человек ещё не вошёл в Ядро");
+    // A roster name may be the exporter's contact label: never shown. What the person told the DAO is.
+    expect(textContent(page)).toContain("Ещё не входил в Ядро");
+    expect(textContent(page)).toContain("Участник форума");
     expect(textContent(page)).not.toContain("Имя из контактов экспортёра");
-    expect(textContent(page)).not.toContain("Казань");
+    expect(textContent(page)).toContain("Казань, Россия");
+  });
+
+  it("shows a person who never logged in by their own Telegram name, with a way to write and how they left", async () => {
+    mocks.getVerificationProfile.mockResolvedValue({ ...rosterProfile, telegramOwnName: "Юлия С.", telegramUsername: "kali_ugi" });
+    mocks.getProfileTimeline.mockResolvedValue({
+      joinedAt: new Date("2024-03-28T10:18:38Z"), leftForumAt: new Date("2026-10-07T09:00:00Z"), leftDaoAt: null });
+    const page = await SubjectProfilePage({
+      params: Promise.resolve({ participantId: rosterProfile.subjectId }), searchParams: Promise.resolve({}),
+    });
+    const text = textContent(page);
+    expect(text).toContain("Юлия С.");
+    expect(text).not.toContain("Имя из контактов экспортёра");
+    expect(hrefs(page)).toContain("https://t.me/kali_ugi");
+    expect(text).toContain("Написать в Telegram");
+    expect(text).toContain("В ДАО с");
+    expect(text).toContain("Покинул форум");
+    expect(text).not.toContain("Вышел из ДАО");
   });
 
   it("shows the Core name after the person's own login", async () => {

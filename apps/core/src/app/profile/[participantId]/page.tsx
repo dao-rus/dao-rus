@@ -13,6 +13,8 @@ import { getReputationSummary } from "@/lib/reputation";
 import { getCurrentParticipant } from "@/lib/session";
 import { formatDarusAmount, getVerificationRewardForFeedback } from "@/lib/tokenization";
 import { getVerificationProfile } from "@/lib/verification";
+import { getProfileTimeline } from "../../../lib/profile-timeline";
+import { LocalDateTime } from "../../../components/local-date-time";
 
 import { listParticipantSignals, listSignalTypes } from "../../../lib/signals";
 import { readInterfaceTexts } from "../../../lib/interface-texts";
@@ -58,11 +60,12 @@ export default async function SubjectProfilePage({ params, searchParams }: Subje
   ]);
   if (!profile) notFound();
 
-  const [reputation, rewardAmount] = await Promise.all([
+  const [reputation, rewardAmount, timeline] = await Promise.all([
     getReputationSummary(profile.subjectId, viewer.id),
     query.verification_action === "created" && query.verification_reward
       ? getVerificationRewardForFeedback(query.verification_reward, viewer.id, profile.subjectId)
       : Promise.resolve(null),
+    getProfileTimeline(profile.subjectId).catch(() => ({ joinedAt: null, leftForumAt: null, leftDaoAt: null })),
   ]);
 
   const awardBadges = await getAwardBadges([profile.subjectId]);
@@ -85,40 +88,57 @@ export default async function SubjectProfilePage({ params, searchParams }: Subje
     invalid: "Не удалось сохранить оценку.",
   } as Record<string, string>)[query.reputation_action] : null;
 
+  // Before their own login a person is shown by the name they gave themselves in Telegram;
+  // a roster name may be the exporter's contact label and never appears here.
+  const shownName = profile.hasLoggedIn ? profile.displayName
+    : profile.telegramOwnName ?? (profile.telegramUsername ? `@${profile.telegramUsername}` : "Участник форума");
+  const initials = shownName.replace(/^@/, "").split(/\s+/).filter(Boolean).slice(0, 2)
+    .map((part) => Array.from(part)[0]?.toLocaleUpperCase("ru-RU") ?? "").join("");
+  const telegramUrl = profile.telegramUsername ? `https://t.me/${encodeURIComponent(profile.telegramUsername)}` : null;
+  const showAbout = Boolean(about && (about.bio || about.residence || about.interests.length || signals.length));
+
   return (
     <main className="shell">
-      <section className="card profile">
+      <section className="card profile publicProfile">
         <CoreNavigation current="participants" texts={texts} />
-        <div className="profileHeader">
+        <div className="publicProfileHead">
           <div className="profileIdentity">
-            {profile.hasLoggedIn ? (
-              <TelegramAvatar participantId={profile.subjectId} displayName={profile.displayName}
+            {profile.hasLoggedIn && (profile.hasTelegramPhoto || profile.avatarUrl) ? (
+              <TelegramAvatar participantId={profile.subjectId} displayName={shownName}
                 avatarUrl={profile.avatarUrl} hasTelegramPhoto={profile.hasTelegramPhoto} />
-            ) : null}
-            <div>
-              <div className="eyebrow">Профиль</div>
-              <h1>{profile.hasLoggedIn ? (
-                <ParticipantName awardBadges={awardBadges[profile.subjectId]} participantId={profile.subjectId}
-                  verificationPoints={profile.verificationPoints} positiveCount={reputation.positiveCount}>{profile.displayName}</ParticipantName>
-              ) : "Человек ещё не вошёл в Ядро"}</h1>
-              {profile.hasLoggedIn && profile.telegramUsername ? <p className="muted">{`@${profile.telegramUsername}`}</p> : null}
-              {profile.hasLoggedIn && profile.telegramName && profile.telegramName !== profile.displayName ? <p className="muted">В Telegram: {profile.telegramName}</p> : null}
-              {profile.hasLoggedIn && profile.telegramBio ? <p className="profileBio muted">Telegram: {profile.telegramBio}</p> : null}
+            ) : <span className="profileInitials" aria-hidden="true">{initials || "·"}</span>}
+            <div className="publicProfileName">
+              <div className="eyebrow">{texts["profile.eyebrow"]}</div>
+              <h1><ParticipantName awardBadges={awardBadges[profile.subjectId]} participantId={profile.subjectId}
+                verificationPoints={profile.verificationPoints} positiveCount={reputation.positiveCount}>{shownName}</ParticipantName></h1>
+              {telegramUrl && profile.telegramUsername ? <a className="publicProfileUsername" href={telegramUrl}>{`@${profile.telegramUsername}`}</a> : null}
+              {!profile.hasLoggedIn ? <span className="muted publicProfileNote">{texts["profile.not_logged_in"]}</span> : null}
             </div>
           </div>
+
+          {timeline.joinedAt || timeline.leftDaoAt || timeline.leftForumAt || about?.residence ? (
+            <div className="publicProfileFacts">
+              <div className="publicProfileDates">
+                {timeline.joinedAt ? <span>{texts["profile.forum_since"]} <LocalDateTime dateOnly value={timeline.joinedAt.toISOString()} /></span> : null}
+                {timeline.leftDaoAt ? <span>{texts["profile.left_dao"]} <LocalDateTime dateOnly value={timeline.leftDaoAt.toISOString()} /></span> : null}
+                {timeline.leftForumAt ? <span>{texts["profile.left_forum"]} <LocalDateTime dateOnly value={timeline.leftForumAt.toISOString()} /></span> : null}
+              </div>
+              {about?.residence ? <Link className="residenceLink" href={residenceDirectoryHref(about.residence)}>{residenceLabel(about.residence)}</Link> : null}
+            </div>
+          ) : null}
+
+          {telegramUrl && !ownProfile ? <a className="button primary publicProfileWrite" href={telegramUrl}>
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="M22 2 11 13"></path><path d="M22 2 15 22l-4-9-9-4 20-7z"></path></svg>
+            {texts["profile.write_telegram"]}
+          </a> : null}
+
+          {profile.hasLoggedIn && profile.telegramBio ? <p className="profileBio muted">{texts["profile.telegram_bio"]}: {profile.telegramBio}</p> : null}
         </div>
 
-        {profile.hasLoggedIn && about && (about.bio || about.residence || about.interests.length || signals.length) ? (
-          <section className="profileAbout publicAbout">
-            {about.bio ? <div className="aboutBlock"><h2>О себе</h2><UserText className="profileBio" text={about.bio} /></div> : null}
-            {about.residence ? (
-              <div className="aboutBlock">
-                <h3>Место жительства</h3>
-                <Link className="residenceLink" href={residenceDirectoryHref(about.residence)}>
-                  {residenceLabel(about.residence)}
-                </Link>
-              </div>
-            ) : null}
+        {showAbout && about ? (
+          <section className="profileAbout publicAbout" aria-labelledby="public-about">
+            <h2 id="public-about">О себе</h2>
+            {about.bio ? <UserText className="profileBio" text={about.bio} /> : null}
             {about.interests.length ? (
               <div className="aboutBlock">
                 <h3>Интересы</h3>
@@ -132,75 +152,77 @@ export default async function SubjectProfilePage({ params, searchParams }: Subje
           </section>
         ) : null}
 
-        <section className="verificationCard">
-          <div>
-            <span className={profile.isVerified ? "verificationBadge verified" : "verificationBadge"}>
-              {profile.isVerified ? "✓ Личность подтверждена" : "Личность пока не подтверждена"}
-            </span>
-            {profile.isRoot ? <small className="muted">В начальном ядре доверия</small> : null}
-          </div>
-          <strong>{profile.verificationPoints} подтверждений от других</strong>
-          <p className="muted">Здесь учитываются подтверждения от людей, чья личность уже подтверждена в сети доверия.</p>
-          {!ownProfile ? <p className="muted">Подтверждайте только тех, кого можете лично узнать и отличить от других.</p> : null}
-          <div className="verificationRewardAnchor">
-            {!ownProfile && profile.viewerAttestationId ? (
-              <form action="/api/verification/attestations" method="post">
-                <input type="hidden" name="subject_id" value={profile.subjectId} />
-                <input type="hidden" name="action" value="revoke" />
-                <button className="button secondary" type="submit">Отозвать подтверждение</button>
-              </form>
-            ) : null}
-            {!ownProfile && !profile.viewerAttestationId && profile.viewerIsVerified ? (
-              <form action="/api/verification/attestations" method="post">
-                <input type="hidden" name="subject_id" value={profile.subjectId} />
-                <input type="hidden" name="action" value="create" />
-                <button className="button primary" type="submit">Подтвердить, что знаю этого человека</button>
-              </form>
-            ) : null}
-            {formattedReward && query.verification_reward ? (
-              <DarusRewardCelebration key={query.verification_reward}
-                entryId={query.verification_reward} amount={formattedReward} />
-            ) : null}
-          </div>
-          {!ownProfile && !profile.viewerIsVerified ? <p className="muted">Подтверждать других можно после подтверждения вашей личности.</p> : null}
-          {ownProfile ? <p className="muted">Нельзя подтвердить самого себя.</p> : null}
-          {actionMessage ? <p className="formNotice" role="status">
-            {actionMessage} {formattedReward ? <Link href="/profile/tokens">Баланс DARUS →</Link> : null}
-          </p> : null}
-        </section>
+        <section className="verificationCard publicTrust" aria-labelledby="public-trust">
+          <h2 id="public-trust">{texts["profile.trust_title"]}</h2>
 
-        {!ownProfile ? (
-          <section className="verificationCard">
-            <h2>Опыт взаимодействия</h2>
-            <p>Хороший опыт взаимодействия: <strong>{reputation.positiveCount}</strong></p>
-            <p className="muted">Ваша текущая оценка: {reputation.viewerSignal === "positive" ? "Хороший опыт взаимодействия" : reputation.viewerSignal === "quality_flag" ? "Есть проблема" : "пока нет"}.</p>
-            <div className="actions">
-              {reputation.viewerSignal !== "positive" ? (
-                <form action="/api/reputation" method="post">
-                  <input type="hidden" name="subject_id" value={profile.subjectId} />
-                  <input type="hidden" name="action" value="positive" />
-                  <button className="button secondary" type="submit">Хороший опыт взаимодействия</button>
-                </form>
-              ) : null}
+          {!ownProfile ? (
+            <div className="publicTrustPart">
+              <p className="publicTrustRow"><span>Хороший опыт взаимодействия:</span> <strong>{reputation.positiveCount}</strong></p>
+              {reputation.viewerSignal ? <p className="muted">Ваша текущая оценка: {reputation.viewerSignal === "positive" ? "Хороший опыт взаимодействия" : "Есть проблема"}.</p> : null}
+              <div className="actions">
+                {reputation.viewerSignal !== "positive" ? (
+                  <form action="/api/reputation" method="post">
+                    <input type="hidden" name="subject_id" value={profile.subjectId} />
+                    <input type="hidden" name="action" value="positive" />
+                    <button className="button secondary" type="submit">{texts["profile.positive_button"]}</button>
+                  </form>
+                ) : null}
+                {reputation.viewerSignal ? (
+                  <form action="/api/reputation" method="post">
+                    <input type="hidden" name="subject_id" value={profile.subjectId} />
+                    <input type="hidden" name="action" value="revoke" />
+                    <button className="button secondary" type="submit">Отозвать оценку</button>
+                  </form>
+                ) : null}
+              </div>
               {reputation.viewerSignal !== "quality_flag" ? (
                 <form action="/api/reputation" method="post">
                   <input type="hidden" name="subject_id" value={profile.subjectId} />
                   <input type="hidden" name="action" value="quality_flag" />
-                  <button className="button secondary" type="submit">Есть проблема</button>
+                  <button className="linkButton muted" type="submit">{texts["profile.report_problem"]}</button>
                 </form>
               ) : null}
-              {reputation.viewerSignal ? (
-                <form action="/api/reputation" method="post">
+              {positiveExperienceSaved ? <PositiveExperienceFeedback /> : null}
+              {reputationMessage ? <p className="formNotice" role="status">{reputationMessage}</p> : null}
+            </div>
+          ) : null}
+
+          <div className="publicTrustPart">
+            <p className="publicTrustRow">
+              <span className={profile.isVerified ? "verificationBadge verified" : "verificationBadge"}>
+                {profile.isVerified ? "✓ Личность подтверждена" : "Личность пока не подтверждена"}
+              </span>
+              <span className="muted">{profile.verificationPoints} подтверждений</span>
+            </p>
+            {profile.isRoot ? <small className="muted">В начальном ядре доверия</small> : null}
+            <div className="verificationRewardAnchor">
+              {!ownProfile && profile.viewerAttestationId ? (
+                <form action="/api/verification/attestations" method="post">
                   <input type="hidden" name="subject_id" value={profile.subjectId} />
                   <input type="hidden" name="action" value="revoke" />
-                  <button className="button secondary" type="submit">Отозвать оценку</button>
+                  <button className="button secondary" type="submit">Отозвать подтверждение</button>
                 </form>
               ) : null}
+              {!ownProfile && !profile.viewerAttestationId && profile.viewerIsVerified ? (
+                <form action="/api/verification/attestations" method="post">
+                  <input type="hidden" name="subject_id" value={profile.subjectId} />
+                  <input type="hidden" name="action" value="create" />
+                  <button className="button secondary" type="submit">Подтвердить, что знаю этого человека</button>
+                </form>
+              ) : null}
+              {formattedReward && query.verification_reward ? (
+                <DarusRewardCelebration key={query.verification_reward}
+                  entryId={query.verification_reward} amount={formattedReward} />
+              ) : null}
             </div>
-            {positiveExperienceSaved ? <PositiveExperienceFeedback /> : null}
-            {reputationMessage ? <p className="formNotice" role="status">{reputationMessage}</p> : null}
-          </section>
-        ) : null}
+            {!ownProfile ? <p className="muted">{profile.viewerIsVerified
+              ? "Только если можете лично узнать этого человека."
+              : "Подтверждать других можно после подтверждения вашей личности."}</p> : null}
+            {actionMessage ? <p className="formNotice" role="status">
+              {actionMessage} {formattedReward ? <Link href="/profile/tokens">Баланс DARUS →</Link> : null}
+            </p> : null}
+          </div>
+        </section>
 
         {admin && !profile.isRoot ? (
           <section className="verificationAdmin">

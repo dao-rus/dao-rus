@@ -803,3 +803,30 @@ div.userText > :last-child { margin-bottom: 0; }
 .awardForm label:has(input[type="checkbox"]) { display: flex; align-items: baseline; gap: .5rem; }
 .awardForm input[type="checkbox"] { width: auto; }
 .awardCandidate { border-top: 1px solid var(--border); padding: 1rem 0; }
+
+/* Someone else's profile: who the person is and how to reach them first, trust below. */
+.publicProfileHead { display: grid; gap: 16px; }
+.publicProfileName { display: grid; gap: 4px; min-width: 0; }
+.publicProfileName h1 { margin: 0; font-size: clamp(26px, 6vw, 40px); line-height: 1.15; overflow-wrap: anywhere; }
+.publicProfileUsername { color: var(--accent); text-decoration: none; font-size: 16px; }
+.publicProfileUsername:hover { text-decoration: underline; }
+.publicProfileNote { font-size: 13px; }
+.profileInitials {
+  display: inline-grid; place-items: center; flex: none; width: 72px; height: 72px; border-radius: 50%;
+  background: #e1efe5; color: var(--accent); font-size: 26px; font-weight: 700;
+}
+.publicProfileFacts { display: flex; flex-wrap: wrap; gap: 6px 18px; align-items: baseline; }
+.publicProfileDates { display: grid; gap: 4px; }
+.publicProfileWrite { gap: 8px; min-height: 48px; justify-self: start; }
+.publicAbout h2 { margin: 0 0 14px; }
+.publicTrust h2 { margin: 0; font-size: 20px; }
+.publicTrust { display: grid; gap: 18px; }
+.publicTrustPart { display: grid; gap: 10px; }
+.publicTrustPart + .publicTrustPart { padding-top: 18px; border-top: 1px solid var(--line); }
+.publicTrustRow { display: flex; flex-wrap: wrap; gap: 8px 12px; align-items: center; margin: 0; }
+.publicTrust .actions { margin-top: 0; }
+.linkButton {
+  background: none; border: 0; padding: 6px 0; min-height: 44px; cursor: pointer;
+  text-decoration: underline; text-underline-offset: 2px; font-size: 14px;
+}
+@media (max-width: 560px) { .publicProfileWrite { justify-self: stretch; } }

@@ -296,8 +296,10 @@ export async function rememberForumMemberName(
   );
 }
 
-// One-off: people who joined before names were remembered still show as the placeholder.
-// The reception bot, a forum administrator, can read their current Telegram name.
+// One-off: forum members whose own Telegram name Core never saw (joined before names were remembered,
+// or known only from a roster whose names may be the exporter's contact labels). The reception bot,
+// a forum administrator, reads the name each person set; only empty fields are filled, and the
+// display name changes only while it is still the placeholder.
 export async function backfillForumMemberNames(
   database: ForumDatabase, apply: boolean,
   fetchUser?: (userId: string) => Promise<Record<string, unknown> | null>,
@@ -312,12 +314,13 @@ export async function backfillForumMemberNames(
     `SELECT identity.external_user_id FROM participants p
        JOIN external_identities identity ON identity.participant_id = p.id AND identity.provider = 'telegram'
        JOIN participant_forum_onboarding forum ON forum.participant_id = p.id AND forum.forum_status = 'joined'
-      WHERE p.display_name = 'Участник форума' AND NOT p.display_name_chosen_in_core
-        AND identity.external_user_id IS NOT NULL
-        AND (identity.username IS NULL OR identity.first_name IS NULL)
+      WHERE identity.external_user_id IS NOT NULL
+        AND identity.first_name IS NULL AND identity.last_name IS NULL
       ORDER BY p.created_at`);
   const result = { placeholders: pending.rows.length, named: 0, unavailable: 0 };
-  for (const row of pending.rows) {
+  for (const [index, row] of pending.rows.entries()) {
+    // Stay well under the Bot API's per-bot request rate.
+    if (index && !fetchUser) await new Promise((resolve) => setTimeout(resolve, 60));
     const user = await read(String(row.external_user_id));
     const hasName = [user?.first_name, user?.last_name, user?.username].some((value) => typeof value === "string" && value.trim());
     if (!user || user.is_bot === true || !hasName) { result.unavailable++; continue; }

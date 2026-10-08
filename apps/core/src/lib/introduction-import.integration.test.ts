@@ -143,21 +143,60 @@ describe.skipIf(!databaseUrl)("introduction import on real PostgreSQL", () => {
     await pool.query("UPDATE participants SET display_name_chosen_in_core = true WHERE id = $1", [chosen.id]);
     const asked: string[] = [];
     const fetchUser = async (userId: string) => { asked.push(userId);
-      return userId === nameless.telegram ? { id: Number(userId), first_name: "Глеб", username: "gleb" } : null; };
+      return userId === nameless.telegram ? { id: Number(userId), first_name: "Глеб", username: "gleb" }
+        : userId === chosen.telegram ? { id: Number(userId), first_name: "Настоящее", last_name: "Имя" } : null; };
     const name = async (id: string) => String((await pool.query("SELECT display_name FROM participants WHERE id = $1", [id])).rows[0].display_name);
     const dry = await backfillForumMemberNames(pool, false, fetchUser);
-    expect(dry.named).toBe(1);
+    expect(dry.named).toBe(2);
     expect(await name(nameless.id)).toBe("Участник форума");
     asked.length = 0;
     const applied = await backfillForumMemberNames(pool, true, fetchUser);
-    expect(applied).toMatchObject({ named: 1 });
+    expect(applied).toMatchObject({ named: 2 });
     expect(applied.unavailable).toBeGreaterThanOrEqual(1);
     expect(asked).toContain(gone.telegram);
     expect(asked).not.toContain(outside.telegram);
-    expect(asked).not.toContain(chosen.telegram);
+    // A name chosen in Core stays; the person's own Telegram name is still recorded beside it.
+    expect(asked).toContain(chosen.telegram);
+    expect(await name(chosen.id)).toBe("Участник форума");
+    expect((await pool.query("SELECT first_name, last_name FROM external_identities WHERE participant_id = $1", [chosen.id])).rows[0])
+      .toEqual({ first_name: "Настоящее", last_name: "Имя" });
     expect(await name(nameless.id)).toBe("Глеб");
     expect(await name(gone.id)).toBe("Участник форума");
     expect((await backfillForumMemberNames(pool, true, fetchUser)).named).toBe(0);
+  });
+
+  it("tells how a person left exactly: silently from the forum, by decision from the DAO, or not at all", async () => {
+    const { getProfileTimelineWithDatabase } = await import("./profile-timeline");
+    const event = (id: string, type: string, at: string) => pool.query(
+      `INSERT INTO events(event_type, participant_id, created_at, payload) VALUES ($1, $2, $3, $4::jsonb)`,
+      [type, id, at, JSON.stringify({ source: "test", observed_at: at })]);
+    const day = (value: Date | null) => value?.toISOString().slice(0, 10) ?? null;
+
+    const silent = await person();
+    await event(silent.id, "forum.joined", "2024-03-01T00:00:00Z"); await event(silent.id, "forum.left", "2026-10-07T10:00:00Z");
+    const one = await getProfileTimelineWithDatabase(pool, silent.id);
+    expect([day(one.joinedAt), day(one.leftForumAt), day(one.leftDaoAt)]).toEqual(["2024-03-01", "2026-10-07", null]);
+
+    const back = await person();
+    await event(back.id, "forum.joined", "2024-03-01T00:00:00Z"); await event(back.id, "forum.left", "2025-01-01T00:00:00Z");
+    await event(back.id, "forum.rejoined", "2025-06-01T00:00:00Z");
+    expect((await getProfileTimelineWithDatabase(pool, back.id)).leftForumAt).toBeNull();
+
+    // A roster check that saw the person in the forum outranks an older recorded leave.
+    const seen = await person();
+    await event(seen.id, "forum.left", "2025-01-01T00:00:00Z");
+    await pool.query("INSERT INTO participant_forum_onboarding(participant_id, forum_status, observed_at) VALUES ($1, 'joined', now())", [seen.id]);
+    expect((await getProfileTimelineWithDatabase(pool, seen.id)).leftForumAt).toBeNull();
+
+    const removed = await person();
+    await event(removed.id, "forum.removed", "2026-01-01T00:00:00Z");
+    expect((await getProfileTimelineWithDatabase(pool, removed.id)).leftForumAt).toBeNull();
+
+    const decided = await person("left");
+    await event(decided.id, "membership.left", "2026-09-01T00:00:00Z");
+    expect(day((await getProfileTimelineWithDatabase(pool, decided.id)).leftDaoAt)).toBe("2026-09-01");
+    await pool.query("UPDATE participants SET membership_status = 'participant' WHERE id = $1", [decided.id]);
+    expect((await getProfileTimelineWithDatabase(pool, decided.id)).leftDaoAt).toBeNull();
   });
 
   it("restores join history from an export: first join, returns, no duplicates, and a later observed join becomes a return", async () => {
@@ -172,8 +211,8 @@ describe.skipIf(!databaseUrl)("introduction import on real PostgreSQL", () => {
       { telegram_user_id: "777777777", joins: [{ at: "2024-01-01T00:00:00Z", message_id: 7004 }] },
     ]);
     const history = async (id: string) => (await pool.query(
-      `SELECT event_type, created_at, payload->>'source' AS source FROM events WHERE participant_id = $1
-        AND event_type IN ('forum.joined', 'forum.rejoined') ORDER BY created_at`, [id])).rows
+      `SELECT event_type, COALESCE((payload->>'observed_at')::timestamptz, created_at) AS created_at, payload->>'source' AS source
+         FROM events WHERE participant_id = $1 AND event_type IN ('forum.joined', 'forum.rejoined') ORDER BY 2`, [id])).rows
       .map((row) => `${row.event_type} ${new Date(String(row.created_at)).toISOString().slice(0, 10)} ${row.source}`);
     expect(await importForumJoins(pool, entries, false)).toEqual({ entries: 3, unknown: 1, participants: 2, joined: 2, rejoined: 1, alreadyImported: 0, reclassified: 1, exactKnown: 0 });
     expect(await history(one.id)).toEqual([]);
