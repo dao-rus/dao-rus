@@ -59,6 +59,8 @@ export default async function AwardBatchPage({ params, searchParams }: {
           {([['offered_at', 'offeredAt'], ['declined_at', 'declinedAt'], ['accepted_at', 'acceptedAt'], ['rejected_at', 'rejectedAt']] as const).map(([column, key]) => candidate[column] ? <p key={column}>{texts[`award.${key}`]}: <LocalDateTime value={candidate[column].toISOString()}/></p> : null)}
           <AwardLink href={`/award-offers/${candidate.instance_id}`} label={texts["award.copy"]} copied={texts["award.copied"]}/></> : null}</>}
     </article>)}
+    {!draft ? <form className="awardForm" action="/api/admin/awards/batches" method="post">{hidden("notify")}
+      <p>{texts["award.notifyHint"]}</p><button type="submit" className="button secondary">{texts["award.notify"]}</button></form> : null}
     {draft ? <form className="awardForm" action="/api/admin/awards/batches" method="post">{hidden("finalize")}
       <label><input type="checkbox" name="confirm" required/>{texts["award.finalizeWarning"]}</label><button type="submit" className="button primary" disabled={!canFinalize}>{texts["award.finalize"]}</button>
       {!canFinalize ? <p>{texts["award.invalid"]}</p> : null}</form> : null}

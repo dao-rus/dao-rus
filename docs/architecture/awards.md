@@ -26,6 +26,19 @@ PNG/JPEG/WebP uploads are decoded with a pixel and size limit, stripped of metad
 and stored as PNG plus a separate 48px preview in the immutable Award row. Public
 image routes serve only those bytes; external image fetching is not used.
 
+An offer reaches its recipient in two independent ways. Automatically: on a finalized
+batch the Founder can notify recipients (`notifyAwardBatchRecipientsWithDatabase`). It
+locks the batch, skips anyone who has already answered or already has this offer's
+notice, and writes one inbox notice with a Telegram delivery per remaining recipient in
+the same transaction, so double clicks and retries never duplicate and a failure leaves
+nothing half-sent. The notice carries only the public award name and a link to the
+personal offer; reason and personal address are never put in it. By link: the public
+page `/awards/<slug>` can be handed to everyone at once. It identifies the visitor by
+session, selects only that visitor's own instance and shows the accept/decline dialog
+when one exists; a visitor without an offer sees exactly the public page, so the link
+reveals nothing about who was or was not offered the award. A guest gets a login that
+returns to the same page (`safeAuthReturnPath` allows `/awards/<slug>` only).
+
 Offer UUIDs are addresses, not authorization tokens. The personal page checks the
 session and selects only the recipient's instance. Login returns only to an allowed
 internal path. Recipient POST routes derive the actor from the session and enforce

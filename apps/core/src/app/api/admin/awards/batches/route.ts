@@ -2,7 +2,8 @@ import { NextRequest, NextResponse } from "next/server";
 import { getCurrentParticipant } from "@/lib/session";
 import { hasAwardCapability } from "@/lib/award-access";
 import { id, AwardValidationError } from "@/lib/awards";
-import { createAwardBatch, snapshotAwardAudience, addAwardCandidate, editAwardCandidate, finalizeAwardBatch } from "@/lib/award-batches";
+import { createAwardBatch, snapshotAwardAudience, addAwardCandidate, editAwardCandidate, finalizeAwardBatch, notifyAwardBatchRecipients } from "@/lib/award-batches";
+import { readInterfaceTexts } from "@/lib/interface-texts";
 import { awardRequestForbidden, awardRedirect, awardHttpError } from "@/lib/award-http";
 import type { AudienceCondition } from "@/lib/participant-audience";
 import { pool } from "@/lib/db";
@@ -41,6 +42,11 @@ export async function POST(request: NextRequest) {
             if (form.get("confirm") !== "on")
                 throw new AwardValidationError("Confirm finalization");
             await finalizeAwardBatch(actor.id, batch);
+        }
+        else if (action === "notify") {
+            const { values: texts } = await readInterfaceTexts();
+            const sent = await notifyAwardBatchRecipients(actor.id, batch, { text: texts["award.notifyText"], action: texts["award.notifyAction"] });
+            return awardRedirect(path, sent ? "notified" : "nothing");
         }
         else
             throw new AwardValidationError("Invalid action");

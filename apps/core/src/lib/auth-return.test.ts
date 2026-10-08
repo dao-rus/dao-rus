@@ -8,6 +8,11 @@ describe("safeAuthReturnPath", () => {
     expect(safeAuthReturnPath("/need")).toBe("/need");
     expect(safeAuthReturnPath(`/exchange/${id}`)).toBe(`/exchange/${id}`);
     expect(safeAuthReturnPath(`/award-offers/${id}`)).toBe(`/award-offers/${id}`);
+    expect(safeAuthReturnPath("/awards/first-wave")).toBe("/awards/first-wave");
+  });
+  it.each(["/awards/", "/awards/First-Wave", "/awards/a--b", "/awards/-a", "/awards/a/b", "/awards/a?next=https://evil.example",
+    "/awards/a\n", "//awards/a", "/awards/a/../../profile", `/awards/${"a".repeat(101)}`])("rejects award path %s", (value) => {
+    expect(safeAuthReturnPath(value)).toBeNull();
   });
   it.each([null, undefined, "", "/", "/profile", "//evil.example", "https://evil.example", `/exchange/${id}/x`,
     `/exchange/${id}?x=1`, "/exchange/not-a-uuid", `/exchange/${id}\n`, `//exchange/${id}`,

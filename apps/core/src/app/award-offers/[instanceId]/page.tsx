@@ -4,9 +4,7 @@ import { getCurrentParticipant } from "@/lib/session";
 import { getOwnAwardOffers } from "@/lib/award-views";
 import { readInterfaceTexts } from "@/lib/interface-texts";
 import { AwardValidationError, id } from "@/lib/awards";
-import { AwardContent, AwardNotice, AwardVisibilityForm } from "@/components/award-content";
-import { UserText } from "@/components/user-text";
-import { LocalDateTime } from "@/components/local-date-time";
+import { AwardContent, AwardInstancePanel, AwardNotice } from "@/components/award-content";
 export const dynamic = "force-dynamic";
 export const metadata = { title: "Предложение награды", robots: { index: false, follow: false } };
 export default async function AwardOfferPage({ params, searchParams }: {
@@ -37,17 +35,7 @@ export default async function AwardOfferPage({ params, searchParams }: {
     const query = await searchParams;
     return <main className="shell"><section className="card">
     <AwardNotice notice={query.award_update} texts={texts}/><AwardContent award={award} texts={texts}/>
-    <p>{texts[`award.${instance.status}`]}</p><p>{texts["award.awarder"]}: {awarderName}</p>
-    <h2>{texts["award.reason"]}</h2><UserText text={instance.reason}/>
-    {instance.personalAddress ? <><h2>{texts["award.personalAddress"]}</h2><UserText text={instance.personalAddress}/></> : null}
-    {(["offeredAt", "declinedAt", "acceptedAt", "rejectedAt"] as const).map(key => instance[key] ? <p key={key}>{texts[`award.${key}`]}: <LocalDateTime value={instance[key]!.toISOString()}/></p> : null)}
-    {instance.status === "offered" || instance.status === "declined" ? <form action="/api/awards/instances" method="post" className="actions">
-      <input type="hidden" name="instanceId" value={instance.id}/><button className="button primary" name="action" value="accept">{texts["award.accept"]}</button>
-      {instance.status === "offered" ? <button className="button secondary" name="action" value="decline">{texts["award.decline"]}</button> : null}</form> : null}
-    <AwardVisibilityForm instance={instance} texts={texts}/>
-    {instance.status === "accepted" ? <details><summary>{texts["award.reject"]}</summary><p>{texts["award.rejectWarning"]}</p>
-      <form action="/api/awards/instances" method="post"><input type="hidden" name="instanceId" value={instance.id}/><input type="hidden" name="action" value="reject"/>
-        <label><input type="checkbox" name="confirm" required/>{texts["award.rejectConfirm"]}</label><button type="submit" className="button secondary">{texts["award.reject"]}</button></form></details> : null}
+    <AwardInstancePanel instance={instance} awarderName={awarderName} texts={texts}/>
     <p><Link href="/profile">{texts["award.own"]}</Link> · <Link href={`/awards/${award.slug}`}>{texts["award.publicPage"]}</Link></p>
   </section></main>;
 }

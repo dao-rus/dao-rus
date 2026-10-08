@@ -1,4 +1,4 @@
-import { createAwardBatchWithDatabase, snapshotAwardAudienceWithDatabase, addAwardCandidateWithDatabase, editAwardCandidateWithDatabase, finalizeAwardBatchWithDatabase } from "./award-batches";
+import { createAwardBatchWithDatabase, snapshotAwardAudienceWithDatabase, addAwardCandidateWithDatabase, editAwardCandidateWithDatabase, finalizeAwardBatchWithDatabase, notifyAwardBatchRecipientsWithDatabase } from "./award-batches";
 import { getPublicAwardWithDatabase, getAwardBadgesWithDatabase, getOwnAwardOffersWithDatabase } from "./award-views";
 import { selectParticipantAudienceWithDatabase } from "./participant-audience";
 import { randomUUID } from "node:crypto";
@@ -346,5 +346,47 @@ describe.skipIf(!databaseUrl)("award foundation on real PostgreSQL", () => {
       expect(current?.status).toBe("offered"); expect(current?.acceptedAt).toBeNull();
       expect(await actions(offered.id)).toHaveLength(1);
     } finally { await pool.query("DROP TRIGGER fail_award_audit ON events; DROP FUNCTION fail_award_audit()"); }
+  });
+  it("notifies recipients of a finalized batch exactly once, skips answered offers and never leaks private content", async () => {
+    const definition = await award();
+    const [first, second, third] = [await participant(), await participant(), await participant()];
+    const batch = String((await createAwardBatchWithDatabase(pool, founder, definition.id, "regular")).id);
+    for (const person of [first, second, third]) { await addAwardCandidateWithDatabase(pool, founder, batch, person); await editedCandidate(batch, person, "included", "PRIVATE_REASON", "PRIVATE_ADDRESS"); }
+    const texts = { text: "Награда «{name}» ждёт вас", action: "Открыть" };
+    await expect(notifyAwardBatchRecipientsWithDatabase(pool, founder, batch, texts)).rejects.toBeInstanceOf(AwardTransitionError);
+    await expect(notifyAwardBatchRecipientsWithDatabase(pool, randomUUID(), batch, texts)).rejects.toBeInstanceOf(AwardAccessError);
+    await expect(notifyAwardBatchRecipientsWithDatabase(pool, founder, randomUUID(), texts)).rejects.toBeInstanceOf(AwardNotFoundError);
+    const release = await finalizeAwardBatchWithDatabase(pool, founder, batch);
+    const byPerson = Object.fromEntries(release.map(row => [String(row.participant_id), String(row.id)]));
+    await actOnAwardInstanceWithDatabase(pool, second, byPerson[second], "decline");
+    await actOnAwardInstanceWithDatabase(pool, third, byPerson[third], "accept");
+    // Concurrent double click and a later retry: one notice per still-open offer.
+    const sent = await Promise.all([notifyAwardBatchRecipientsWithDatabase(pool, founder, batch, texts), notifyAwardBatchRecipientsWithDatabase(pool, founder, batch, texts)]);
+    expect(sent.sort()).toEqual([0, 1]);
+    expect(await notifyAwardBatchRecipientsWithDatabase(pool, founder, batch, texts)).toBe(0);
+    const notices = (await pool.query("SELECT n.*, d.channel, d.status AS delivery FROM notifications n LEFT JOIN notification_deliveries d ON d.notification_id=n.id WHERE n.notification_type='award.offered' AND n.participant_id=ANY($1)", [[first, second, third]])).rows;
+    expect(notices).toHaveLength(1);
+    expect(notices[0]).toMatchObject({ participant_id: first, action_url: `/award-offers/${byPerson[first]}`, action_label: "Открыть", source_type: "admin", created_by_participant_id: founder, channel: "telegram", delivery: "pending" });
+    expect(notices[0].text).toBe("Награда «Орден Первой волны» ждёт вас");
+    expect(JSON.stringify(notices[0])).not.toContain("PRIVATE");
+    // A recipient who declined may still change their mind; that answer does not re-open the notice.
+    await actOnAwardInstanceWithDatabase(pool, first, byPerson[first], "decline");
+    expect(await notifyAwardBatchRecipientsWithDatabase(pool, founder, batch, texts)).toBe(0);
+  });
+  it("rolls back every notice of a run when one cannot be written", async () => {
+    const definition = await award();
+    const [first, second] = [await participant(), await participant()];
+    const batch = String((await createAwardBatchWithDatabase(pool, founder, definition.id, "regular")).id);
+    for (const person of [first, second]) { await addAwardCandidateWithDatabase(pool, founder, batch, person); await editedCandidate(batch, person); }
+    await finalizeAwardBatchWithDatabase(pool, founder, batch);
+    const failing = [first, second].sort()[1];
+    await pool.query(`CREATE FUNCTION fail_award_notice() RETURNS trigger LANGUAGE plpgsql AS $$
+      BEGIN IF NEW.participant_id='${failing}' THEN RAISE EXCEPTION 'Notice failure'; END IF; RETURN NEW; END; $$;
+      CREATE TRIGGER fail_award_notice BEFORE INSERT ON notifications FOR EACH ROW EXECUTE FUNCTION fail_award_notice();`);
+    try {
+      await expect(notifyAwardBatchRecipientsWithDatabase(pool, founder, batch, { text: "{name}", action: "Открыть" })).rejects.toThrow("Notice failure");
+      expect((await pool.query("SELECT count(*)::int AS n FROM notifications WHERE notification_type='award.offered' AND participant_id=ANY($1)", [[first, second]])).rows[0].n).toBe(0);
+    } finally { await pool.query("DROP TRIGGER fail_award_notice ON notifications; DROP FUNCTION fail_award_notice()"); }
+    expect(await notifyAwardBatchRecipientsWithDatabase(pool, founder, batch, { text: "{name}", action: "Открыть" })).toBe(2);
   });
 });

@@ -346,6 +346,14 @@ const interfaceTextFieldDefinitions = [
   { section: "Награды", key: "award.never_logged_in", label: "Ещё не входили в Core", defaultValue: "Ещё не входили в Core", multiline: false },
   { section: "Награды", key: "award.authority", label: "Учредитель", defaultValue: "Учредитель", multiline: false },
   { section: "Награды", key: "award.count", label: "Всего", defaultValue: "Всего", multiline: false },
+  { section: "Награды", key: "award.ownOffer", label: "Заголовок личного предложения на странице награды", defaultValue: "Вам предложена эта награда", multiline: false },
+  { section: "Награды", key: "award.loginIfOffered", label: "Вход на странице награды для тех, кому её могли предложить", defaultValue: "Если эта награда предложена вам, войдите, чтобы увидеть предложение", multiline: false },
+  { section: "Награды", key: "award.notify", label: "Кнопка: уведомить получателей выпуска", defaultValue: "Уведомить получателей в Telegram", multiline: false },
+  { section: "Награды", key: "award.notifyHint", label: "Пояснение к уведомлению получателей", defaultValue: "Каждому, кому награда ещё только предложена, придёт одно уведомление со ссылкой на личное предложение. Повторное нажатие не создаёт дублей. Ссылку можно по-прежнему передать вручную.", multiline: true },
+  { section: "Награды", key: "award.notifyText", label: "Текст уведомления о предложенной награде ({name} — название награды)", defaultValue: "Вам предложена награда ДАО Русь «{name}». Откройте предложение, чтобы принять её или отказаться.", multiline: true },
+  { section: "Награды", key: "award.notifyAction", label: "Кнопка в уведомлении о предложенной награде", defaultValue: "Открыть предложение", multiline: false },
+  { section: "Награды", key: "award.notified", label: "Уведомления поставлены в очередь.", defaultValue: "Уведомления поставлены в очередь.", multiline: false },
+  { section: "Награды", key: "award.nothingToNotify", label: "Новых уведомлений нет: все получатели уже уведомлены или ответили на предложение.", defaultValue: "Новых уведомлений нет: все получатели уже уведомлены или ответили на предложение.", multiline: false },
 ] as const;
 
 type PageContext = { pageLabel: string; pageHref?: string };

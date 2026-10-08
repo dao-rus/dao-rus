@@ -1,5 +1,6 @@
 import { requireAwardCapability } from "./award-access";
 import { selectParticipantAudienceWithDatabase, audienceConditions, type AudienceFilters } from "./participant-audience";
+import { createNotificationWithDatabase } from "./notifications";
 import { AwardConflictError, AwardNotFoundError, AwardTransitionError, AwardValidationError, id, text, transaction, type AwardDatabase, type AwardDatabaseClient } from "./awards";
 export function validateAwardFilters(input: AudienceFilters): AudienceFilters {
     if (input.city && (typeof input.city !== "string" || input.city.length > 1000))
@@ -106,6 +107,43 @@ export async function finalizeAwardBatchWithDatabase(database: AwardDatabase, ac
         return (await client.query("SELECT id,participant_id FROM award_instances WHERE batch_id=$1 ORDER BY participant_id", [batchId])).rows;
     });
 }
+export type AwardNotifyTexts = {
+    text: string;
+    action: string;
+};
+// Delivery is a separate, repeatable step after finalization: the batch row is locked, and a
+// recipient who already has this offer's notice (or has answered the offer) is skipped, so a retry
+// or a double click never sends twice. The notice carries only the public award name; the reason
+// and the personal address stay on the recipient's own page.
+export async function notifyAwardBatchRecipientsWithDatabase(database: AwardDatabase, actorId: string, batchId: string, texts: AwardNotifyTexts): Promise<number> {
+    const actor = id(actorId);
+    requireAwardCapability(actor, "award.offer");
+    const batch = id(batchId);
+    return transaction(database, async (client) => {
+        const found = await client.query("SELECT b.status, a.name FROM award_batches b JOIN awards a ON a.id=b.award_id WHERE b.id=$1 FOR UPDATE OF b", [batch]);
+        if (!found.rowCount)
+            throw new AwardNotFoundError();
+        if (found.rows[0].status !== "finalized")
+            throw new AwardTransitionError("Recipients can be notified only after finalization");
+        const body = texts.text.replaceAll("{name}", String(found.rows[0].name));
+        const pending = await client.query(`SELECT i.id, i.participant_id FROM award_instances i
+      WHERE i.batch_id=$1 AND i.status='offered'
+        AND NOT EXISTS (SELECT 1 FROM notifications n WHERE n.participant_id=i.participant_id
+          AND n.notification_type='award.offered' AND n.action_url='/award-offers/' || i.id::text)
+      ORDER BY i.participant_id`, [batch]);
+        // The notices join this transaction, so a rolled-back run leaves nothing half-sent.
+        const joined = { connect: async () => ({
+                query: (sql: string, values?: unknown[]) => /^(BEGIN|COMMIT|ROLLBACK)$/.test(sql)
+                    ? Promise.resolve({ rowCount: 0, rows: [] }) : client.query(sql, values),
+                release() { },
+            }) };
+        for (const row of pending.rows)
+            await createNotificationWithDatabase(joined, { participantId: String(row.participant_id), notificationType: "award.offered", text: body,
+                actionUrl: `/award-offers/${row.id}`, actionLabel: texts.action, sourceType: "admin", createdByParticipantId: actor, queueTelegram: true });
+        return pending.rows.length;
+    });
+}
+export async function notifyAwardBatchRecipients(actor: string, batch: string, texts: AwardNotifyTexts) { const { pool } = await import("./db"); return notifyAwardBatchRecipientsWithDatabase(pool, actor, batch, texts); }
 export async function createAwardBatch(actor: string, award: string, kind: "regular" | "remint") { const { pool } = await import("./db"); return createAwardBatchWithDatabase(pool, actor, award, kind); }
 export async function snapshotAwardAudience(actor: string, batch: string, filters: AudienceFilters) { const { pool } = await import("./db"); return snapshotAwardAudienceWithDatabase(pool, actor, batch, filters); }
 export async function addAwardCandidate(actor: string, batch: string, participant: string) { const { pool } = await import("./db"); return addAwardCandidateWithDatabase(pool, actor, batch, participant); }
