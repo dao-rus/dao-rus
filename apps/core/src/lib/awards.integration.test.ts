@@ -158,7 +158,7 @@ describe.skipIf(!databaseUrl)("award foundation on real PostgreSQL", () => {
   it("applies the migration through checksum machinery without altering existing profiles/events", async () => {
     expect((await pool.query("SELECT display_name FROM participants WHERE id=$1", [legacyParticipant])).rows[0].display_name).toBe("Existing profile");
     expect((await pool.query("SELECT event_type FROM events WHERE participant_id=$1", [legacyParticipant])).rows).toEqual([{ event_type: "participant.logged_in" }]);
-    expect((await pool.query("SELECT count(*)::int AS count FROM schema_migrations")).rows[0].count).toBe(43);
+    expect((await pool.query("SELECT count(*)::int AS count FROM schema_migrations")).rows[0].count).toBe(readdirSync(new URL("../../migrations/", import.meta.url)).filter(name => name.endsWith(".sql")).length);
   });
   it("establishes both award kinds, stores actual founder/version, and rejects duplicate slug", async () => {
     for (const kind of ["historical", "open"] as const) {
