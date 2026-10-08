@@ -5,23 +5,12 @@ import { AdminCrumbs } from "../../../../components/admin-crumbs";
 import { CoreNavigation } from "../../../../components/core-navigation";
 import { hasPrototypeAdminAccess } from "@/lib/config";
 import { getCurrentParticipant } from "@/lib/session";
-import { getGuardianDepartures, type GuardianDeparture } from "../../../../lib/guardian-departures";
+import { getGuardianDepartures } from "../../../../lib/guardian-departures";
+import { departureHandle as handle, departureName } from "../../../../lib/departure-names";
 import { readInterfaceTexts } from "../../../../lib/interface-texts";
 
 export const dynamic = "force-dynamic";
 export const metadata: Metadata = { title: "История убытия" };
-// The placeholder tells nothing about who left: fall back to anything the person is actually known by.
-const PLACEHOLDER = "Участник форума";
-function departureName(event: GuardianDeparture): string | null {
-  const own = event.displayName && event.displayName !== PLACEHOLDER ? event.displayName : null;
-  return own ?? event.telegramOwnName ?? event.archivedDisplayName
-    ?? (event.telegramUsername ? `@${event.telegramUsername}` : null) ?? event.archivedUsername ?? event.displayName;
-}
-function handle(event: GuardianDeparture): string | null {
-  const username = event.telegramUsername ? `@${event.telegramUsername}` : event.archivedUsername;
-  return username && username !== departureName(event) ? username : null;
-}
-
 export default async function GuardianDeparturesPage() {
   const participant = await getCurrentParticipant();
   if (!participant) redirect("/");

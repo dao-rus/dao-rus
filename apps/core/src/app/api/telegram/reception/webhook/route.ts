@@ -61,6 +61,7 @@ export async function POST(request: NextRequest) {
   if (await observeForumMemberUpdate(update) === "observed") {
     await (await import("../../../../../lib/reception-voice")).onForumMemberUpdate(update);
     await (await import("../../../../../lib/guardian-forum-actions")).afterForumMemberUpdate(update);
+    await (await import("../../../../../lib/departure-log")).logDepartureAfterUpdate(update);
   }
   return NextResponse.json({ ok: true });
 }

@@ -15,6 +15,7 @@ export const dynamic = "force-dynamic";
 export const metadata: Metadata = { title: "Хранитель: форум и маршруты" };
 
 const featureLabels: Record<(typeof GUARDIAN_FEATURES)[number], [string, string]> = {
+  departure_log: ["Запись об уходе в канале уходов", "Когда участник сам вышел из форума, Хранитель добавляет строку в канал уходов. Удалённых администратором не записывает."],
   exchange_discussion: ["Обсуждение записей в форуме", "Кнопка «Обсудить в Telegram» на карточке: Хранитель публикует запись в ветке её типа."],
   forum_buttons: ["Кнопки в форуме открывают Ядро внутри Telegram", "Нужны имя бота ниже и «основное мини-приложение» в BotFather. Иначе кнопки ведут в браузер."],
   newcomer_announcements: ["Объявления о новичках", "Когда новый участник впервые указал город или интересы, Хранитель пишет об этом в ветку новичков."],
@@ -36,8 +37,8 @@ export default async function GuardianForumPage({ searchParams }: { searchParams
     ...types.map((type) => ({ key: discussionTopicKey(type.key), label: `Обсуждение: ${signalTypePresentation(type, texts).navigationName}` }))];
   const message = {
     saved: "Настройки сохранены.", unchanged: "Изменений нет.",
-    invalid: "Проверьте ссылки на ветки (они должны быть из этого форума) и имя бота.",
-    test_ok: "Пробное сообщение отправлено. Проверьте, что оно появилось в нужной ветке.",
+    invalid: "Проверьте ссылки на ветки (они должны быть из этого форума), номер канала и имя бота.",
+    test_ok: "Пробное сообщение отправлено. Проверьте, что оно появилось в нужном месте.",
     test_failed: "Telegram не принял сообщение",
   }[params.forum_update ?? ""];
   return (
@@ -64,6 +65,12 @@ export default async function GuardianForumPage({ searchParams }: { searchParams
           <div className="interfaceField">
             <label htmlFor="miniapp-bot">Имя бота Хранителя (без @)</label>
             <input id="miniapp-bot" name="miniapp.bot" defaultValue={settings.get("miniapp.bot") ?? ""} maxLength={40} placeholder="например DaoRusGuardianBot" />
+          </div>
+          <div className="interfaceField">
+            <label htmlFor="channel-departures">Канал уходов: номер или ссылка на любое сообщение</label>
+            <input id="channel-departures" name="channel.departures" defaultValue={settings.get("channel.departures") ?? ""} placeholder="-100… или https://t.me/c/…/…" />
+            <small className="muted">Канал закрытый, поэтому нужна ссылка на сообщение (в меню сообщения «Копировать ссылку») или его номер. Хранитель должен быть администратором канала с правом публикации.</small>
+            <button className="button secondary compact" type="submit" name="test" value="channel.departures">Проверить</button>
           </div>
           <h2>Ветки форума</h2>
           <p className="muted">В Telegram откройте ветку, в её меню выберите «Копировать ссылку на тему» и вставьте сюда. Пустое поле выключает функцию для этой ветки.

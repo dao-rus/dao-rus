@@ -1,3 +1,4 @@
+export { departureHandle, departureName } from "./departure-names";
 type Database = { query(sql: string, values?: unknown[]): Promise<{ rows: Array<Record<string, unknown>> }> };
 export type GuardianDeparture = {
   id: string; participantId: string | null; displayName: string | null;
@@ -9,7 +10,7 @@ export type GuardianDeparture = {
   joinedAt?: Date | null;
 };
 
-export async function getGuardianDeparturesWithDatabase(database: Database) {
+export async function getGuardianDeparturesWithDatabase(database: Database, onlyEventId?: string) {
   const result = await database.query(
     `SELECT event.id, event.participant_id, participant.display_name, event.event_type,
             telegram.username AS telegram_username,
@@ -24,8 +25,9 @@ export async function getGuardianDeparturesWithDatabase(database: Database) {
               >= clock_timestamp() - interval '30 days' AS recent
        FROM events event LEFT JOIN participants participant ON participant.id = event.participant_id
        LEFT JOIN external_identities telegram ON telegram.participant_id = event.participant_id AND telegram.provider = 'telegram'
-      WHERE event.event_type IN ('forum.left', 'forum.removed')
+      WHERE event.event_type IN ('forum.left', 'forum.removed') AND ($1::bigint IS NULL OR event.id = $1::bigint)
       ORDER BY observed_at DESC, event.id DESC`,
+    [onlyEventId ?? null],
   );
   return {
     total: result.rows.length,

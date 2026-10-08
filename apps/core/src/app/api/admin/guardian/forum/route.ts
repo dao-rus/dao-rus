@@ -4,7 +4,7 @@ import { getCurrentParticipant } from "@/lib/session";
 import { readInterfaceTexts } from "@/lib/interface-texts";
 import { listSignalTypes, SignalValidationError } from "@/lib/signals";
 import {
-  ForumBotError, GUARDIAN_FEATURES, discussionTopicKey, normalizeBotUsername, parseTopicLink, productionForumBot,
+  ForumBotError, GUARDIAN_FEATURES, discussionTopicKey, normalizeBotUsername, parseChannelId, parseTopicLink, productionForumBot,
   saveGuardianForumSettings, type GuardianFeature,
 } from "@/lib/guardian-forum";
 
@@ -29,8 +29,20 @@ export async function POST(request: NextRequest) {
     const keys = ["topic.newcomers", ...(await listSignalTypes()).filter((type) => type.key !== "dating").map((type) => discussionTopicKey(type.key))];
     const topics = Object.fromEntries(keys.map((key) => [key, parseTopicLink(form.get(key), forumChatId)]));
     const features = Object.fromEntries(GUARDIAN_FEATURES.map((feature) => [feature, form.get(`feature.${feature}`) === "on"])) as Record<GuardianFeature, boolean>;
-    const changed = await saveGuardianForumSettings(participant.id, { features, botUsername: normalizeBotUsername(form.get("miniapp.bot")), topics });
+    const rawChannel = String(form.get("channel.departures") ?? "").trim();
+    const departuresChannel = parseChannelId(rawChannel);
+    if (rawChannel && !departuresChannel) throw new SignalValidationError("Invalid departures channel");
+    const changed = await saveGuardianForumSettings(participant.id, { features, botUsername: normalizeBotUsername(form.get("miniapp.bot")), topics, departuresChannel });
     const test = form.get("test");
+    if (test === "channel.departures") {
+      const { telegramBotToken } = await import("@/lib/config");
+      const token = telegramBotToken();
+      if (!token || !departuresChannel) return forumRedirect("test_failed", departuresChannel ? "бот не настроен на сервере" : "канал уходов не указан");
+      const { channelSender } = await import("@/lib/departure-log");
+      const { values: texts } = await readInterfaceTexts();
+      await channelSender(token, departuresChannel)(texts["forum.departure_test"]);
+      return forumRedirect("test_ok");
+    }
     if (typeof test === "string" && test) {
       const topic = topics[test];
       const forum = await productionForumBot();

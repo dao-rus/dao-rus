@@ -3,7 +3,7 @@ import { SignalValidationError, type SignalDatabase, type SignalReader } from ".
 
 // Guardian's routes between Core and the Telegram forum. Every function has a switch
 // in /admin/guardian/forum; an unset switch means "on".
-export const GUARDIAN_FEATURES = ["exchange_discussion", "forum_buttons", "newcomer_announcements", "notification_mini_app",
+export const GUARDIAN_FEATURES = ["departure_log", "exchange_discussion", "forum_buttons", "newcomer_announcements", "notification_mini_app",
   "reception_greeting", "reception_welcome"] as const;
 export type GuardianFeature = (typeof GUARDIAN_FEATURES)[number];
 export type GuardianSettings = Map<string, string>;
@@ -74,13 +74,22 @@ export function coreButtonUrl(path: string, settings: GuardianSettings, baseUrl:
 
 export type GuardianForumSettingsInput = {
   features: Record<GuardianFeature, boolean>; botUsername: string | null; topics: Record<string, number | null>;
+  // Bot API number of the departures channel ("-100…"); left out means "do not touch".
+  departuresChannel?: string | null;
 };
+// The channel is private, so Telegram knows it by number only: accept "-100…" or a t.me/c/… link.
+export function parseChannelId(value: unknown): string | null {
+  const text = typeof value === "string" ? value.trim() : "";
+  const match = /^-100(\d{5,20})$/u.exec(text) ?? /^https?:\/\/t\.me\/c\/(\d{5,20})(?:\/|$)/u.exec(text);
+  return match ? `-100${match[1]}` : null;
+}
 export async function saveGuardianForumSettingsWithDatabase(
   database: SignalDatabase, actorId: string, input: GuardianForumSettingsInput,
 ): Promise<string[]> {
   const desired = new Map<string, string | null>();
   for (const feature of GUARDIAN_FEATURES) desired.set(`feature.${feature}`, input.features[feature] ? null : "off");
   desired.set("miniapp.bot", input.botUsername);
+  if (input.departuresChannel !== undefined) desired.set("channel.departures", input.departuresChannel);
   for (const [key, topic] of Object.entries(input.topics)) {
     if (!/^topic\.(?:newcomers|discussion\.[a-z][a-z0-9_]{0,63})$/u.test(key)) throw new GuardianForumValidationError();
     desired.set(key, topic === null ? null : String(topic));
