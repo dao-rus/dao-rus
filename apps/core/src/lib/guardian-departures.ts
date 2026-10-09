@@ -10,6 +10,27 @@ export type GuardianDeparture = {
   joinedAt?: Date | null;
 };
 
+export type DeparturePeriod = { from?: string; to?: string };
+
+export function departureDate(value: unknown): string | undefined {
+  if (typeof value !== "string" || !/^\d{4}-\d{2}-\d{2}$/.test(value)) return undefined;
+  const date = new Date(value);
+  return Number.isFinite(date.getTime()) && date.toISOString().slice(0, 10) === value ? value : undefined;
+}
+
+export function departuresInPeriod(events: GuardianDeparture[], period: DeparturePeriod) {
+  const from = departureDate(period.from), to = departureDate(period.to);
+  // Moscow calendar days, inclusive on both ends; do not depend on the server timezone.
+  return events.filter(event => {
+    const day = event.observedAt.toLocaleDateString("sv-SE", { timeZone: "Europe/Moscow" });
+    return (!from || day >= from) && (!to || day <= to);
+  });
+}
+
+export function departurePeople(events: GuardianDeparture[]) {
+  return new Set(events.map(event => event.participantId ? 'participant:' + event.participantId : 'event:' + event.id)).size;
+}
+
 export async function getGuardianDeparturesWithDatabase(database: Database, onlyEventId?: string) {
   const result = await database.query(
     `SELECT event.id, event.participant_id, participant.display_name, event.event_type,
@@ -29,10 +50,7 @@ export async function getGuardianDeparturesWithDatabase(database: Database, only
       ORDER BY observed_at DESC, event.id DESC`,
     [onlyEventId ?? null],
   );
-  return {
-    total: result.rows.length,
-    last30Days: result.rows.filter((row) => row.recent === true).length,
-    events: result.rows.map((row): GuardianDeparture => ({
+  const events = result.rows.map((row): GuardianDeparture => ({
       id: String(row.id), participantId: row.participant_id == null ? null : String(row.participant_id),
       displayName: row.display_name == null ? null : String(row.display_name),
       archivedUsername: row.archived_username == null ? null : String(row.archived_username),
@@ -41,13 +59,14 @@ export async function getGuardianDeparturesWithDatabase(database: Database, only
       telegramOwnName: row.telegram_own_name == null ? null : String(row.telegram_own_name),
       joinedAt: row.joined_at == null ? null : new Date(String(row.joined_at)),
       observedAt: new Date(String(row.observed_at)), type: row.event_type as GuardianDeparture["type"],
-    })),
-  };
+    }));
+  return { total: departurePeople(events),
+    last30Days: departurePeople(events.filter((_, index) => result.rows[index].recent === true)), events };
 }
 
 export async function getGuardianDepartureSummaryWithDatabase(database: Database) {
-  const result = await database.query(`SELECT count(*)::integer AS total,
-    count(*) FILTER (WHERE COALESCE((payload->>'observed_at')::timestamptz, created_at)
+  const result = await database.query(`SELECT count(DISTINCT COALESCE(participant_id::text, 'event:' || id::text))::integer AS total,
+    count(DISTINCT COALESCE(participant_id::text, 'event:' || id::text)) FILTER (WHERE COALESCE((payload->>'observed_at')::timestamptz, created_at)
       >= clock_timestamp() - interval '30 days')::integer AS last_30_days
     FROM events WHERE event_type IN ('forum.left', 'forum.removed')`);
   return { total: Number(result.rows[0]?.total ?? 0), last30Days: Number(result.rows[0]?.last_30_days ?? 0) };

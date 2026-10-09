@@ -4,7 +4,7 @@ const mocks = vi.hoisted(() => ({ session: vi.fn(), admin: vi.fn(), history: vi.
 vi.mock("next/navigation", () => ({ redirect: mocks.redirect }));
 vi.mock("@/lib/session", () => ({ getCurrentParticipant: mocks.session }));
 vi.mock("@/lib/config", () => ({ hasPrototypeAdminAccess: mocks.admin }));
-vi.mock("../../../../lib/guardian-departures", () => ({ getGuardianDepartures: mocks.history }));
+vi.mock("../../../../lib/guardian-departures", async (original) => ({ ...await original<typeof import("../../../../lib/guardian-departures")>(), getGuardianDepartures: mocks.history }));
 vi.mock("../../../../lib/interface-texts", async (original) => { const actual = await original<typeof import("../../../../lib/interface-texts")>();
   return { ...actual, readInterfaceTexts: async () => ({ values: Object.fromEntries(actual.interfaceTextFields.map(f => [f.key, f.defaultValue])), overrides: {} }) }; });
 import Page from "./page";
@@ -58,6 +58,21 @@ describe("Guardian full departure chronology", () => {
     const content = text(await Page()).replace(/\s+/gu, " ");
     expect(content).toContain("В ДАО с 14 октября 2023 г.");
     expect(content.match(/В ДАО с/gu)).toHaveLength(1);
+  });
+  it("filters inclusive Moscow dates and preserves global counters", async () => {
+    mocks.history.mockResolvedValue({ total: 3, last30Days: 2, events: [
+      { id: "3", participantId: "a", type: "forum.left", observedAt: new Date("2026-10-31T21:00:00Z") },
+      { id: "2", participantId: "b", type: "forum.left", observedAt: new Date("2026-09-30T21:00:00Z") },
+      { id: "1", participantId: "b", type: "forum.left", observedAt: new Date("2026-09-30T20:59:59Z") },
+    ] });
+    const page = await Page({ searchParams: Promise.resolve({ from: "2026-10-01", to: "2026-10-31" }) });
+    const content = text(page).replace(/\s+/gu, " ");
+    expect(content).toContain("Всего зарегистрировано убытий: 3");
+    expect(content).toContain("За выбранный период: 1");
+    expect(content).toContain("Октябрь 2026");
+    expect(nodes(page).filter(n => n.type === "li")).toHaveLength(1);
+    expect(nodes(page).find(n => n.type === "time")?.props.children).toBe("1 октября 2026 г.");
+    expect(nodes(page).find(n => n.type === "form")?.props.method).toBe("get");
   });
   it("renders empty history", async () => {
     mocks.history.mockResolvedValue({ total: 0, last30Days: 0, events: [] });
