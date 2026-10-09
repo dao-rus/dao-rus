@@ -1,6 +1,6 @@
 import type { ProposalDatabase, ProposalDatabaseClient } from "./proposals";
 
-export type PollConfig = { circle: "dao" | "city"; mode: "secret" | "open"; deadline: Date | null; bySignatures?: boolean };
+export type PollConfig = { circle: "dao" | "city"; mode: "secret" | "open"; deadline: Date | null; bySignatures?: boolean; paid?: boolean };
 export type VoteChoice = "yes" | "no" | "abstain";
 export class VecheError extends Error { constructor(readonly code: "invalid" | "ineligible" | "closed" | "forbidden" | "missing") { super(`Veche ${code}`); } }
 export type VecheSettings = { inactivityDays: number | null; quorumDao: number; quorumCity: number };

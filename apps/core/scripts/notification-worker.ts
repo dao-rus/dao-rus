@@ -1,3 +1,4 @@
+import { settleDueVeche } from "../src/lib/veche-finance";
 import { flushVecheAnnouncements } from "../src/lib/veche-announcement";
 import { refreshSignatureCalls } from "../src/lib/veche-signatures";
 import { closeDuePolls } from "../src/lib/veche-polls";
@@ -30,6 +31,7 @@ async function main() {
     try {
       await refreshSignatureCalls(pool);
       await closeDuePolls(pool);
+      await settleDueVeche(pool);
       await flushVecheAnnouncements();
       for (const id of await expireStaleDeliveries(pool)) {
         console.log(JSON.stringify({ deliveryId: id, status: "unknown", errorCode: "claim_expired" }));

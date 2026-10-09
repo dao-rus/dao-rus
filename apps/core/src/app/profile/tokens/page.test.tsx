@@ -16,6 +16,10 @@ vi.mock("@/lib/tokenization", () => ({
 }));
 vi.mock("@/components/local-date-time", () => ({ LocalDateTime: () => null }));
 
+vi.mock("@/lib/interface-texts",async()=>{
+ const {interfaceTextFields}=await import("../../../lib/interface-texts");
+ return {readInterfaceTexts:async()=>({values:Object.fromEntries(interfaceTextFields.map(field=>[field.key,field.defaultValue]))})};
+});
 import TokensPage from "./page";
 
 function content(node: ReactNode): string {

@@ -1,3 +1,5 @@
+import { createPaidCall } from "@/lib/veche-finance";
+import { afterPollCalled } from "@/lib/veche-announcement";
 import { NextRequest, NextResponse } from "next/server";
 import { appBaseUrl } from "@/lib/config";
 import { getCurrentParticipant } from "@/lib/session";
@@ -14,8 +16,9 @@ export async function POST(request:NextRequest){
  try{
    const form=await request.formData();
    const deadline=form.get("timing")==="permanent"?null:new Date(String(form.get("deadline"))+"+03:00");
-   const proposal=await createSignatureCall(participant.id,form.get("title"),form.get("body"),{circle:form.get("circle") as PollConfig["circle"],mode:form.get("mode") as PollConfig["mode"],deadline});
-   await afterSignatureCallChanged(proposal.id);
+   const paid=form.get("path")==="paid";
+   const proposal=await (paid?createPaidCall:createSignatureCall)(participant.id,form.get("title"),form.get("body"),{circle:form.get("circle") as PollConfig["circle"],mode:form.get("mode") as PollConfig["mode"],deadline});
+   if(paid)await afterPollCalled(proposal.id);else await afterSignatureCallChanged(proposal.id);
    url=new URL(`/veche/${proposal.id}`,appBaseUrl());
  }catch{url.searchParams.set("call","failed");}
  return NextResponse.redirect(url,303);

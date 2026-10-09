@@ -1,6 +1,21 @@
 import { signalPresentationDefaults, signalGroupDefaults } from "./signal-presentation";
 
 const interfaceTextFieldDefinitions = [
+{"section":"Вече","key":"veche.participation_reward","label":"Чеканка за благо Вече","defaultValue":"Чеканка за благо Вече","multiline":false,"pageLabel":"Вече","pageHref":"/profile/tokens"},
+{"section":"Вече","key":"veche.organizer_reward","label":"Награда организатору Вече","defaultValue":"Награда организатору Вече","multiline":false,"pageLabel":"Вече","pageHref":"/profile/tokens"},
+{"section":"Вече","key":"veche.tariffBaseDao","label":"Базовый тариф всего ДАО, DARUS","defaultValue":"Базовый тариф всего ДАО, DARUS","multiline":false,"pageLabel":"Вече","pageHref":"/veche"},
+{"section":"Вече","key":"veche.tariffBaseCity","label":"Базовый тариф соты, DARUS","defaultValue":"Базовый тариф соты, DARUS","multiline":false,"pageLabel":"Вече","pageHref":"/veche"},
+{"section":"Вече","key":"veche.tariffMultiplierDao","label":"Множитель тарифа всего ДАО","defaultValue":"Множитель тарифа всего ДАО","multiline":false,"pageLabel":"Вече","pageHref":"/veche"},
+{"section":"Вече","key":"veche.tariffMultiplierCity","label":"Множитель тарифа соты","defaultValue":"Множитель тарифа соты","multiline":false,"pageLabel":"Вече","pageHref":"/veche"},
+{"section":"Вече","key":"veche.attentionDays","label":"Перманентный опрос: первые N дней для платы за внимание","defaultValue":"Перманентный опрос: первые N дней для платы за внимание","multiline":false,"pageLabel":"Вече","pageHref":"/veche"},
+{"section":"Вече","key":"veche.organizerFraction","label":"Порог явки для награды организатору, доля действующих участников ДАО","defaultValue":"Порог явки для награды организатору, доля действующих участников ДАО","multiline":false,"pageLabel":"Вече","pageHref":"/veche"},
+{"section":"Вече","key":"veche.organizerCooldownDays","label":"Награда организатору: не чаще раза в N дней","defaultValue":"Награда организатору: не чаще раза в N дней","multiline":false,"pageLabel":"Вече","pageHref":"/veche"},
+{"section":"Вече","key":"veche.participationAmount","label":"Чеканка за благо каждому проголосовавшему, DARUS (0 — выключено)","defaultValue":"Чеканка за благо каждому проголосовавшему, DARUS (0 — выключено)","multiline":false,"pageLabel":"Вече","pageHref":"/veche"},
+{"section":"Вече","key":"veche.organizerAmount","label":"Награда организатору, DARUS (0 — выключено)","defaultValue":"Награда организатору, DARUS (0 — выключено)","multiline":false,"pageLabel":"Вече","pageHref":"/veche"},
+{"section":"Вече","key":"veche.finance_hint","label":"Пустые ставки и множители выключают платный созыв. Тариф = ставка × множитель × текущее число участников круга с городом. Настройки фиксируются за опросом. Тариф невозвратный; при отсутствии голосов раздачи нет.","defaultValue":"Пустые ставки и множители выключают платный созыв. Тариф = ставка × множитель × текущее число участников круга с городом. Настройки фиксируются за опросом. Тариф невозвратный; при отсутствии голосов раздачи нет.","multiline":false,"pageLabel":"Вече","pageHref":"/veche"},
+{"section":"Вече","key":"veche.call_path","label":"Путь созыва","defaultValue":"Путь созыва","multiline":false,"pageLabel":"Вече","pageHref":"/veche"},
+{"section":"Вече","key":"veche.call_signatures","label":"По подписям","defaultValue":"По подписям","multiline":false,"pageLabel":"Вече","pageHref":"/veche"},
+{"section":"Вече","key":"veche.call_paid","label":"За DARUS — без сбора подписей","defaultValue":"За DARUS — без сбора подписей","multiline":false,"pageLabel":"Вече","pageHref":"/veche"},
   {"section":"Вече","key":"veche.collecting","label":"Сбор подписей","defaultValue":"Сбор подписей","multiline":false,"pageLabel":"Вече","pageHref":"/veche"},
   {"section":"Вече","key":"veche.not_called","label":"Не созван","defaultValue":"Не созван","multiline":false,"pageLabel":"Вече","pageHref":"/veche"},
   {"section":"Вече","key":"veche.signature_support","label":"Поддержать созыв","defaultValue":"Поддержать созыв","multiline":false,"pageLabel":"Вече","pageHref":"/veche"},

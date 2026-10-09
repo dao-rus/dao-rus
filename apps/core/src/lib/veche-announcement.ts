@@ -42,7 +42,7 @@ export async function flushVecheAnnouncements() {
     const context=await(await import("./guardian-forum-actions")).forumDeps();if(!context||!topicFor(context.settings,"topic.veche"))return;
     const rows=(await context.database.query(`SELECT id,poll_call_state FROM proposals
       WHERE (poll_call_state='collecting' AND poll_collection_announcement_claimed_at IS NULL)
-      OR (poll_call_state='called' AND poll_announcement_claimed_at IS NULL) ORDER BY created_at,id LIMIT 20`)).rows;
+      OR ((poll_call_state='called' OR (poll_paid AND poll_call_state IS NULL)) AND poll_announcement_claimed_at IS NULL) ORDER BY created_at,id LIMIT 20`)).rows;
     for(const row of rows){
       try {if(row.poll_call_state==="collecting")await announceSignatureCollection(context,String(row.id));else await announcePoll(context,String(row.id));}
       catch{console.error("Veche announcement delivery failed");}

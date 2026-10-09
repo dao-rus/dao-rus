@@ -1,3 +1,4 @@
+import { financeFields, parseFinanceSettings, saveFinanceSettings } from "@/lib/veche-finance";
 import { parseSignatureSettings, saveSignatureSettings } from "@/lib/veche-signatures";
 import { NextRequest, NextResponse } from "next/server";
 import { appBaseUrl, hasPrototypeAdminAccess } from "@/lib/config";
@@ -16,11 +17,13 @@ export async function POST(request: NextRequest) {
     const form = await request.formData();
     const settings = parseVecheSettings({ inactivityDays: form.get("inactivityDays"), quorumDao: form.get("quorumDao"), quorumCity: form.get("quorumCity") });
     const signatures = parseSignatureSettings({ fractionDao: form.get("fractionDao"), fractionCity: form.get("fractionCity"), days: form.get("signatureDays"), cooldownDays: form.get("signatureCooldown") });
+    const finance = parseFinanceSettings(Object.fromEntries(Object.keys(financeFields).map(key=>[key,form.get(key)])) as Parameters<typeof parseFinanceSettings>[0]);
     const client = await pool.connect();
     try {
       await client.query("BEGIN");
       await saveVecheSettings(client, settings);
       await saveSignatureSettings(client, signatures);
+      await saveFinanceSettings(client, participant.id, finance);
       await client.query("COMMIT");
     } catch (error) { await client.query("ROLLBACK"); throw error; }
     finally { client.release(); }

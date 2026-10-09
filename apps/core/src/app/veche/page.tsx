@@ -1,3 +1,4 @@
+import { paidCallPrices } from "@/lib/veche-finance";
 import { pool } from "@/lib/db";
 import { readSignatureSettings } from "@/lib/veche-signatures";
 import { SignatureCallForm } from "@/components/signature-call-form";
@@ -45,7 +46,7 @@ export default async function ProposalsPage({ searchParams }: ProposalsPageProps
       params.proposal_create === "not_eligible"
     : false;
   const proposalCreationAllowed = canCreateProposal(participant);
-  const [signatureSettings, callAuthor] = await Promise.all([readSignatureSettings(pool), pool.query("SELECT btrim(COALESCE(residence_name,''))<>'' AS has_city FROM participants WHERE id=$1", [participant.id])]);
+  const [signatureSettings, callAuthor, paidPrices] = await Promise.all([readSignatureSettings(pool), pool.query("SELECT btrim(COALESCE(residence_name,''))<>'' AS has_city FROM participants WHERE id=$1", [participant.id]), paidCallPrices(pool,participant.id)]);
 
   return (
     <main className="shell">
@@ -60,7 +61,7 @@ export default async function ProposalsPage({ searchParams }: ProposalsPageProps
         </div>
 
         {params.call === "failed" ? <p className="formError">{texts["veche.call_failed"]}</p> : null}
-        {proposalCreationAllowed && callAuthor.rows[0]?.has_city ? <SignatureCallForm texts={texts} settings={signatureSettings} /> : null}
+        {proposalCreationAllowed && callAuthor.rows[0]?.has_city ? <SignatureCallForm texts={texts} settings={signatureSettings} paidPrices={paidPrices} /> : null}
         {proposalCreationAllowed ? (
           <form className="proposalForm" action="/api/proposals" method="post">
             <label htmlFor="proposal-title">Заголовок</label>

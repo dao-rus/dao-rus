@@ -1,3 +1,4 @@
+import { readInterfaceTexts } from "@/lib/interface-texts";
 import Link from "next/link";
 import type { Metadata } from "next";
 import { redirect } from "next/navigation";
@@ -19,8 +20,8 @@ const onboardingReasons = {
 export default async function TokensPage() {
   const participant = await getCurrentParticipant();
   if (!participant) redirect("/");
-  const [balance, history] = await Promise.all([
-    getDarusBalance(participant.id), getDarusHistory(participant.id),
+  const [balance, history, {values:texts}] = await Promise.all([
+    getDarusBalance(participant.id), getDarusHistory(participant.id), readInterfaceTexts(),
   ]);
 
   return (
@@ -41,7 +42,7 @@ export default async function TokensPage() {
             <li key={entry.id}>
               <div>
                 <strong>+{entry.amount} DARUS · {entry.sourceType === "verification_created"
-                  ? `Подтверждение личности: ${entry.subjectName}` : onboardingReasons[entry.sourceType]}</strong>
+                  ? `Подтверждение личности: ${entry.subjectName}` : entry.sourceType === "veche_participation" ? texts["veche.participation_reward"] : entry.sourceType === "veche_organizer" ? texts["veche.organizer_reward"] : onboardingReasons[entry.sourceType]}</strong>
                 <span className="muted"><LocalDateTime value={entry.createdAt.toISOString()} /></span>
                 <small className="muted">Тариф: {entry.tariff} DARUS · версия {entry.rewardRuleVersion}</small>
               </div>
