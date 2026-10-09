@@ -171,7 +171,7 @@ export async function getDarusBalanceWithDatabase(
 ): Promise<string> {
   const result = await database.query(
     `SELECT COALESCE(SUM(amount), 0) AS balance
-       FROM darus_ledger WHERE participant_id = $1::uuid`,
+       FROM darus_book WHERE participant_id = $1::uuid`,
     [participantId],
   );
   return String(result.rows[0].balance);
