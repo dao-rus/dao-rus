@@ -36,8 +36,8 @@ export default async function ProposalsPage({ searchParams }: ProposalsPageProps
   if (!participant) redirect("/");
 
   const [params, proposals, { values: texts }] = await Promise.all([searchParams, listProposals(), readInterfaceTexts()]);
-  const indicators = await getParticipantIndicators([...new Set(proposals.map((proposal) => proposal.authorParticipantId))]);
-  const badges = await getAwardBadges(proposals.map(p => p.authorParticipantId));
+  const indicators = await getParticipantIndicators([...new Set(proposals.flatMap(proposal=>proposal.authorParticipantId?[proposal.authorParticipantId]:[]))]);
+  const badges = await getAwardBadges(proposals.flatMap(p=>p.authorParticipantId?[p.authorParticipantId]:[]));
   const createMessage = params.proposal_create
     ? createMessages[params.proposal_create]
     : null;
@@ -94,10 +94,10 @@ export default async function ProposalsPage({ searchParams }: ProposalsPageProps
               {proposals.map((proposal) => (
                 <li key={proposal.id}>
                   <div className="proposalMeta">
-                    <ParticipantName participantId={proposal.authorParticipantId}
+                    {proposal.authorParticipantId ? <ParticipantName participantId={proposal.authorParticipantId}
                       verificationPoints={indicators.get(proposal.authorParticipantId)?.verificationPoints ?? 0}
                       positiveCount={indicators.get(proposal.authorParticipantId)?.positiveCount ?? 0}
-                      awardBadges={badges[proposal.authorParticipantId]}>{proposal.authorDisplayName}</ParticipantName>
+                      awardBadges={badges[proposal.authorParticipantId]}>{proposal.authorDisplayName ?? ""}</ParticipantName> : <span>{texts["veche.anonymous_author"]}</span>}
                     <span>
                       <LocalDateTime value={proposal.createdAt.toISOString()} />
                     </span>

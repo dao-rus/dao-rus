@@ -1,3 +1,6 @@
+import { readFinanceSettings,saveFinanceSettings,createPaidCallWithDatabase } from "./veche-finance";
+import { getVisibleDarusBookWithDatabase } from "./darus-holds";
+import { listProposalsWithDatabase,ownProposalFlags } from "./proposals";
 import { createSignatureCallWithDatabase, setSignatureWithDatabase, saveSignatureSettings, readSignatureSettings, refreshSignatureCalls } from "./veche-signatures";
 import { announceSignatureCollection } from "./veche-announcement";
 import { randomUUID, createHash, randomBytes } from "node:crypto";
@@ -42,6 +45,7 @@ describe.skipIf(!databaseUrl)("Veche invariants on isolated PostgreSQL", () => {
   beforeAll(async () => {
     const url = new URL(databaseUrl!);
     if (url.hostname !== "127.0.0.1" || url.pathname !== "/veche_tests") throw new Error("Use isolated local veche_tests");
+    await pool.query("BEGIN; SELECT pg_advisory_xact_lock(49001,0); CREATE EXTENSION IF NOT EXISTS pgcrypto WITH SCHEMA public; COMMIT;");
     await pool.query(`CREATE SCHEMA ${schema}`); schemaCreated = true;
     const directory = new URL("../../migrations/", import.meta.url);
     for (const file of readdirSync(directory).filter(name => name.endsWith(".sql") && name < "046_").sort()) await pool.query("BEGIN;" + readFileSync(new URL(file,directory),"utf8") + ";COMMIT;");
@@ -67,13 +71,16 @@ describe.skipIf(!databaseUrl)("Veche invariants on isolated PostgreSQL", () => {
       if (!ready) throw new Error("Isolated Next test server did not become ready");
     }
   }, 150000);
+  async function cleanup(){if(schemaCreated){await pool.query(`DROP SCHEMA ${schema} CASCADE`);schemaCreated=false;}await pool.end();}
   afterAll(async () => {
     if (server && server.exitCode===null && server.pid) {
-      if (process.platform==="win32") execFileSync("taskkill",["/PID",String(server.pid),"/T","/F"],{ windowsHide:true,stdio:"ignore" });
+      if (process.platform==="win32") {
+        try {execFileSync("taskkill",["/PID",String(server.pid),"/T","/F"],{ windowsHide:true,stdio:"ignore" });}
+        catch(error) {try {process.kill(server.pid,0);}catch(check){if((check as NodeJS.ErrnoException).code==="ESRCH")return await cleanup();throw check;}throw error;}
+      }
       else server.kill("SIGTERM");
     }
-    if(schemaCreated) await pool.query(`DROP SCHEMA ${schema} CASCADE`);
-    await pool.end();
+    await cleanup();
   });
 
   it("preserves legacy proposals and does not turn them into polls", async () => {
@@ -312,4 +319,37 @@ describe.skipIf(!databaseUrl)("Veche invariants on isolated PostgreSQL", () => {
     expect((await pool.query('SELECT row_to_json(s) AS settings FROM veche_settings s')).rows).toEqual(settings);
   },60000);
 
+  it('keeps anonymous signatures and open ballots free of initiator identity while preserving independent participants',async()=>{
+    const c=await signatureCircle(),anonymous=(await createSignatureCallWithDatabase(pool,c.creator,'Anonymous question','Synthetic body',{...c.config,authorVisibility:'anonymous'})).id;
+    await setSignatureWithDatabase(pool,anonymous,c.creator,true);await setSignatureWithDatabase(pool,anonymous,c.one,true);await setSignatureWithDatabase(pool,anonymous,c.two,true);
+    await vote(anonymous,c.creator);await vote(anonymous,c.one);
+    expect((await view(anonymous))?.authorId).toBeNull();expect(JSON.stringify(await view(anonymous))).not.toContain(c.creator);
+    expect(await ownProposalFlags(pool,anonymous,c.creator)).toEqual({own:true,signed:true});
+    await expect(closePollWithDatabase(pool,anonymous,c.one)).rejects.toMatchObject({code:'forbidden'});await closePollWithDatabase(pool,anonymous,c.creator);
+    const event=(await pool.query("SELECT participant_id,payload FROM events WHERE payload->>'proposal_id'=$1",[anonymous])).rows;expect(event[0].participant_id).toBeNull();expect(JSON.stringify(event)).not.toContain(c.creator);
+    expect((await listProposalsWithDatabase(pool)).find(row=>row.id===anonymous)?.authorParticipantId).toBeNull();
+    await expect(pool.query("UPDATE proposals SET author_visibility='public' WHERE id=$1",[anonymous])).rejects.toThrow('Author visibility is immutable');
+    expect((await view(c.id))?.authorId).toBe(c.creator);
+    const open=(await createProposalWithDatabase(pool,c.creator,'Anonymous open','Synthetic body',{...c.config,mode:'open',authorVisibility:'anonymous'})).id;
+    await vote(open,c.creator,'no');await vote(open,c.one,'yes');await closePollWithDatabase(pool,open,c.creator);
+    const result=(await view(open))!;expect(result.publicVotes).toContainEqual({participantId:null,displayName:null,choice:'no'});expect(result.publicVotes).toContainEqual({participantId:c.one,displayName: 'Private voter '+c.one,choice:'yes'});expect(JSON.stringify(result)).not.toContain(c.creator);
+  });
+  it.skipIf(!http)('anonymous paid initiator is absent from actual API, HTML, RSC, lists, admin, events, announcements, logs and foreign books',async()=>{
+    const creator=await member('Synthetic private circle '+randomUUID());
+    await pool.query("INSERT INTO darus_ledger(participant_id,amount,reward_rule_id,reward_rule_version,source_type) SELECT $1,amount,id,version,'residence_first_filled' FROM reward_rules WHERE action_type='residence_first_filled' ORDER BY version DESC LIMIT 1",[creator]);
+    const client=await pool.connect();try{await client.query('BEGIN');const settings=await readFinanceSettings(client);await saveFinanceSettings(client,author,{...settings,tariffBaseCity:'0.001',tariffMultiplierCity:'1'});await client.query('COMMIT');}finally{client.release();}
+    const id=(await createPaidCallWithDatabase(pool,creator,'Anonymous paid question','Synthetic body',{circle:'city',mode:'secret',deadline:null,authorVisibility:'anonymous'})).id;
+    const ownBook=await getVisibleDarusBookWithDatabase(pool,creator,creator),foreign=await getVisibleDarusBookWithDatabase(pool,creator,author);
+    expect(ownBook.some(row=>row.kind==='hold'&&row.source_id===id)).toBe(true);expect(foreign.some(row=>row.kind==='hold')).toBe(false);expect(JSON.stringify(foreign)).not.toContain(id);
+    for(const path of ['/api/veche/'+id,'/veche/'+id,'/veche','/admin/veche']){
+     const payloads=[await request(path),...(path.startsWith('/api/')?[]:[await request(path,true)])];
+     for(const payload of payloads){expect(payload).not.toContain(creator);expect(payload).not.toContain('Private voter '+creator);expect(payload).not.toContain('/profile/'+creator);}
+    }
+    const sent:string[]=[];await announcePoll({database:pool,bot:{send:async(_topic:number,text:string)=>{sent.push(text);return 901;},edit:async()=>{}},texts,baseUrl:base,settings:new Map([['topic.veche','12']])},id);expect(JSON.stringify(sent)).not.toContain(creator);
+    expect(JSON.stringify((await pool.query("SELECT participant_id,payload FROM events WHERE payload->>'proposal_id'=$1",[id])).rows)).not.toContain(creator);expect(serverOutput).not.toContain(creator);
+    const token=randomBytes(32).toString('base64url');await pool.query("INSERT INTO sessions(token_hash,participant_id,expires_at) VALUES($1,$2,now()+interval '1 hour')",[createHash('sha256').update(token).digest('hex'),creator]);
+    const ownPage=await fetch(base+'/veche/'+id,{headers:{cookie:'dao_session='+token}});expect(await ownPage.text()).toContain(texts['veche.own_question']);
+    const closeResponse=await fetch(base+'/api/veche/'+id,{method:'POST',headers:{cookie:'dao_session='+token,origin:base},body:new URLSearchParams({action:'close'}),redirect:'manual'});expect(closeResponse.status).toBe(303);expect((await view(id))?.closedAt).not.toBeNull();
+    for(const path of ['/api/veche/'+id,'/veche/'+id])expect(await request(path)).not.toContain(creator);
+  },120000);
 });

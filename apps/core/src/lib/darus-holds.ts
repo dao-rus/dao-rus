@@ -71,3 +71,11 @@ export async function getDarusBookWithDatabase(database: Pick<TokenizationDataba
   if (!uuid.test(participantId)) throw new Error("Invalid participant");
   return (await database.query("SELECT id,amount,currency,kind,source_type,source_id,hold_id,created_at FROM darus_book WHERE participant_id=$1::uuid ORDER BY created_at DESC,id DESC", [participantId])).rows;
 }
+
+// The audit helper above is internal; every caller-facing book carries a viewer.
+export async function getVisibleDarusBookWithDatabase(database: Pick<TokenizationDatabase,"query">,participantId:string,viewerId:string|null) {
+ if(!uuid.test(participantId)||(viewerId!==null&&!uuid.test(viewerId)))throw new Error("Invalid participant");
+ return (await database.query("SELECT * FROM darus_visible_book($1::uuid,$2::uuid)",[participantId,viewerId])).rows;
+}
+
+export async function getOwnDarusBook(participantId:string){const{pool}=await import("./db");return getVisibleDarusBookWithDatabase(pool,participantId,participantId);}

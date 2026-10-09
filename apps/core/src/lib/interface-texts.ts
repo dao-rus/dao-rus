@@ -1,6 +1,15 @@
 import { signalPresentationDefaults, signalGroupDefaults } from "./signal-presentation";
 
 const interfaceTextFieldDefinitions = [
+{"section":"Вече","key":"veche.tariff_debit","label":"Списание тарифа Вече","defaultValue":"Списание тарифа Вече","multiline":false,"pageLabel":"DARUS","pageHref":"/profile/tokens"},
+{"section":"Вече","key":"veche.attention_payment","label":"Плата за внимание Вече","defaultValue":"Плата за внимание Вече","multiline":false,"pageLabel":"DARUS","pageHref":"/profile/tokens"},
+{"section":"Вече","key":"veche.anonymous_author","label":"Автор скрыт","defaultValue":"Автор скрыт","multiline":false,"pageLabel":"Вече","pageHref":"/veche"},
+{"section":"Вече","key":"veche.anonymous_participant","label":"Участник со скрытым именем","defaultValue":"Участник со скрытым именем","multiline":false,"pageLabel":"Вече","pageHref":"/veche"},
+{"section":"Вече","key":"veche.own_question","label":"Ваш вопрос","defaultValue":"Ваш вопрос","multiline":false,"pageLabel":"Вече","pageHref":"/veche"},
+{"section":"Вече","key":"veche.author_visibility","label":"Имя инициатора","defaultValue":"Имя инициатора","multiline":false,"pageLabel":"Вече","pageHref":"/veche"},
+{"section":"Вече","key":"veche.author_public","label":"Показать имя","defaultValue":"Показать имя","multiline":false,"pageLabel":"Вече","pageHref":"/veche"},
+{"section":"Вече","key":"veche.author_hidden","label":"Скрыть имя","defaultValue":"Скрыть имя","multiline":false,"pageLabel":"Вече","pageHref":"/veche"},
+{"section":"Вече","key":"veche.author_warning","label":"Текст вопроса, цитаты и вложения могут раскрыть вас косвенно. Ядро хранит автора для проверки прав; анонимность от оператора сервера не обещается.","defaultValue":"Текст вопроса, цитаты и вложения могут раскрыть вас косвенно. Ядро хранит автора для проверки прав; анонимность от оператора сервера не обещается.","multiline":false,"pageLabel":"Вече","pageHref":"/veche"},
 {"section":"Вече","key":"veche.participation_reward","label":"Чеканка за благо Вече","defaultValue":"Чеканка за благо Вече","multiline":false,"pageLabel":"Вече","pageHref":"/profile/tokens"},
 {"section":"Вече","key":"veche.organizer_reward","label":"Награда организатору Вече","defaultValue":"Награда организатору Вече","multiline":false,"pageLabel":"Вече","pageHref":"/profile/tokens"},
 {"section":"Вече","key":"veche.tariffBaseDao","label":"Базовый тариф всего ДАО, DARUS","defaultValue":"Базовый тариф всего ДАО, DARUS","multiline":false,"pageLabel":"Вече","pageHref":"/veche"},

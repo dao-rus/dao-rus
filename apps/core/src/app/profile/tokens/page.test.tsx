@@ -20,6 +20,7 @@ vi.mock("@/lib/interface-texts",async()=>{
  const {interfaceTextFields}=await import("../../../lib/interface-texts");
  return {readInterfaceTexts:async()=>({values:Object.fromEntries(interfaceTextFields.map(field=>[field.key,field.defaultValue]))})};
 });
+vi.mock("@/lib/darus-holds",()=>({getOwnDarusBook:async()=>[]}));
 import TokensPage from "./page";
 
 function content(node: ReactNode): string {

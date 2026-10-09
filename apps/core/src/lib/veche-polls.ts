@@ -1,22 +1,23 @@
+import { publicProposal,publicParticipant } from "./proposals";
 import type { ProposalDatabase, ProposalDatabaseClient } from "./proposals";
 
-export type PollConfig = { circle: "dao" | "city"; mode: "secret" | "open"; deadline: Date | null; bySignatures?: boolean; paid?: boolean };
+export type PollConfig = { circle: "dao" | "city"; mode: "secret" | "open"; deadline: Date | null; bySignatures?: boolean; paid?: boolean; authorVisibility?: "public" | "anonymous" };
 export type VoteChoice = "yes" | "no" | "abstain";
 export class VecheError extends Error { constructor(readonly code: "invalid" | "ineligible" | "closed" | "forbidden" | "missing") { super(`Veche ${code}`); } }
 export type VecheSettings = { inactivityDays: number | null; quorumDao: number; quorumCity: number };
 export type PollView = {
-  id: string; title: string; body: string; authorId: string; circle: "dao" | "city"; mode: "secret" | "open";
+  id: string; title: string; body: string; authorId: string | null; circle: "dao" | "city"; mode: "secret" | "open";
   deadline: string | null; closedAt: string | null; turnout: number;
-  call: null | { state: "collecting" | "called" | "not_called"; deadline: string; required: number; population: number; counted: number; signatures: Array<{ participantId: string; displayName: string }> };
+  call: null | { state: "collecting" | "called" | "not_called"; deadline: string; required: number; population: number; counted: number; signatures: Array<{ participantId: string | null; displayName: string | null }> };
   result: null | { counts: Record<VoteChoice, number>; eligible: number; quorum: number; quorumReached: boolean };
   // This property exists ONLY for a closed open poll. There is no own-choice projection.
-  publicVotes?: Array<{ participantId: string; displayName: string; choice: VoteChoice }>;
+  publicVotes?: Array<{ participantId: string | null; displayName: string | null; choice: VoteChoice }>;
 };
 type Reader = { query: ProposalDatabaseClient["query"] };
 const uuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 export function validPollId(id: string) { return uuid.test(id); }
 export function normalizePollConfig(config: PollConfig): PollConfig {
-  if (!config || !["dao", "city"].includes(config.circle) || !["secret", "open"].includes(config.mode)
+  if (!config || (config.authorVisibility !== undefined && !["public","anonymous"].includes(config.authorVisibility)) || !["dao", "city"].includes(config.circle) || !["secret", "open"].includes(config.mode)
       || (config.deadline !== null && (!(config.deadline instanceof Date) || !Number.isFinite(config.deadline.getTime()) || config.deadline.getTime() <= Date.now()))) throw new VecheError("invalid");
   return config;
 }
@@ -97,18 +98,18 @@ export async function getPollViewWithDatabase(database: ProposalDatabase, id: st
     await client.query("SELECT veche_refresh_call($1)", [id]);
     const callState = (await client.query("SELECT poll_call_state FROM proposals WHERE id=$1", [id])).rows[0]?.poll_call_state;
     if (!callState || callState === "called") await client.query("SELECT veche_close_poll($1)", [id]);
-    const p = (await client.query(`SELECT id,title,body,author_participant_id,poll_circle,poll_mode,poll_deadline,poll_closed_at,poll_eligible_count,poll_quorum,poll_call_state,poll_signature_deadline,poll_signatures_required,poll_signature_population,poll_signature_count_at_call
+    const p = (await client.query(`SELECT id,title,body,author_participant_id,author_visibility,poll_circle,poll_mode,poll_deadline,poll_closed_at,poll_eligible_count,poll_quorum,poll_call_state,poll_signature_deadline,poll_signatures_required,poll_signature_population,poll_signature_count_at_call
       FROM proposals WHERE id=$1 AND poll_circle IS NOT NULL FOR SHARE`, [id])).rows[0];
     if (!p) { await client.query("COMMIT"); return null; }
     const iso = (date: unknown) => date ? new Date(String(date)).toISOString() : null;
     const turnout = Number((await client.query("SELECT count(*) AS n FROM proposal_votes WHERE proposal_id=$1", [id])).rows[0].n);
-    const view: PollView = { id: String(p.id), title: String(p.title), body: String(p.body), authorId: String(p.author_participant_id),
+    const view: PollView = { id: String(p.id), title: String(p.title), body: String(p.body), authorId: publicProposal(p).authorParticipantId,
       circle: p.poll_circle as PollView["circle"], mode: p.poll_mode as PollView["mode"], deadline: iso(p.poll_deadline), closedAt: iso(p.poll_closed_at), turnout, call: null, result: null };
     if (p.poll_call_state) {
       const signatures = (await client.query(`SELECT s.participant_id,p.display_name FROM proposal_signatures s JOIN participants p ON p.id=s.participant_id WHERE s.proposal_id=$1 ORDER BY s.created_at,s.participant_id`, [id])).rows;
       view.call = { state: p.poll_call_state as NonNullable<PollView["call"]>["state"], deadline: iso(p.poll_signature_deadline)!, required: Number(p.poll_signatures_required), population: Number(p.poll_signature_population),
         counted: p.poll_signature_count_at_call !== null ? Number(p.poll_signature_count_at_call) : Number((await client.query("SELECT veche_signature_count(p) AS n FROM proposals p WHERE id=$1", [id])).rows[0].n),
-        signatures: signatures.map(row => ({ participantId: String(row.participant_id), displayName: String(row.display_name) })) };
+        signatures: signatures.map(row => publicParticipant(p,row)) };
     }
     if (view.closedAt) {
       const counts: Record<VoteChoice, number> = { yes: 0, no: 0, abstain: 0 };
@@ -117,7 +118,7 @@ export async function getPollViewWithDatabase(database: ProposalDatabase, id: st
       view.result = { counts, eligible, quorum, quorumReached: quorum === 0 || turnout >= Math.ceil(eligible * quorum) };
       if (view.mode === "open") view.publicVotes = (await client.query(`SELECT v.participant_id,p.display_name,v.choice FROM proposal_votes v
         JOIN participants p ON p.id=v.participant_id WHERE v.proposal_id=$1 ORDER BY v.participant_id`, [id])).rows
-        .map(row => ({ participantId: String(row.participant_id), displayName: String(row.display_name), choice: row.choice as VoteChoice }));
+        .map(row => ({ ...publicParticipant(p,row), choice: row.choice as VoteChoice }));
     }
     await client.query("COMMIT"); return view;
   } catch (error) { await client.query("ROLLBACK"); throw error; }

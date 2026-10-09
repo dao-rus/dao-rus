@@ -5,6 +5,7 @@ export function SignatureCallForm({texts,settings,paidPrices={}}:{texts:Interfac
  if(!circles.length)return null;
  return <form className="proposalForm" action="/api/veche" method="post">
   <h2>{texts["veche.call_create"]}</h2><p>{texts["veche.signature_meaning"]}</p>
+  <label htmlFor="authorVisibility">{texts["veche.author_visibility"]}</label><select id="authorVisibility" name="authorVisibility"><option value="public">{texts["veche.author_public"]}</option><option value="anonymous">{texts["veche.author_hidden"]}</option></select><p>{texts["veche.author_warning"]}</p>
   <label htmlFor="callTitle">{texts["veche.call_title"]}</label><input id="callTitle" name="title" required />
   <label htmlFor="callBody">{texts["veche.call_body"]}</label><textarea id="callBody" name="body" required rows={5} />
   <label htmlFor="callCircle">{texts["veche.call_circle"]}</label><select id="callCircle" name="circle">{circles.map(circle=><option key={circle} value={circle}>{texts[`veche.${circle}`]}</option>)}</select>

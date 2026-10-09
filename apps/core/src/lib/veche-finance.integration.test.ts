@@ -28,7 +28,8 @@ async function expireWindow(id:string){
 const vote=(id:string,voter:string,choice='abstain')=>castVoteWithDatabase(pool,id,voter,choice);
 const balance=async(id:string)=>Number((await pool.query('SELECT coalesce(sum(amount),0) AS n FROM darus_book WHERE participant_id=$1',[id])).rows[0].n);
 describe.skipIf(!url)('Veche money on isolated PostgreSQL',()=>{
- beforeAll(async()=>{const parsed=new URL(url!);if(parsed.hostname!=='127.0.0.1'||parsed.pathname!=='/veche_tests')throw Error('Use isolated local veche_tests');await pool.query(`CREATE SCHEMA ${schema}`);created=true;const dir=new URL('../../migrations/',import.meta.url);for(const f of readdirSync(dir).filter(f=>f.endsWith('.sql')).sort()){
+ beforeAll(async()=>{const parsed=new URL(url!);if(parsed.hostname!=='127.0.0.1'||parsed.pathname!=='/veche_tests')throw Error('Use isolated local veche_tests');await pool.query("BEGIN; SELECT pg_advisory_xact_lock(49001,0); CREATE EXTENSION IF NOT EXISTS pgcrypto WITH SCHEMA public; COMMIT;");
+    await pool.query(`CREATE SCHEMA ${schema}`);created=true;const dir=new URL('../../migrations/',import.meta.url);for(const f of readdirSync(dir).filter(f=>f.endsWith('.sql')).sort()){
  if(f.startsWith("048_")){const id=await member(`Synthetic legacy ${randomUUID()}`);await pool.query("INSERT INTO darus_ledger(participant_id,amount,reward_rule_id,reward_rule_version,source_type) SELECT $1,amount,id,version,'residence_first_filled' FROM reward_rules WHERE action_type='residence_first_filled' ORDER BY version DESC LIMIT 1",[id]);}
  const before=(await pool.query("SELECT to_regclass('darus_ledger') AS ledger")).rows[0].ledger ? (await pool.query("SELECT * FROM darus_ledger ORDER BY id")).rows:null;
  await pool.query('BEGIN;'+readFileSync(new URL(f,dir),'utf8')+';COMMIT;');

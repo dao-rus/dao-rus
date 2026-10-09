@@ -1,3 +1,4 @@
+import { getOwnDarusBook } from "@/lib/darus-holds";
 import { readInterfaceTexts } from "@/lib/interface-texts";
 import Link from "next/link";
 import type { Metadata } from "next";
@@ -20,8 +21,8 @@ const onboardingReasons = {
 export default async function TokensPage() {
   const participant = await getCurrentParticipant();
   if (!participant) redirect("/");
-  const [balance, history, {values:texts}] = await Promise.all([
-    getDarusBalance(participant.id), getDarusHistory(participant.id), readInterfaceTexts(),
+  const [balance, history, {values:texts}, book] = await Promise.all([
+    getDarusBalance(participant.id), getDarusHistory(participant.id), readInterfaceTexts(), getOwnDarusBook(participant.id),
   ]);
 
   return (
@@ -38,6 +39,7 @@ export default async function TokensPage() {
         </div>
         <section className="activityHistory">
           <h2>История начислений</h2>
+          {book.filter(entry=>entry.kind!=="mint"&&String(entry.source_type).startsWith("veche_")).map(entry=><p key={String(entry.id)}>{texts[entry.kind==="hold"?"veche.tariff_debit":"veche.attention_payment"]}: {String(entry.amount)} DARUS {entry.source_id?<Link href={`/veche/${String(entry.source_id)}`}>{texts["veche.title"]}</Link>:null}</p>)}
           {history.length ? <ol>{history.map((entry) => (
             <li key={entry.id}>
               <div>

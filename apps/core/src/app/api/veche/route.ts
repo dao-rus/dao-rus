@@ -17,7 +17,7 @@ export async function POST(request:NextRequest){
    const form=await request.formData();
    const deadline=form.get("timing")==="permanent"?null:new Date(String(form.get("deadline"))+"+03:00");
    const paid=form.get("path")==="paid";
-   const proposal=await (paid?createPaidCall:createSignatureCall)(participant.id,form.get("title"),form.get("body"),{circle:form.get("circle") as PollConfig["circle"],mode:form.get("mode") as PollConfig["mode"],deadline});
+   const proposal=await (paid?createPaidCall:createSignatureCall)(participant.id,form.get("title"),form.get("body"),{circle:form.get("circle") as PollConfig["circle"],mode:form.get("mode") as PollConfig["mode"],deadline,authorVisibility:form.get("authorVisibility")==="anonymous"?"anonymous":"public"});
    if(paid)await afterPollCalled(proposal.id);else await afterSignatureCallChanged(proposal.id);
    url=new URL(`/veche/${proposal.id}`,appBaseUrl());
  }catch{url.searchParams.set("call","failed");}

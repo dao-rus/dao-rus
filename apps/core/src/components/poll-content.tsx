@@ -16,7 +16,7 @@ export function PollContent({ poll, texts, canVote = false, canClose = false, ca
       <p>{texts["veche.signature_meaning"]}</p>
       <p>{texts["veche.signature_count"]}: {poll.call.counted} · {texts["veche.signature_required"]}: {poll.call.required}</p>
       <LocalDateTime value={poll.call.deadline} />
-      <ul>{poll.call.signatures.map(signer => <li key={signer.participantId}>{signer.displayName}</li>)}</ul>
+      <ul>{poll.call.signatures.map((signer,index) => <li key={signer.participantId ?? index}>{signer.displayName ?? texts["veche.anonymous_participant"]}</li>)}</ul>
       {poll.call.state === "collecting" && (canSign || signed) ? <form action={`/api/veche/${poll.id}/signatures`} method="post">
         <button className="button secondary" name="support" value={signed ? "off" : "on"}>{texts[signed ? "veche.signature_withdraw" : "veche.signature_support"]}</button>
       </form> : null}
@@ -34,6 +34,6 @@ export function PollContent({ poll, texts, canVote = false, canClose = false, ca
       <p>{texts[poll.result.quorumReached ? "veche.quorum_reached" : "veche.quorum_missing"]}</p>
       <p>{texts["veche.eligible"]}: {poll.result.eligible}</p>
     </> : null}
-    {poll.publicVotes ? <ul>{poll.publicVotes.map(vote => <li key={vote.participantId}>{vote.displayName}: {choiceText(vote.choice)}</li>)}</ul> : null}
+    {poll.publicVotes ? <ul>{poll.publicVotes.map((vote,index) => <li key={vote.participantId ?? index}>{vote.displayName ?? texts["veche.anonymous_participant"]}: {choiceText(vote.choice)}</li>)}</ul> : null}
   </section>;
 }
