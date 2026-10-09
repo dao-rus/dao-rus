@@ -1,3 +1,4 @@
+import {saveEmptySettings,setEmptyMarkWithDatabase} from "./veche-empty";
 import { createSignatureCallWithDatabase,saveSignatureSettings,setSignatureWithDatabase } from "./veche-signatures";
 import { randomUUID } from "node:crypto";
 import { readFileSync,readdirSync } from "node:fs";
@@ -9,7 +10,7 @@ import { castVoteWithDatabase,closePollWithDatabase,getPollViewWithDatabase } fr
 const url=process.env.VECHE_TEST_DATABASE_URL;
 const schema=`veche_finance_test_${randomUUID().replaceAll('-','')}`;
 const pool=new Pool({connectionString:url,options:`-c search_path=${schema},public`,max:12});
-let created=false;
+let created=false; let preEmptyPoll:string; let preEmptyPollState:unknown;
 async function member(city:string){const id=randomUUID();await pool.query("INSERT INTO participants(id,display_name,membership_status,residence_name,residence_type,residence_country) VALUES($1,'Synthetic participant','participant',$2,'city','Synthetic country')",[id,city]);return id;}
 async function fixture(){
  const city=`Synthetic ${randomUUID()}`,author=await member(city),voters=await Promise.all([member(city),member(city),member(city)]);
@@ -30,12 +31,23 @@ const balance=async(id:string)=>Number((await pool.query('SELECT coalesce(sum(am
 describe.skipIf(!url)('Veche money on isolated PostgreSQL',()=>{
  beforeAll(async()=>{const parsed=new URL(url!);if(parsed.hostname!=='127.0.0.1'||parsed.pathname!=='/veche_tests')throw Error('Use isolated local veche_tests');await pool.query("BEGIN; SELECT pg_advisory_xact_lock(49001,0); CREATE EXTENSION IF NOT EXISTS pgcrypto WITH SCHEMA public; COMMIT;");
     await pool.query(`CREATE SCHEMA ${schema}`);created=true;const dir=new URL('../../migrations/',import.meta.url);for(const f of readdirSync(dir).filter(f=>f.endsWith('.sql')).sort()){
+ if(f.startsWith("051_")){
+  const oldAuthor=await member(`Synthetic pre-empty ${randomUUID()}`);
+  preEmptyPoll=(await createProposalWithDatabase(pool,oldAuthor,'Legacy closed','Body',{circle:'dao',mode:'open',deadline:null})).id;
+  await castVoteWithDatabase(pool,preEmptyPoll,oldAuthor,'yes');await closePollWithDatabase(pool,preEmptyPoll,oldAuthor);
+  preEmptyPollState=(await pool.query('SELECT id,status,poll_closed_at,poll_eligible_count,poll_quorum FROM proposals WHERE id=$1',[preEmptyPoll])).rows;
+ }
  if(f.startsWith("048_")){const id=await member(`Synthetic legacy ${randomUUID()}`);await pool.query("INSERT INTO darus_ledger(participant_id,amount,reward_rule_id,reward_rule_version,source_type) SELECT $1,amount,id,version,'residence_first_filled' FROM reward_rules WHERE action_type='residence_first_filled' ORDER BY version DESC LIMIT 1",[id]);}
  const before=(await pool.query("SELECT to_regclass('darus_ledger') AS ledger")).rows[0].ledger ? (await pool.query("SELECT * FROM darus_ledger ORDER BY id")).rows:null;
  await pool.query('BEGIN;'+readFileSync(new URL(f,dir),'utf8')+';COMMIT;');
+ if(f.startsWith("051_"))expect((await pool.query("SELECT * FROM darus_ledger ORDER BY id")).rows).toEqual(before);
  if(f.startsWith("048_"))expect((await pool.query("SELECT id,participant_id,amount,currency,reward_rule_id,reward_rule_version,source_type,source_attestation_id,source_subject_id,created_at FROM darus_ledger ORDER BY id")).rows).toEqual(before);
  }},60000);
  afterAll(async()=>{if(created)await pool.query(`DROP SCHEMA ${schema} CASCADE`);await pool.end();});
+ it('preserves closed results and existing ledger during the additive empty-question migration',async()=>{
+  expect((await pool.query('SELECT id,status,poll_closed_at,poll_eligible_count,poll_quorum FROM proposals WHERE id=$1',[preEmptyPoll])).rows).toEqual(preEmptyPollState);
+  expect((await pool.query('SELECT poll_empty,poll_empty_fraction FROM proposals WHERE id=$1',[preEmptyPoll])).rows).toEqual([{poll_empty:false,poll_empty_fraction:null}]);
+ });
  it('keeps defaults disabled and snapshots append-only',async()=>{
   const settings=await readFinanceSettings(pool);expect(settings).toMatchObject({tariffBaseDao:null,tariffBaseCity:null,participationAmount:'0',organizerAmount:'0',attentionDays:'7'});
   const author=await member(`Synthetic ${randomUUID()}`);await expect(paid(author)).rejects.toThrow('Paid call is disabled');expect(await paidCallPrices(pool,author)).toEqual({});
@@ -106,4 +118,16 @@ describe.skipIf(!url)('Veche money on isolated PostgreSQL',()=>{
   await Promise.all(ids.map(id=>closePollWithDatabase(pool,id,author)));
   expect((await pool.query("SELECT count(*) AS n FROM darus_ledger WHERE participant_id=$1 AND source_type='veche_organizer'",[author])).rows[0].n).toBe('1');
  });
+
+ it('suppresses both public-good rewards for empty service, paid and anonymous questions while preserving tariff distribution',async()=>{
+  const {author,voters}=await fixture(),client=await pool.connect();try{await client.query('BEGIN');const settings=await readFinanceSettings(client);await saveFinanceSettings(client,author,{...settings,participationAmount:'0.003',organizerAmount:'0.002',organizerFraction:'0.000001',organizerCooldownDays:'1'});await saveEmptySettings(client,{emptyFraction:0.5,emptySignalCount:null,emptySignalDays:null});await client.query('COMMIT');}finally{client.release();}
+  const deadline=new Date(Date.now()+1800);
+  const ids=[(await createProposalWithDatabase(pool,author,'Q','B',{circle:'city',mode:'secret',deadline:null})).id,await paid(author,deadline),(await createPaidCallWithDatabase(pool,author,'Q','B',{circle:'city',mode:'secret',deadline:null,authorVisibility:'anonymous'})).id];
+  for(const id of ids){await vote(id,voters[0]);await setEmptyMarkWithDatabase(pool,id,voters[0],true);}
+  await closePollWithDatabase(pool,ids[0],author);await closePollWithDatabase(pool,ids[2],author);
+  await new Promise(resolve=>setTimeout(resolve,1900));await getPollViewWithDatabase(pool,ids[1]);
+  for(const id of ids){expect((await getPollViewWithDatabase(pool,id))?.empty.recognized).toBe(true);await Promise.all(Array.from({length:4},()=>pool.query('SELECT veche_settle($1)',[id])));expect((await pool.query('SELECT count(*) AS n FROM darus_ledger WHERE source_proposal_id=$1',[id])).rows[0].n).toBe('0');}
+  expect((await pool.query("SELECT amount FROM darus_movements WHERE source_id=$1 AND kind='distribution'",[ids[1]])).rows).toEqual([{amount:'0.000004'}]);
+  await expect(pool.query('UPDATE proposals SET poll_empty=false WHERE id=$1',[ids[0]])).rejects.toThrow('immutable');
+ },15000);
 });

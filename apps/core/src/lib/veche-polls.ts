@@ -8,6 +8,7 @@ export type VecheSettings = { inactivityDays: number | null; quorumDao: number; 
 export type PollView = {
   id: string; title: string; body: string; authorId: string | null; circle: "dao" | "city"; mode: "secret" | "open";
   deadline: string | null; closedAt: string | null; turnout: number;
+  empty: { enabled: boolean; recognized: boolean; fraction: number | null; marks: Array<{ participantId: string; displayName: string }> };
   call: null | { state: "collecting" | "called" | "not_called"; deadline: string; required: number; population: number; counted: number; signatures: Array<{ participantId: string | null; displayName: string | null }> };
   result: null | { counts: Record<VoteChoice, number>; eligible: number; quorum: number; quorumReached: boolean };
   // This property exists ONLY for a closed open poll. There is no own-choice projection.
@@ -98,13 +99,15 @@ export async function getPollViewWithDatabase(database: ProposalDatabase, id: st
     await client.query("SELECT veche_refresh_call($1)", [id]);
     const callState = (await client.query("SELECT poll_call_state FROM proposals WHERE id=$1", [id])).rows[0]?.poll_call_state;
     if (!callState || callState === "called") await client.query("SELECT veche_close_poll($1)", [id]);
-    const p = (await client.query(`SELECT id,title,body,author_participant_id,author_visibility,poll_circle,poll_mode,poll_deadline,poll_closed_at,poll_eligible_count,poll_quorum,poll_call_state,poll_signature_deadline,poll_signatures_required,poll_signature_population,poll_signature_count_at_call,poll_rule_snapshot
+    const p = (await client.query(`SELECT id,title,body,author_participant_id,author_visibility,poll_circle,poll_mode,poll_deadline,poll_closed_at,poll_eligible_count,poll_quorum,poll_call_state,poll_signature_deadline,poll_signatures_required,poll_signature_population,poll_signature_count_at_call,poll_rule_snapshot,poll_empty,poll_empty_fraction
       FROM proposals WHERE id=$1 AND poll_circle IS NOT NULL FOR SHARE`, [id])).rows[0];
     if (!p) { await client.query("COMMIT"); return null; }
     const iso = (date: unknown) => date ? new Date(String(date)).toISOString() : null;
     const turnout = Number((await client.query("SELECT count(*) AS n FROM proposal_votes WHERE proposal_id=$1", [id])).rows[0].n);
     const view: PollView = { id: String(p.id), title: String(p.title), body: String(p.body), authorId: publicProposal(p).authorParticipantId,
-      circle: p.poll_circle as PollView["circle"], mode: p.poll_mode as PollView["mode"], deadline: iso(p.poll_deadline), closedAt: iso(p.poll_closed_at), turnout, call: null, result: null };
+      circle: p.poll_circle as PollView["circle"], mode: p.poll_mode as PollView["mode"], deadline: iso(p.poll_deadline), closedAt: iso(p.poll_closed_at), turnout, empty: { enabled: false, recognized: p.poll_empty === true, fraction: p.poll_empty_fraction === null ? null : Number(p.poll_empty_fraction), marks: [] }, call: null, result: null };
+    view.empty.enabled = (await client.query("SELECT empty_fraction IS NOT NULL AS enabled FROM veche_settings WHERE singleton")).rows[0].enabled === true;
+    view.empty.marks = (await client.query("SELECT m.participant_id,p.display_name FROM proposal_empty_marks m JOIN participants p ON p.id=m.participant_id WHERE m.proposal_id=$1 ORDER BY m.created_at,m.participant_id",[id])).rows.map(row=>({participantId:String(row.participant_id),displayName:String(row.display_name)}));
     if (p.poll_call_state) {
       const signatures = (await client.query(`SELECT s.participant_id,p.display_name FROM proposal_signatures s JOIN participants p ON p.id=s.participant_id WHERE s.proposal_id=$1 ORDER BY s.created_at,s.participant_id`, [id])).rows;
       const snapshot=p.poll_rule_snapshot as Record<string,unknown> | null;

@@ -1,3 +1,4 @@
+import { parseEmptySettings,readEmptySettings,saveEmptySettings,setEmptyMarkWithDatabase,readEmptySignals,readPublicFreezes,recordFreezeWithDatabase } from "./veche-empty";
 import { readFinanceSettings,saveFinanceSettings,createPaidCallWithDatabase } from "./veche-finance";
 import { getVisibleDarusBookWithDatabase } from "./darus-holds";
 import { listProposalsWithDatabase,ownProposalFlags } from "./proposals";
@@ -376,5 +377,97 @@ describe.skipIf(!databaseUrl)("Veche invariants on isolated PostgreSQL", () => {
     const ownPage=await fetch(base+'/veche/'+id,{headers:{cookie:'dao_session='+token}});expect(await ownPage.text()).toContain(texts['veche.own_question']);
     const closeResponse=await fetch(base+'/api/veche/'+id,{method:'POST',headers:{cookie:'dao_session='+token,origin:base},body:new URLSearchParams({action:'close'}),redirect:'manual'});expect(closeResponse.status).toBe(303);expect((await view(id))?.closedAt).not.toBeNull();
     for(const path of ['/api/veche/'+id,'/veche/'+id])expect(await request(path)).not.toContain(creator);
+  },120000);
+
+  async function emptyFixture(){
+   const creator=await member('Synthetic empty '+randomUUID()),voter=await member();
+   const create=(visibility:'public'|'anonymous'='public')=>createProposalWithDatabase(pool,creator,'Synthetic empty question','Synthetic body',{circle:'dao',mode:'secret',deadline:null,authorVisibility:visibility}).then(p=>p.id);
+   return {creator,voter,create};
+  }
+  async function markEmpty(id:string,creator:string,voter:string){await vote(id,voter);await setEmptyMarkWithDatabase(pool,id,voter,true);await closePollWithDatabase(pool,id,creator);expect((await view(id))?.empty.recognized).toBe(true);}
+  async function approvedDecision(){const id=await poll({mode:'open'});await vote(id,author);await close(id);return id;}
+  it('keeps empty recognition and repetition defaults off and validates optional settings',async()=>{
+   expect(await readEmptySettings(pool)).toEqual({emptyFraction:null,emptySignalCount:null,emptySignalDays:null});
+   expect(parseEmptySettings({emptyFraction:'',emptySignalCount:'',emptySignalDays:''})).toEqual({emptyFraction:null,emptySignalCount:null,emptySignalDays:null});
+   for(const emptyFraction of ['0','1.1','-1','NaN'])expect(()=>parseEmptySettings({emptyFraction,emptySignalCount:null,emptySignalDays:null})).toThrow();
+   const c=await emptyFixture(),id=await c.create();await expect(setEmptyMarkWithDatabase(pool,id,c.voter,true)).rejects.toThrow('disabled');
+   await saveEmptySettings(pool,{emptyFraction:0.5,emptySignalCount:null,emptySignalDays:null});
+  });
+  it('excludes the initiator, enforces circle and city, and exposes one withdrawable mark without revealing secret choices',async()=>{
+   const c=await emptyFixture(),id=await c.create(),noCity=await member(null),outsider=await member('Synthetic elsewhere');
+   await expect(setEmptyMarkWithDatabase(pool,id,c.creator,true)).rejects.toThrow('own poll');await expect(setEmptyMarkWithDatabase(pool,id,noCity,true)).rejects.toThrow('not eligible');
+   const city=(await createProposalWithDatabase(pool,c.creator,'City','Body',{circle:'city',mode:'secret',deadline:null})).id;
+   await expect(setEmptyMarkWithDatabase(pool,city,outsider,true)).rejects.toThrow('not eligible');
+   await Promise.all(Array.from({length:6},()=>setEmptyMarkWithDatabase(pool,id,c.voter,true)));
+   expect((await view(id))?.empty.marks).toEqual([{participantId:c.voter,displayName:'Private voter '+c.voter}]);expect((await view(id))?.publicVotes).toBeUndefined();
+   await pool.query("UPDATE participants SET membership_status='left' WHERE id=$1",[c.voter]);await setEmptyMarkWithDatabase(pool,id,c.voter,false);expect((await view(id))?.empty.marks).toEqual([]);
+  });
+  it('freezes the empty result at closure and serializes marks against closure',async()=>{
+   const c=await emptyFixture(),id=await c.create();await markEmpty(id,c.creator,c.voter);
+   await expect(setEmptyMarkWithDatabase(pool,id,c.voter,false)).rejects.toMatchObject({code:'closed'});
+   await expect(pool.query('UPDATE proposals SET poll_empty=false WHERE id=$1',[id])).rejects.toThrow('immutable');
+   await saveEmptySettings(pool,{emptyFraction:null,emptySignalCount:null,emptySignalDays:null});expect((await view(id))?.empty.recognized).toBe(true);
+   const off=await c.create();await vote(off,c.voter);await closePollWithDatabase(pool,off,c.creator);expect((await view(off))?.empty.recognized).toBe(false);
+   await saveEmptySettings(pool,{emptyFraction:0.5,emptySignalCount:null,emptySignalDays:null});
+   const race=await c.create();await vote(race,c.voter);
+   const [mark]=await Promise.allSettled([setEmptyMarkWithDatabase(pool,race,c.voter,true),closePollWithDatabase(pool,race,c.creator)]);
+   const result=(await view(race))!;expect(result.empty.recognized).toBe(mark.status==='fulfilled');expect(result.empty.marks.length).toBe(mark.status==='fulfilled'?1:0);
+   const zero=await c.create();await setEmptyMarkWithDatabase(pool,zero,c.voter,true);await closePollWithDatabase(pool,zero,c.creator);expect((await view(zero))?.empty.recognized).toBe(false);
+  });
+  it('counts only public empty questions and never associates anonymous B with public A in signals or sanctions',async()=>{
+   const c=await emptyFixture(),a=await c.create(),b=await c.create('anonymous');await markEmpty(a,c.creator,c.voter);await markEmpty(b,c.creator,c.voter);
+   await saveEmptySettings(pool,{emptyFraction:0.5,emptySignalCount:2,emptySignalDays:30});expect((await readEmptySignals(pool)).find(s=>s.authorId===c.creator)).toBeUndefined();
+   await saveEmptySettings(pool,{emptyFraction:0.5,emptySignalCount:1,emptySignalDays:30});const signal=(await readEmptySignals(pool)).find(s=>s.authorId===c.creator)!;expect(signal.questions.map(q=>q.id)).toEqual([a]);expect(JSON.stringify(signal)).not.toContain(b);
+   const decision=await approvedDecision();await expect(recordFreezeWithDatabase(pool,author,b,decision,'freeze',new Date(Date.now()+60000))).rejects.toThrow('Public empty question');
+   await recordFreezeWithDatabase(pool,author,a,decision,'freeze',new Date(Date.now()+60000));const records=await readPublicFreezes(pool);const record=records.find(r=>r.questions.some(q=>q.id===a))!;expect(record.active).toBe(true);expect(record.questions.map(q=>q.id)).toEqual([a]);expect(JSON.stringify(records)).not.toContain(b);
+   await recordFreezeWithDatabase(pool,author,a,decision,'unfreeze',null);
+  });
+  it('requires an approved public open DAO decision, keeps sanctions append-only, blocks all call paths and permits early release',async()=>{
+   const c=await emptyFixture(),a=await c.create();await markEmpty(a,c.creator,c.voter);const decision=await approvedDecision();
+   await expect(recordFreezeWithDatabase(pool,author,a,'','freeze',new Date(Date.now()+60000))).rejects.toThrow();
+   const pending=await poll({mode:'open'});await expect(recordFreezeWithDatabase(pool,author,a,pending,'freeze',new Date(Date.now()+60000))).rejects.toThrow('Closed open DAO decision');
+   const rejected=await poll({mode:'open'});await vote(rejected,author,'no');await close(rejected);await expect(recordFreezeWithDatabase(pool,author,a,rejected,'freeze',new Date(Date.now()+60000))).rejects.toThrow('Approved DAO decision');
+   const secret=await poll();await vote(secret,author);await close(secret);await expect(recordFreezeWithDatabase(pool,author,a,secret,'freeze',new Date(Date.now()+60000))).rejects.toThrow('Closed open DAO decision');
+   const anonymousDecision=await poll({mode:'open',authorVisibility:'anonymous'});await vote(anonymousDecision,author);await close(anonymousDecision);await expect(recordFreezeWithDatabase(pool,author,a,anonymousDecision,'freeze',new Date(Date.now()+60000))).rejects.toThrow('Closed open DAO decision');
+   await saveSignatureSettings(pool,{fractionDao:0.000001,fractionCity:0.000001,minimumDao:1,minimumCity:1,days:14,cooldownDays:0});
+   const collecting=(await createSignatureCallWithDatabase(pool,c.creator,'Pre-freeze collection','Body',{circle:'dao',mode:'secret',deadline:null})).id;
+   await recordFreezeWithDatabase(pool,author,a,decision,'freeze',new Date(Date.now()+60000));
+   await expect(c.create()).rejects.toThrow('frozen');await expect(c.create('anonymous')).rejects.toThrow('frozen');
+   await expect(createSignatureCallWithDatabase(pool,c.creator,'Q','B',{circle:'dao',mode:'secret',deadline:null})).rejects.toThrow('frozen');
+   await expect(createPaidCallWithDatabase(pool,c.creator,'Q','B',{circle:'dao',mode:'secret',deadline:null})).rejects.toThrow('frozen');
+   await expect(setSignatureWithDatabase(pool,collecting,c.voter,true)).rejects.toThrow('frozen');
+   await expect(pool.query("INSERT INTO proposals(author_participant_id,title,body,status,poll_circle,poll_mode) VALUES($1,'Q','B','open','dao','secret')",[c.creator])).rejects.toThrow('frozen');
+   await expect(pool.query('DELETE FROM veche_convocation_freezes WHERE source_proposal_id=$1',[a])).rejects.toThrow('append-only');
+   await recordFreezeWithDatabase(pool,author,a,decision,'unfreeze',null);await expect(c.create()).resolves.toBeTypeOf('string');await setSignatureWithDatabase(pool,collecting,c.voter,true);expect((await view(collecting))?.call?.state).toBe('called');
+  });
+  it('serializes freezes with call creation and allows calls after expiry without rewriting sanctions',async()=>{
+   const c=await emptyFixture(),a=await c.create();await markEmpty(a,c.creator,c.voter);const decision=await approvedDecision();
+   const lock=await pool.connect();try{
+    await lock.query('BEGIN');await lock.query('SELECT id FROM participants WHERE id=$1 FOR UPDATE',[c.creator]);
+    const creating=c.create();await recordFreezeWithDatabase(lock,author,a,decision,'freeze',new Date(Date.now()+1200));await lock.query('COMMIT');await expect(creating).rejects.toThrow('frozen');
+   }finally{lock.release();}
+   await new Promise(resolve=>setTimeout(resolve,1300));await expect(c.create()).resolves.toBeTypeOf('string');
+  });
+  it.skipIf(!http)('HTTP marks use the session actor, reject CSRF/self marks; sanctions require admin and omit anonymous B from actual admin and RSC projection',async()=>{
+   const c=await emptyFixture(),a=await c.create(),b=await c.create('anonymous');
+   const token=randomBytes(32).toString('base64url');await pool.query("INSERT INTO sessions(token_hash,participant_id,expires_at) VALUES($1,$2,now()+interval '1 hour')",[createHash('sha256').update(token).digest('hex'),c.creator]);
+   const path='/api/veche/'+a+'/empty';
+   expect((await fetch(base+path,{method:'POST',body:new URLSearchParams({mark:'on'}),redirect:'manual'})).status).toBe(401);
+   expect((await fetch(base+path,{method:'POST',headers:{cookie,origin:'https://foreign.invalid'},body:new URLSearchParams({mark:'on'}),redirect:'manual'})).status).toBe(403);
+   const own=await fetch(base+path,{method:'POST',headers:{cookie:'dao_session='+token,origin:base},body:new URLSearchParams({mark:'on',participantId:c.voter}),redirect:'manual'});expect(own.headers.get('location')).toContain('failed');
+   const marked=await fetch(base+path,{method:'POST',headers:{cookie,origin:base},body:new URLSearchParams({mark:'on',participantId:c.creator}),redirect:'manual'});expect(marked.headers.get('location')).toContain('saved');expect((await view(a))?.empty.marks[0].participantId).toBe(author);
+   for(const rsc of [false,true]){const payload=await request('/veche/'+a,rsc);expect(payload).toContain(texts['veche.empty_count']);expect(payload).toContain(author);}
+   const withdrawn=await fetch(base+path,{method:'POST',headers:{cookie,origin:base},body:new URLSearchParams({mark:'off'}),redirect:'manual'});expect(withdrawn.headers.get('location')).toContain('saved');expect((await view(a))?.empty.marks).toEqual([]);
+   await markEmpty(a,c.creator,c.voter);await markEmpty(b,c.creator,c.voter);await saveEmptySettings(pool,{emptyFraction:0.5,emptySignalCount:1,emptySignalDays:30});const decision=await approvedDecision();
+   const body=new URLSearchParams({source:a,decision,action:'freeze',expiresAt:new Date(Date.now()+3600000+3*3600000).toISOString().slice(0,16),attest:'yes'});
+   expect((await fetch(base+'/api/admin/veche/freeze',{method:'POST',headers:{cookie:'dao_session='+token,origin:base},body,redirect:'manual'})).status).toBe(403);
+   expect((await fetch(base+'/api/admin/veche/freeze',{method:'POST',headers:{cookie,origin:'https://foreign.invalid'},body,redirect:'manual'})).status).toBe(403);
+   const result=await fetch(base+'/api/admin/veche/freeze',{method:'POST',headers:{cookie,origin:base},body,redirect:'manual'});expect(result.headers.get('location')).toContain('freeze=saved');
+   for(const rsc of [false,true]){const payload=await request('/admin/veche',rsc);expect(payload).toContain(a);expect(payload).toContain(decision);expect(payload).not.toContain(b);}
+   expect(JSON.stringify(await readEmptySignals(pool))).not.toContain(b);expect(JSON.stringify(await readPublicFreezes(pool))).not.toContain(b);
+   for(const rsc of [false,true]){const payload=await request('/veche',rsc);expect(payload).toContain(texts['veche.freeze_active']);}
+   const denied=await fetch(base+'/api/veche',{method:'POST',headers:{cookie:'dao_session='+token,origin:base},body:new URLSearchParams({circle:'dao',mode:'secret',timing:'permanent',title:'Q',body:'B',path:'signatures'}),redirect:'manual'});expect(denied.headers.get('location')).toContain('failed');
+   expect(await request('/veche',false,{cookie:'dao_session='+token})).not.toContain('action="/api/veche"');
+   expect(serverOutput).not.toContain(c.creator);await recordFreezeWithDatabase(pool,author,a,decision,'unfreeze',null);
   },120000);
 });

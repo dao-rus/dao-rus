@@ -1,3 +1,4 @@
+import { parseEmptySettings, saveEmptySettings } from "@/lib/veche-empty";
 import { financeFields, parseFinanceSettings, saveFinanceSettings } from "@/lib/veche-finance";
 import { parseSignatureSettings, saveSignatureSettings } from "@/lib/veche-signatures";
 import { NextRequest, NextResponse } from "next/server";
@@ -18,10 +19,12 @@ export async function POST(request: NextRequest) {
     const settings = parseVecheSettings({ inactivityDays: form.get("inactivityDays"), quorumDao: form.get("quorumDao"), quorumCity: form.get("quorumCity") });
     const signatures = parseSignatureSettings({ minimumDao:form.get("minimumDao"),minimumCity:form.get("minimumCity"),fractionDao: form.get("fractionDao"), fractionCity: form.get("fractionCity"), days: form.get("signatureDays"), cooldownDays: form.get("signatureCooldown") });
     const finance = parseFinanceSettings(Object.fromEntries(Object.keys(financeFields).map(key=>[key,form.get(key)])) as Parameters<typeof parseFinanceSettings>[0]);
+    const empty = parseEmptySettings({emptyFraction:form.get("emptyFraction"),emptySignalCount:form.get("emptySignalCount"),emptySignalDays:form.get("emptySignalDays")});
     const client = await pool.connect();
     try {
       await client.query("BEGIN");
       await saveVecheSettings(client, settings);
+      await saveEmptySettings(client, empty);
       await saveSignatureSettings(client, signatures);
       await saveFinanceSettings(client, participant.id, finance);
       await client.query("COMMIT");

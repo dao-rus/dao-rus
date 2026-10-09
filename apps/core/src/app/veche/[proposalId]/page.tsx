@@ -23,6 +23,6 @@ export default async function PollPage({ params, searchParams }: { params: Promi
     {query.outcome ? <p role="status">{texts[query.outcome === "saved" ? "veche.vote_saved" : "veche.vote_failed"]}</p> : null}
     {query.signature ? <p role="status">{texts[query.signature === "saved" ? "veche.signature_saved" : "veche.signature_failed"]}</p> : null}
     {own?<p>{texts["veche.own_question"]}</p>:null}
-    <PollContent poll={poll} texts={texts} canVote={canVote} canSign={signatureEligible} signed={signed} canClose={!poll.closedAt && !poll.deadline && (!poll.call || poll.call.state === "called") && own} />
+    <PollContent poll={poll} texts={texts} canVote={canVote} canMark={canVote && !own && poll.empty.enabled} marked={!poll.closedAt && (!poll.call || poll.call.state === "called") && poll.empty.marks.some(m=>m.participantId===participant.id)} canSign={signatureEligible} signed={signed} canClose={!poll.closedAt && !poll.deadline && (!poll.call || poll.call.state === "called") && own} />
   </section></main>;
 }

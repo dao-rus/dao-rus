@@ -1,3 +1,5 @@
+import { readPublicFreezes } from "@/lib/veche-empty";
+import { VecheFreezes } from "@/components/veche-freezes";
 import { paidCallPrices } from "@/lib/veche-finance";
 import { pool } from "@/lib/db";
 import { readSignatureSettings } from "@/lib/veche-signatures";
@@ -35,7 +37,7 @@ export default async function ProposalsPage({ searchParams }: ProposalsPageProps
   const participant = await getCurrentParticipant();
   if (!participant) redirect("/");
 
-  const [params, proposals, { values: texts }] = await Promise.all([searchParams, listProposals(), readInterfaceTexts()]);
+  const [params, proposals, { values: texts }, freezes] = await Promise.all([searchParams, listProposals(), readInterfaceTexts(),readPublicFreezes(pool)]);
   const indicators = await getParticipantIndicators([...new Set(proposals.flatMap(proposal=>proposal.authorParticipantId?[proposal.authorParticipantId]:[]))]);
   const badges = await getAwardBadges(proposals.flatMap(p=>p.authorParticipantId?[p.authorParticipantId]:[]));
   const createMessage = params.proposal_create
@@ -46,7 +48,7 @@ export default async function ProposalsPage({ searchParams }: ProposalsPageProps
       params.proposal_create === "not_eligible"
     : false;
   const proposalCreationAllowed = canCreateProposal(participant);
-  const [signatureSettings, callAuthor, paidPrices] = await Promise.all([readSignatureSettings(pool), pool.query("SELECT btrim(COALESCE(residence_name,''))<>'' AS has_city FROM participants WHERE id=$1", [participant.id]), paidCallPrices(pool,participant.id)]);
+  const [signatureSettings, callAuthor, paidPrices] = await Promise.all([readSignatureSettings(pool), pool.query("SELECT NOT veche_author_frozen(id) AS can_call,btrim(COALESCE(residence_name,''))<>'' AS has_city FROM participants WHERE id=$1", [participant.id]), paidCallPrices(pool,participant.id)]);
 
   return (
     <main className="shell">
@@ -61,7 +63,7 @@ export default async function ProposalsPage({ searchParams }: ProposalsPageProps
         </div>
 
         {params.call === "failed" ? <p className="formError">{texts["veche.call_failed"]}</p> : null}
-        {proposalCreationAllowed && callAuthor.rows[0]?.has_city ? <SignatureCallForm texts={texts} settings={signatureSettings} paidPrices={paidPrices} /> : null}
+        {proposalCreationAllowed && callAuthor.rows[0]?.has_city && callAuthor.rows[0]?.can_call ? <SignatureCallForm texts={texts} settings={signatureSettings} paidPrices={paidPrices} /> : null}
         {proposalCreationAllowed ? (
           <form className="proposalForm" action="/api/proposals" method="post">
             <label htmlFor="proposal-title">Заголовок</label>
@@ -87,6 +89,7 @@ export default async function ProposalsPage({ searchParams }: ProposalsPageProps
         )}
 
         {hasPrototypeAdminAccess(participant.id) ? <Link href="/admin/veche">{texts["veche.settings"]}</Link> : null}
+        <VecheFreezes records={freezes} texts={texts}/>
         <section className="proposalList">
           <h2>Все предложения</h2>
           {proposals.length ? (

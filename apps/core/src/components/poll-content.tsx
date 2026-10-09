@@ -4,8 +4,8 @@ import { UserText } from "./user-text";
 import { LocalDateTime } from "./local-date-time";
 
 // Receives only the safe domain projection; no private ballot is available in this tree.
-export function PollContent({ poll, texts, canVote = false, canClose = false, canSign = false, signed = false }: {
-  poll: PollView; texts: InterfaceTextValues; canVote?: boolean; canClose?: boolean; canSign?: boolean; signed?: boolean;
+export function PollContent({ poll, texts, canVote = false, canClose = false, canSign = false, signed = false, canMark = false, marked = false }: {
+  poll: PollView; texts: InterfaceTextValues; canVote?: boolean; canClose?: boolean; canSign?: boolean; signed?: boolean; canMark?: boolean; marked?: boolean;
 }) {
   const choiceText = (choice: VoteChoice) => texts[`veche.${choice}`];
   return <section>
@@ -20,6 +20,17 @@ export function PollContent({ poll, texts, canVote = false, canClose = false, ca
       {poll.call.state === "collecting" && (canSign || signed) ? <form action={`/api/veche/${poll.id}/signatures`} method="post">
         <button className="button secondary" name="support" value={signed ? "off" : "on"}>{texts[signed ? "veche.signature_withdraw" : "veche.signature_support"]}</button>
       </form> : null}
+    </section> : null}
+    {poll.empty ? <section>
+      {poll.empty.recognized ? <p role="status">{texts["veche.empty_recognized"]}</p> : null}
+      {poll.empty.enabled || poll.empty.marks.length || poll.empty.fraction !== null ? <>
+        <p>{texts["veche.empty_count"]}: {poll.empty.marks.length}</p>
+        <ul>{poll.empty.marks.map(marker=><li key={marker.participantId}>{marker.displayName}</li>)}</ul>
+        {!poll.closedAt && (canMark || marked) ? <form action={`/api/veche/${poll.id}/empty`} method="post">
+          <p>{texts["veche.empty_hint"]}</p>
+          <button className="button secondary" name="mark" value={marked?"off":"on"}>{texts[marked?"veche.empty_withdraw":"veche.empty_mark"]}</button>
+        </form> : null}
+      </> : null}
     </section> : null}
     <p>{texts["veche.turnout"]}: {poll.turnout}</p>
     {!poll.closedAt && (!poll.call || poll.call.state === "called") ? <>
