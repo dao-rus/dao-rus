@@ -16,7 +16,7 @@ export async function POST(request: NextRequest) {
   try {
     const form = await request.formData();
     const settings = parseVecheSettings({ inactivityDays: form.get("inactivityDays"), quorumDao: form.get("quorumDao"), quorumCity: form.get("quorumCity") });
-    const signatures = parseSignatureSettings({ fractionDao: form.get("fractionDao"), fractionCity: form.get("fractionCity"), days: form.get("signatureDays"), cooldownDays: form.get("signatureCooldown") });
+    const signatures = parseSignatureSettings({ minimumDao:form.get("minimumDao"),minimumCity:form.get("minimumCity"),fractionDao: form.get("fractionDao"), fractionCity: form.get("fractionCity"), days: form.get("signatureDays"), cooldownDays: form.get("signatureCooldown") });
     const finance = parseFinanceSettings(Object.fromEntries(Object.keys(financeFields).map(key=>[key,form.get(key)])) as Parameters<typeof parseFinanceSettings>[0]);
     const client = await pool.connect();
     try {

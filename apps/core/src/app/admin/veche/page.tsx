@@ -32,6 +32,7 @@ export default async function VecheSettingsPage({ searchParams }: { searchParams
         <label htmlFor={`fraction${circle}`}>{texts[circle === "Dao" ? "veche.signature_dao" : "veche.signature_city"]}</label>
         <input id={`fraction${circle}`} name={`fraction${circle}`} type="number" min="0.000001" max="1" step="0.000001" defaultValue={signatures[`fraction${circle}`] ?? ""} />
       </div>)}
+      {(["Dao","City"] as const).map(circle=><div className="interfaceField" key={`minimum${circle}`}><label htmlFor={`minimum${circle}`}>{texts[circle==="Dao"?"veche.minimum_dao":"veche.minimum_city"]}</label><input id={`minimum${circle}`} name={`minimum${circle}`} type="number" min="1" max="2147483647" step="1" defaultValue={signatures[`minimum${circle}`]??5} required /></div>)}
       <label htmlFor="signatureDays">{texts["veche.signature_days"]}</label><input id="signatureDays" name="signatureDays" type="number" min="1" max="36500" step="1" defaultValue={signatures.days} required />
       <label htmlFor="signatureCooldown">{texts["veche.signature_cooldown"]}</label><input id="signatureCooldown" name="signatureCooldown" type="number" min="0" max="36500" step="1" defaultValue={signatures.cooldownDays ?? ""} />
       <p>{texts["veche.signature_unset"]}</p>

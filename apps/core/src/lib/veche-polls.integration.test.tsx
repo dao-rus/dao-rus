@@ -22,7 +22,7 @@ const texts = Object.fromEntries(interfaceTextFields.map(field => [field.key,fie
 let schemaCreated = false, author: string, legacy: string, server: ChildProcess | undefined, serverOutput = "";
 const http = process.env.VECHE_HTTP_TESTS === "1";
 const base = "http://127.0.0.1:3107";
-let cookie: string;
+let cookie: string, preSnapshotCall:string, preSnapshotRequired:number,preSnapshotDeadline:string;
 async function member(city: string | null = "Synthetic locality", status = "participant") {
   const id = randomUUID();
   await pool.query("INSERT INTO participants(id,display_name,membership_status,residence_name,residence_type,residence_country) VALUES($1,$2,$3,$4,$5,$6)", [id, `Private voter ${id}`, status, city?.trim() ? city : null, city?.trim() ? 'city' : null, city?.trim() ? 'Synthetic country' : null]);
@@ -53,7 +53,14 @@ describe.skipIf(!databaseUrl)("Veche invariants on isolated PostgreSQL", () => {
     const before = (await pool.query("SELECT id,title,body,status,created_at FROM proposals ORDER BY id")).rows;
     await pool.query("BEGIN;" + readFileSync(new URL("046_veche_opinion_polls.sql",directory),"utf8") + ";COMMIT;");
     expect((await pool.query("SELECT id,title,body,status,created_at FROM proposals ORDER BY id")).rows).toEqual(before);
-    for (const file of readdirSync(directory).filter(name => name.endsWith(".sql") && name > "046_veche_opinion_polls.sql").sort()) await pool.query("BEGIN;" + readFileSync(new URL(file,directory),"utf8") + ";COMMIT;");
+    for (const file of readdirSync(directory).filter(name => name.endsWith(".sql") && name > "046_veche_opinion_polls.sql").sort()){
+      if(file.startsWith("050_")){
+       await pool.query("UPDATE veche_settings SET signature_fraction_city=0.5,signature_cooldown_days=1 WHERE singleton");
+       preSnapshotCall=(await createProposalWithDatabase(pool,author,"Existing collection","Synthetic body",{circle:"city",mode:"secret",deadline:null,bySignatures:true})).id;
+       const old=(await pool.query("SELECT poll_signatures_required,poll_signature_deadline FROM proposals WHERE id=$1",[preSnapshotCall])).rows[0];preSnapshotRequired=Number(old.poll_signatures_required);preSnapshotDeadline=new Date(old.poll_signature_deadline).toISOString();
+      }
+      await pool.query("BEGIN;" + readFileSync(new URL(file,directory),"utf8") + ";COMMIT;");
+    }
     if (http) {
       const token = randomBytes(32).toString("base64url"); cookie = `dao_session=${token}`;
       await pool.query("INSERT INTO sessions(token_hash,participant_id,expires_at) VALUES($1,$2,now()+interval '1 hour')", [createHash("sha256").update(token).digest("hex"),author]);
@@ -216,14 +223,14 @@ describe.skipIf(!databaseUrl)("Veche invariants on isolated PostgreSQL", () => {
   async function signatureCircle(fraction=0.5, deadline:Date|null=null) {
     const city='Synthetic signature circle '+randomUUID();
     const creator=await member(city), one=await member(city), two=await member(city);
-    await saveSignatureSettings(pool,{fractionDao:fraction,fractionCity:fraction,days:14,cooldownDays:1});
+    await saveSignatureSettings(pool,{minimumDao:1,minimumCity:1,fractionDao:fraction,fractionCity:fraction,days:14,cooldownDays:1});
     const config={circle:'city' as const,mode:'secret' as const,deadline};
     const id=(await createSignatureCallWithDatabase(pool,creator,'Synthetic signature poll','Synthetic question',config)).id;
     return {id,creator,one,two,config};
   }
   it('signature defaults require explicit threshold/cooldown; collection defaults to 14 days',async()=>{
-    await saveSignatureSettings(pool,{fractionDao:null,fractionCity:null,days:14,cooldownDays:null});
-    expect(await readSignatureSettings(pool)).toEqual({fractionDao:null,fractionCity:null,days:14,cooldownDays:null});
+    await saveSignatureSettings(pool,{minimumDao:1,minimumCity:1,fractionDao:null,fractionCity:null,days:14,cooldownDays:null});
+    expect(await readSignatureSettings(pool)).toEqual({fractionDao:null,fractionCity:null,days:14,cooldownDays:null,minimumDao:1,minimumCity:1});
     await expect(createSignatureCallWithDatabase(pool,author,'Synthetic question','Synthetic body',{circle:'dao',mode:'secret',deadline:null})).rejects.toThrow('Signature settings are not configured');
   });
   it('excludes the author from the signature threshold and opens only on reaching it',async()=>{
@@ -252,7 +259,7 @@ describe.skipIf(!databaseUrl)("Veche invariants on isolated PostgreSQL", () => {
     expect((await view(c.id))?.call?.counted).toBe(0);
   });
   it('DAO signature circle accepts an eligible participant from another city',async()=>{
-    await saveSignatureSettings(pool,{fractionDao:1,fractionCity:0.5,days:14,cooldownDays:1});
+    await saveSignatureSettings(pool,{minimumDao:1,minimumCity:1,fractionDao:1,fractionCity:0.5,days:14,cooldownDays:1});
     const id=(await createSignatureCallWithDatabase(pool,author,'Synthetic DAO poll','Synthetic question',{circle:'dao',mode:'open',deadline:null})).id;
     const outsider=await member('Another synthetic place');await setSignatureWithDatabase(pool,id,outsider,true);
     expect((await view(id))?.call?.counted).toBe(1);expect((await view(id))?.turnout).toBe(0);
@@ -271,7 +278,7 @@ describe.skipIf(!databaseUrl)("Veche invariants on isolated PostgreSQL", () => {
     await expect(createSignatureCallWithDatabase(pool,c.creator,'Any changed question','Synthetic body',{...c.config,deadline:null})).rejects.toThrow('Signature call cooldown has not ended');
     const other=(await createSignatureCallWithDatabase(pool,c.creator,'Other circle','Synthetic body',{circle:'dao',mode:'secret',deadline:null})).id;
     expect((await view(other))?.call?.state).toBe('collecting');
-    await saveSignatureSettings(pool,{fractionDao:0.5,fractionCity:0.5,days:14,cooldownDays:0});
+    await saveSignatureSettings(pool,{minimumDao:1,minimumCity:1,fractionDao:0.5,fractionCity:0.5,days:14,cooldownDays:0});
     const retry=(await createSignatureCallWithDatabase(pool,c.creator,'Any question after explicit zero pause','Synthetic body',{...c.config,deadline:null})).id;
     expect((await view(retry))?.call?.state).toBe('collecting');
   },15000);
@@ -319,6 +326,24 @@ describe.skipIf(!databaseUrl)("Veche invariants on isolated PostgreSQL", () => {
     expect((await pool.query('SELECT row_to_json(s) AS settings FROM veche_settings s')).rows).toEqual(settings);
   },60000);
 
+  it('adds a migration snapshot to existing collections without rewriting their threshold or deadline',async()=>{
+    const row=(await pool.query('SELECT poll_rule_snapshot,poll_signatures_required,poll_signature_deadline FROM proposals WHERE id=$1',[preSnapshotCall])).rows[0];
+    expect(row.poll_rule_snapshot).toMatchObject({fraction:0.5,minimum:5,required:preSnapshotRequired,circle:'city',days:14,origin:'migration'});
+    expect(Number(row.poll_signatures_required)).toBe(preSnapshotRequired);expect(new Date(row.poll_signature_deadline).toISOString()).toBe(preSnapshotDeadline);
+    expect((await view(preSnapshotCall))?.call?.required).toBe(preSnapshotRequired);
+  });
+  it('uses max(minimum, ceil(fraction*population)) and freezes all collection rules against later settings',async()=>{
+    const city='Synthetic minimum circle '+randomUUID(),creator=await member(city);await member(city);await member(city);
+    await saveSignatureSettings(pool,{fractionDao:0.1,fractionCity:0.1,days:14,cooldownDays:1,minimumDao:5,minimumCity:5});
+    const config={circle:'city' as const,mode:'secret' as const,deadline:null};
+    const small=(await createSignatureCallWithDatabase(pool,creator,'Small circle','Synthetic body',config)).id;const before=(await view(small))!.call!;expect(before.required).toBe(5);
+    const snapshot=(await pool.query('SELECT poll_rule_snapshot FROM proposals WHERE id=$1',[small])).rows[0].poll_rule_snapshot;expect(snapshot).toMatchObject({fraction:0.1,minimum:5,required:5,population:3,days:14,circle:'city',origin:'creation'});
+    await saveSignatureSettings(pool,{fractionDao:0.9,fractionCity:0.9,days:1,cooldownDays:1,minimumDao:1,minimumCity:1});
+    const unchanged=(await view(small))!.call!;expect(unchanged.required).toBe(before.required);expect(unchanged.deadline).toBe(before.deadline);
+    for(let n=0;n<7;n++)await member(city);
+    const large=(await createSignatureCallWithDatabase(pool,creator,'Large circle','Synthetic body',config)).id;expect((await view(large))?.call?.required).toBe(9);
+    await expect(pool.query("UPDATE proposals SET poll_rule_snapshot=jsonb_set(poll_rule_snapshot,'{minimum}','1') WHERE id=$1",[small])).rejects.toThrow('Veche rule snapshot is immutable');
+  });
   it('keeps anonymous signatures and open ballots free of initiator identity while preserving independent participants',async()=>{
     const c=await signatureCircle(),anonymous=(await createSignatureCallWithDatabase(pool,c.creator,'Anonymous question','Synthetic body',{...c.config,authorVisibility:'anonymous'})).id;
     await setSignatureWithDatabase(pool,anonymous,c.creator,true);await setSignatureWithDatabase(pool,anonymous,c.one,true);await setSignatureWithDatabase(pool,anonymous,c.two,true);

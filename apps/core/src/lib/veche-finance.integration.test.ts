@@ -85,7 +85,7 @@ describe.skipIf(!url)('Veche money on isolated PostgreSQL',()=>{
   await pool.query('UPDATE veche_settings SET quorum_city=0 WHERE singleton');
  });
  it('mints the same public-good reward after a signature call, with no tariff',async()=>{
-  const {author,voters}=await fixture(),client=await pool.connect();try{await client.query('BEGIN');const settings=await readFinanceSettings(client);await saveFinanceSettings(client,author,{...settings,participationAmount:'0.003'});await saveSignatureSettings(client,{fractionDao:null,fractionCity:0.5,days:14,cooldownDays:0});await client.query('COMMIT');}finally{client.release();}
+  const {author,voters}=await fixture(),client=await pool.connect();try{await client.query('BEGIN');const settings=await readFinanceSettings(client);await saveFinanceSettings(client,author,{...settings,participationAmount:'0.003'});await saveSignatureSettings(client,{minimumDao:1,minimumCity:1,fractionDao:null,fractionCity:0.5,days:14,cooldownDays:0});await client.query('COMMIT');}finally{client.release();}
   const id=(await createSignatureCallWithDatabase(pool,author,'Q','B',{circle:'city',mode:'secret',deadline:null})).id;
   await setSignatureWithDatabase(pool,id,voters[0],true);await setSignatureWithDatabase(pool,id,voters[1],true);
   for(const voter of voters.slice(0,2))await vote(id,voter);await closePollWithDatabase(pool,id,author);

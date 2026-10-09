@@ -1,22 +1,23 @@
 import type { ProposalDatabase, ProposalDatabaseClient } from "./proposals";
 import { createProposalWithDatabase } from "./proposals";
 import { normalizePollConfig, validPollId, VecheError, type PollConfig } from "./veche-polls";
-export type SignatureSettings = { fractionDao: number | null; fractionCity: number | null; days: number; cooldownDays: number | null };
+export type SignatureSettings = { fractionDao: number | null; fractionCity: number | null; days: number; cooldownDays: number | null; minimumDao?: number; minimumCity?: number };
 type Reader = Pick<ProposalDatabaseClient,"query">;
 export async function readSignatureSettings(database: Reader): Promise<SignatureSettings> {
-  const row=(await database.query("SELECT signature_fraction_dao,signature_fraction_city,signature_days,signature_cooldown_days FROM veche_settings WHERE singleton")).rows[0];
-  return { fractionDao:row.signature_fraction_dao===null?null:Number(row.signature_fraction_dao),fractionCity:row.signature_fraction_city===null?null:Number(row.signature_fraction_city),days:Number(row.signature_days),cooldownDays:row.signature_cooldown_days===null?null:Number(row.signature_cooldown_days) };
+  const row=(await database.query("SELECT signature_fraction_dao,signature_fraction_city,signature_days,signature_cooldown_days,signature_minimum_dao,signature_minimum_city FROM veche_settings WHERE singleton")).rows[0];
+  return { fractionDao:row.signature_fraction_dao===null?null:Number(row.signature_fraction_dao),fractionCity:row.signature_fraction_city===null?null:Number(row.signature_fraction_city),days:Number(row.signature_days),cooldownDays:row.signature_cooldown_days===null?null:Number(row.signature_cooldown_days),minimumDao:Number(row.signature_minimum_dao),minimumCity:Number(row.signature_minimum_city) };
 }
-export function parseSignatureSettings(input:{fractionDao:unknown;fractionCity:unknown;days:unknown;cooldownDays:unknown}): SignatureSettings {
+export function parseSignatureSettings(input:{fractionDao:unknown;fractionCity:unknown;days:unknown;cooldownDays:unknown;minimumDao?:unknown;minimumCity?:unknown}): SignatureSettings {
   const fraction=(value:unknown)=>{ const text=String(value??"").trim(); if(!text) return null;
     if(!/^(?:0\.\d{1,6}|1(?:\.0{1,6})?)$/.test(text)||Number(text)<=0)throw new VecheError("invalid");return Number(text); };
   const integer=(value:unknown,minimum:number,optional:boolean)=>{const text=String(value??"").trim();if(optional&&!text)return null;
     if(!/^\d{1,5}$/.test(text)||Number(text)<minimum||Number(text)>36500)throw new VecheError("invalid");return Number(text);};
-  return {fractionDao:fraction(input.fractionDao),fractionCity:fraction(input.fractionCity),days:integer(input.days,1,false)!,cooldownDays:integer(input.cooldownDays,0,true)};
+  const minimum=(value:unknown)=>{const text=String(value??5);if(!/^\d{1,10}$/.test(text)||Number(text)<1||Number(text)>2147483647)throw new VecheError("invalid");return Number(text);};
+  return {minimumDao:minimum(input.minimumDao),minimumCity:minimum(input.minimumCity),fractionDao:fraction(input.fractionDao),fractionCity:fraction(input.fractionCity),days:integer(input.days,1,false)!,cooldownDays:integer(input.cooldownDays,0,true)};
 }
 export async function saveSignatureSettings(database: Reader, input: SignatureSettings) {
   const settings=parseSignatureSettings(input);
-  await database.query("UPDATE veche_settings SET signature_fraction_dao=$1,signature_fraction_city=$2,signature_days=$3,signature_cooldown_days=$4 WHERE singleton",[settings.fractionDao,settings.fractionCity,settings.days,settings.cooldownDays]);
+  await database.query("UPDATE veche_settings SET signature_fraction_dao=$1,signature_fraction_city=$2,signature_days=$3,signature_cooldown_days=$4,signature_minimum_dao=$5,signature_minimum_city=$6 WHERE singleton",[settings.fractionDao,settings.fractionCity,settings.days,settings.cooldownDays,settings.minimumDao,settings.minimumCity]);
 }
 export async function createSignatureCallWithDatabase(database: ProposalDatabase, authorId:string,title:unknown,body:unknown,config:PollConfig) {
   normalizePollConfig(config);

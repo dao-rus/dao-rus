@@ -98,7 +98,7 @@ export async function getPollViewWithDatabase(database: ProposalDatabase, id: st
     await client.query("SELECT veche_refresh_call($1)", [id]);
     const callState = (await client.query("SELECT poll_call_state FROM proposals WHERE id=$1", [id])).rows[0]?.poll_call_state;
     if (!callState || callState === "called") await client.query("SELECT veche_close_poll($1)", [id]);
-    const p = (await client.query(`SELECT id,title,body,author_participant_id,author_visibility,poll_circle,poll_mode,poll_deadline,poll_closed_at,poll_eligible_count,poll_quorum,poll_call_state,poll_signature_deadline,poll_signatures_required,poll_signature_population,poll_signature_count_at_call
+    const p = (await client.query(`SELECT id,title,body,author_participant_id,author_visibility,poll_circle,poll_mode,poll_deadline,poll_closed_at,poll_eligible_count,poll_quorum,poll_call_state,poll_signature_deadline,poll_signatures_required,poll_signature_population,poll_signature_count_at_call,poll_rule_snapshot
       FROM proposals WHERE id=$1 AND poll_circle IS NOT NULL FOR SHARE`, [id])).rows[0];
     if (!p) { await client.query("COMMIT"); return null; }
     const iso = (date: unknown) => date ? new Date(String(date)).toISOString() : null;
@@ -107,7 +107,8 @@ export async function getPollViewWithDatabase(database: ProposalDatabase, id: st
       circle: p.poll_circle as PollView["circle"], mode: p.poll_mode as PollView["mode"], deadline: iso(p.poll_deadline), closedAt: iso(p.poll_closed_at), turnout, call: null, result: null };
     if (p.poll_call_state) {
       const signatures = (await client.query(`SELECT s.participant_id,p.display_name FROM proposal_signatures s JOIN participants p ON p.id=s.participant_id WHERE s.proposal_id=$1 ORDER BY s.created_at,s.participant_id`, [id])).rows;
-      view.call = { state: p.poll_call_state as NonNullable<PollView["call"]>["state"], deadline: iso(p.poll_signature_deadline)!, required: Number(p.poll_signatures_required), population: Number(p.poll_signature_population),
+      const snapshot=p.poll_rule_snapshot as Record<string,unknown> | null;
+      view.call = { state: p.poll_call_state as NonNullable<PollView["call"]>["state"], deadline: snapshot?.deadline ? iso(snapshot.deadline)! : iso(p.poll_signature_deadline)!, required: Number(snapshot?.required ?? p.poll_signatures_required), population: Number(p.poll_signature_population),
         counted: p.poll_signature_count_at_call !== null ? Number(p.poll_signature_count_at_call) : Number((await client.query("SELECT veche_signature_count(p) AS n FROM proposals p WHERE id=$1", [id])).rows[0].n),
         signatures: signatures.map(row => publicParticipant(p,row)) };
     }

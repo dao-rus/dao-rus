@@ -1,6 +1,8 @@
 import { signalPresentationDefaults, signalGroupDefaults } from "./signal-presentation";
 
 const interfaceTextFieldDefinitions = [
+{"section":"Вече","key":"veche.minimum_dao","label":"Минимум подписей всего ДАО","defaultValue":"Минимум подписей всего ДАО","multiline":false,"pageLabel":"Вече","pageHref":"/admin/veche"},
+{"section":"Вече","key":"veche.minimum_city","label":"Минимум подписей соты","defaultValue":"Минимум подписей соты","multiline":false,"pageLabel":"Вече","pageHref":"/admin/veche"},
 {"section":"Вече","key":"veche.tariff_debit","label":"Списание тарифа Вече","defaultValue":"Списание тарифа Вече","multiline":false,"pageLabel":"DARUS","pageHref":"/profile/tokens"},
 {"section":"Вече","key":"veche.attention_payment","label":"Плата за внимание Вече","defaultValue":"Плата за внимание Вече","multiline":false,"pageLabel":"DARUS","pageHref":"/profile/tokens"},
 {"section":"Вече","key":"veche.anonymous_author","label":"Автор скрыт","defaultValue":"Автор скрыт","multiline":false,"pageLabel":"Вече","pageHref":"/veche"},
