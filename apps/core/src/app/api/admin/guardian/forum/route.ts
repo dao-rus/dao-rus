@@ -26,7 +26,7 @@ export async function POST(request: NextRequest) {
   const form = await request.formData();
   const forumChatId = telegramReceptionConfig().forumChatId;
   try {
-    const keys = ["topic.newcomers", ...(await listSignalTypes()).filter((type) => type.key !== "dating").map((type) => discussionTopicKey(type.key))];
+    const keys = ["topic.newcomers", "topic.veche", ...(await listSignalTypes()).filter((type) => type.key !== "dating").map((type) => discussionTopicKey(type.key))];
     const topics = Object.fromEntries(keys.map((key) => [key, parseTopicLink(form.get(key), forumChatId)]));
     const features = Object.fromEntries(GUARDIAN_FEATURES.map((feature) => [feature, form.get(`feature.${feature}`) === "on"])) as Record<GuardianFeature, boolean>;
     const rawChannel = String(form.get("channel.departures") ?? "").trim();

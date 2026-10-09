@@ -1,3 +1,4 @@
+import type { InterfaceTextValues } from "../lib/interface-texts";
 import Link from "next/link";
 import { findAdminSection } from "../lib/admin-sections";
 
@@ -5,11 +6,11 @@ type Crumb = { label: string; href?: string };
 
 // The same path line on every management page: Управление › Группа › Раздел [› вложенная страница].
 // Pages deeper than a section (an award, one of its batches) pass the extra steps as `trail`.
-export function AdminCrumbs({ href, trail = [] }: { href: string; trail?: Crumb[] }) {
+export function AdminCrumbs({ href, trail = [], texts }: { href: string; trail?: Crumb[]; texts?: InterfaceTextValues }) {
   const found = findAdminSection(href);
   const steps: Crumb[] = [
     { label: "Управление", href: "/admin" },
-    ...(found ? [{ label: found.group.title }, { label: found.section.title, href: trail.length ? found.section.href : undefined }] : []),
+    ...(found ? [{ label: found.group.title }, { label: texts && found.section.titleKey ? texts[found.section.titleKey] : found.section.title, href: trail.length ? found.section.href : undefined }] : []),
     ...trail,
   ];
   return (

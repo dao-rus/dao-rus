@@ -1,3 +1,4 @@
+vi.mock("../../lib/interface-texts", async (importOriginal) => ({ ...await importOriginal<typeof import("../../lib/interface-texts")>(), readInterfaceTexts: async () => ({ values: {} }) }));
 import { isValidElement, type ReactNode } from "react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 

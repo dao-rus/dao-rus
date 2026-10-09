@@ -55,10 +55,8 @@ vi.mock("@/lib/verification", () => ({
   getVerificationProfile: mocks.getVerificationProfile,
 }));
 
-vi.mock("@/lib/interface-texts", () => ({
-  readInterfaceTexts: mocks.readInterfaceTexts,
-}));
-vi.mock("../lib/interface-texts", () => ({ readInterfaceTexts: mocks.readInterfaceTexts }));
+vi.mock("@/lib/interface-texts", () => ({ readInterfaceTexts: mocks.readInterfaceTexts }));
+vi.mock("../lib/interface-texts", async (importOriginal) => ({ ...await importOriginal<typeof import("../lib/interface-texts")>(), readInterfaceTexts: mocks.readInterfaceTexts }));
 vi.mock("@/lib/tokenization", () => ({
   getDarusBalance: mocks.getDarusBalance,
   getCurrentRewardRule: mocks.getCurrentRewardRule,
@@ -120,6 +118,7 @@ function treeContainsAction(node: ReactNode, action: string) {
 describe("admin access regression", () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    mocks.readInterfaceTexts.mockResolvedValue({ values: {} });
     mocks.redirect.mockImplementation((destination: string) => {
       throw new Error(`redirect:${destination}`);
     });
@@ -173,6 +172,7 @@ describe("admin access regression", () => {
     await expect(AdminPage()).rejects.toThrow("redirect:/profile");
     await expect(RewardsPage({ searchParams: Promise.resolve({}) })).rejects.toThrow("redirect:/profile");
     expect(mocks.getCurrentRewardRule).not.toHaveBeenCalled();
+    expect(mocks.readInterfaceTexts).not.toHaveBeenCalled();
   });
 
   it("shows the protected sections in one admin dashboard", async () => {
@@ -184,6 +184,7 @@ describe("admin access regression", () => {
     expect(treeContainsHref(page, "/admin/rewards")).toBe(true);
     expect(treeContainsHref(page, "/admin/reputation")).toBe(true);
     expect(treeContainsHref(page, "/admin/guardian")).toBe(true);
+    expect(treeContainsHref(page, "/admin/veche")).toBe(true);
   });
 
   it("shows only one management link in the admin profile", async () => {

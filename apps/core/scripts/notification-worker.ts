@@ -1,3 +1,4 @@
+import { closeDuePolls } from "../src/lib/veche-polls";
 import { pool } from "../src/lib/db";
 import { telegramNotificationsEnabled } from "../src/lib/config";
 import { expireStaleDeliveries, processNextNotificationDelivery } from "../src/lib/notification-delivery";
@@ -25,6 +26,7 @@ function waitForNextPoll(): Promise<void> {
 async function main() {
   while (!stopping) {
     try {
+      await closeDuePolls(pool);
       for (const id of await expireStaleDeliveries(pool)) {
         console.log(JSON.stringify({ deliveryId: id, status: "unknown", errorCode: "claim_expired" }));
       }

@@ -1,3 +1,4 @@
+import { normalizePollConfig, type PollConfig } from "./veche-polls";
 import { canCreateProposal } from "./eligibility";
 
 export type ProposalStatus = "open";
@@ -13,6 +14,7 @@ export type Proposal = {
 
 export type ProposalListItem = Proposal & {
   authorDisplayName: string;
+  hasPoll?: boolean;
 };
 
 type ProposalField = "title" | "body";
@@ -69,16 +71,18 @@ export async function createProposalWithDatabase(
   authorParticipantId: string,
   titleValue: unknown,
   bodyValue: unknown,
+  poll?: PollConfig,
 ): Promise<Proposal> {
   const title = normalizeRequiredText(titleValue, "title");
   const body = normalizeRequiredText(bodyValue, "body");
+  if (poll) normalizePollConfig(poll);
   const client = await database.connect();
 
   try {
     await client.query("BEGIN");
 
     const participantResult = await client.query(
-      `SELECT membership_status
+      `SELECT membership_status${poll ? ", residence_name" : ""}
          FROM participants
         WHERE id = $1
         FOR SHARE`,
@@ -86,6 +90,7 @@ export async function createProposalWithDatabase(
     );
     if (
       !participantResult.rowCount ||
+      (poll && !String(participantResult.rows[0].residence_name ?? "").trim()) ||
       !canCreateProposal({
         membershipStatus: String(
           participantResult.rows[0].membership_status,
@@ -96,10 +101,10 @@ export async function createProposalWithDatabase(
     }
 
     const proposalResult = await client.query(
-      `INSERT INTO proposals(author_participant_id, title, body, status)
-       VALUES ($1, $2, $3, 'open')
+      `INSERT INTO proposals(author_participant_id, title, body, status${poll ? ",poll_circle,poll_city,poll_mode,poll_deadline" : ""})
+       VALUES ($1, $2, $3, 'open'${poll ? ",$4,$5,$6,$7" : ""})
        RETURNING id, author_participant_id, title, body, status, created_at`,
-      [authorParticipantId, title, body],
+      poll ? [authorParticipantId, title, body, poll.circle, poll.circle === "city" ? String(participantResult.rows[0].residence_name).trim().toLocaleLowerCase("ru-RU") : null, poll.mode, poll.deadline] : [authorParticipantId, title, body],
     );
     const proposal = proposalFromRow(proposalResult.rows[0]);
 
@@ -146,6 +151,7 @@ export async function listProposals(): Promise<ProposalListItem[]> {
             proposals.title,
             proposals.body,
             proposals.status,
+            proposals.poll_circle IS NOT NULL AS has_poll,
             proposals.created_at,
             participants.display_name AS author_display_name
        FROM proposals
@@ -156,5 +162,6 @@ export async function listProposals(): Promise<ProposalListItem[]> {
   return result.rows.map((row) => ({
     ...proposalFromRow(row),
     authorDisplayName: String(row.author_display_name),
+    hasPoll: row.has_poll === true,
   }));
 }

@@ -1,3 +1,4 @@
+import { readInterfaceTexts } from "../../lib/interface-texts";
 import Link from "next/link";
 import type { Metadata } from "next";
 import { redirect } from "next/navigation";
@@ -13,6 +14,7 @@ export default async function AdminPage() {
   if (!participant) redirect("/");
   const groups = visibleAdminGroups(participant.id);
   if (groups.length === 0) redirect("/profile");
+  const { values: texts } = await readInterfaceTexts();
   return (
     <main className="shell">
       <section className="card profile">
@@ -27,7 +29,7 @@ export default async function AdminPage() {
             <ul>
               {group.sections.map((section) => (
                 <li key={section.href}>
-                  <Link href={section.href}><strong>{section.title}</strong><span>{section.hint}</span></Link>
+                  <Link href={section.href}><strong>{section.titleKey ? texts[section.titleKey] : section.title}</strong><span>{section.hintKey ? texts[section.hintKey] : section.hint}</span></Link>
                 </li>
               ))}
             </ul>

@@ -1,3 +1,5 @@
+import { hasPrototypeAdminAccess } from "@/lib/config";
+import { readInterfaceTexts } from "@/lib/interface-texts";
 import { getAwardBadges } from "@/lib/award-views";
 import Link from "next/link";
 import type { Metadata } from "next";
@@ -29,7 +31,7 @@ export default async function ProposalsPage({ searchParams }: ProposalsPageProps
   const participant = await getCurrentParticipant();
   if (!participant) redirect("/");
 
-  const [params, proposals] = await Promise.all([searchParams, listProposals()]);
+  const [params, proposals, { values: texts }] = await Promise.all([searchParams, listProposals(), readInterfaceTexts()]);
   const indicators = await getParticipantIndicators([...new Set(proposals.map((proposal) => proposal.authorParticipantId))]);
   const badges = await getAwardBadges(proposals.map(p => p.authorParticipantId));
   const createMessage = params.proposal_create
@@ -77,6 +79,7 @@ export default async function ProposalsPage({ searchParams }: ProposalsPageProps
           </p>
         )}
 
+        {hasPrototypeAdminAccess(participant.id) ? <Link href="/admin/veche">{texts["veche.settings"]}</Link> : null}
         <section className="proposalList">
           <h2>Все предложения</h2>
           {proposals.length ? (
@@ -91,7 +94,7 @@ export default async function ProposalsPage({ searchParams }: ProposalsPageProps
                     <span>
                       <LocalDateTime value={proposal.createdAt.toISOString()} />
                     </span>
-                    <span>Статус: открыто</span>
+                    {proposal.hasPoll ? <Link href={`/veche/${proposal.id}`}>{texts["veche.title"]}</Link> : <span>Статус: открыто</span>}
                   </div>
                   <h3>{proposal.title}</h3>
                   <UserText text={proposal.body} />

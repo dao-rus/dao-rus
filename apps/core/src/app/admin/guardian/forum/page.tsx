@@ -33,7 +33,7 @@ export default async function GuardianForumPage({ searchParams }: { searchParams
   const forumChatId = telegramReceptionConfig().forumChatId;
   const ready = Boolean(telegramBotToken() && forumInternalId(forumChatId));
   const types = orderSignalTypes(catalog.filter((type) => type.enabled && type.key !== "dating"));
-  const topics = [{ key: "topic.newcomers", label: "Новички" },
+  const topics = [{ key: "topic.newcomers", label: "Новички" }, { key: "topic.veche", label: texts["veche.forum_topic"] },
     ...types.map((type) => ({ key: discussionTopicKey(type.key), label: `Обсуждение: ${signalTypePresentation(type, texts).navigationName}` }))];
   const message = {
     saved: "Настройки сохранены.", unchanged: "Изменений нет.",

@@ -1,3 +1,4 @@
+import { interfaceTextFields, type InterfaceTextKey } from "./interface-texts";
 // One list of everything the management area contains. The "Управление" page, the breadcrumb on every
 // admin page and the access rule all read from here, so moving a function to another group, or to
 // other hands later, is a change in this file and not a hunt through pages.
@@ -6,7 +7,7 @@
 /** Who may open a section. Transferring a function means changing this one value. */
 export type AdminAccess = "admin" | "award.establish";
 
-export type AdminSection = { href: string; title: string; hint: string; access: AdminAccess };
+export type AdminSection = { href: string; title: string; hint: string; titleKey?: InterfaceTextKey; hintKey?: InterfaceTextKey; access: AdminAccess };
 export type AdminGroup = { key: string; title: string; sections: AdminSection[] };
 
 export const adminGroups: AdminGroup[] = [
@@ -26,6 +27,7 @@ export const adminGroups: AdminGroup[] = [
     { href: "/admin/awards", title: "Награды", hint: "Учреждение наград и их выпуски", access: "award.establish" },
   ] },
   { key: "words", title: "Слова и справочники", sections: [
+    { href: "/admin/veche", title: interfaceTextFields.find(field => field.key === "veche.settings")!.defaultValue, hint: interfaceTextFields.find(field => field.key === "veche.settings_hint")!.defaultValue, titleKey: "veche.settings", hintKey: "veche.settings_hint", access: "admin" },
     { href: "/admin/interface", title: "Тексты интерфейса", hint: "Все подписи и сообщения Ядра", access: "admin" },
     { href: "/admin/closer", title: "Цели «Ближе»", hint: "По каким целям ищутся совпадения", access: "admin" },
   ] },

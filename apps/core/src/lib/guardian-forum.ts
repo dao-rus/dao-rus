@@ -91,7 +91,7 @@ export async function saveGuardianForumSettingsWithDatabase(
   desired.set("miniapp.bot", input.botUsername);
   if (input.departuresChannel !== undefined) desired.set("channel.departures", input.departuresChannel);
   for (const [key, topic] of Object.entries(input.topics)) {
-    if (!/^topic\.(?:newcomers|discussion\.[a-z][a-z0-9_]{0,63})$/u.test(key)) throw new GuardianForumValidationError();
+    if (!/^topic\.(?:newcomers|veche|discussion\.[a-z][a-z0-9_]{0,63})$/u.test(key)) throw new GuardianForumValidationError();
     desired.set(key, topic === null ? null : String(topic));
   }
   const client = await database.connect();

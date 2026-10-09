@@ -55,6 +55,7 @@ describe("POST /api/proposals", () => {
     const response = await POST(
       proposalRequest({
         author_participant_id: "another-participant",
+        poll_circle: "dao", poll_mode: "secret",
         title: "Заголовок",
         body: "Текст",
       }),
