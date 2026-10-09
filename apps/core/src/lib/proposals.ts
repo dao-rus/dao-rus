@@ -101,10 +101,10 @@ export async function createProposalWithDatabase(
     }
 
     const proposalResult = await client.query(
-      `INSERT INTO proposals(author_participant_id, title, body, status${poll ? ",poll_circle,poll_city,poll_mode,poll_deadline" : ""})
-       VALUES ($1, $2, $3, 'open'${poll ? ",$4,$5,$6,$7" : ""})
+      `INSERT INTO proposals(author_participant_id, title, body, status${poll ? ",poll_circle,poll_city,poll_mode,poll_deadline,poll_call_state" : ""})
+       VALUES ($1, $2, $3, 'open'${poll ? ",$4,$5,$6,$7,$8" : ""})
        RETURNING id, author_participant_id, title, body, status, created_at`,
-      poll ? [authorParticipantId, title, body, poll.circle, poll.circle === "city" ? String(participantResult.rows[0].residence_name).trim().toLocaleLowerCase("ru-RU") : null, poll.mode, poll.deadline] : [authorParticipantId, title, body],
+      poll ? [authorParticipantId, title, body, poll.circle, poll.circle === "city" ? String(participantResult.rows[0].residence_name).trim().toLocaleLowerCase("ru-RU") : null, poll.mode, poll.deadline, poll.bySignatures ? "collecting" : null] : [authorParticipantId, title, body],
     );
     const proposal = proposalFromRow(proposalResult.rows[0]);
 

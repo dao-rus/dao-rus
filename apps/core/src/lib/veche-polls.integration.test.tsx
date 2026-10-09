@@ -1,3 +1,5 @@
+import { createSignatureCallWithDatabase, setSignatureWithDatabase, saveSignatureSettings, readSignatureSettings, refreshSignatureCalls } from "./veche-signatures";
+import { announceSignatureCollection } from "./veche-announcement";
 import { randomUUID, createHash, randomBytes } from "node:crypto";
 import { readFileSync, readdirSync } from "node:fs";
 import { spawn, execFileSync, type ChildProcess } from "node:child_process";
@@ -47,6 +49,7 @@ describe.skipIf(!databaseUrl)("Veche invariants on isolated PostgreSQL", () => {
     const before = (await pool.query("SELECT id,title,body,status,created_at FROM proposals ORDER BY id")).rows;
     await pool.query("BEGIN;" + readFileSync(new URL("046_veche_opinion_polls.sql",directory),"utf8") + ";COMMIT;");
     expect((await pool.query("SELECT id,title,body,status,created_at FROM proposals ORDER BY id")).rows).toEqual(before);
+    for (const file of readdirSync(directory).filter(name => name.endsWith(".sql") && name > "046_veche_opinion_polls.sql").sort()) await pool.query("BEGIN;" + readFileSync(new URL(file,directory),"utf8") + ";COMMIT;");
     if (http) {
       const token = randomBytes(32).toString("base64url"); cookie = `dao_session=${token}`;
       await pool.query("INSERT INTO sessions(token_hash,participant_id,expires_at) VALUES($1,$2,now()+interval '1 hour')", [createHash("sha256").update(token).digest("hex"),author]);
@@ -203,4 +206,110 @@ describe.skipIf(!databaseUrl)("Veche invariants on isolated PostgreSQL", () => {
     const csrf=await fetch(base+`/api/veche/${id}`,{method:"POST",headers:{cookie,origin:"https://other.invalid"},body:new URLSearchParams({choice:"yes"}),redirect:"manual"});expect(csrf.status).toBe(403);
     await close(id);expect(JSON.parse(await request(`/api/veche/${id}`)).publicVotes).toEqual([{participantId:author,displayName:`Private voter ${author}`,choice:"no"}]);
   },60000);
+  async function signatureCircle(fraction=0.5, deadline:Date|null=null) {
+    const city='Synthetic signature circle '+randomUUID();
+    const creator=await member(city), one=await member(city), two=await member(city);
+    await saveSignatureSettings(pool,{fractionDao:fraction,fractionCity:fraction,days:14,cooldownDays:1});
+    const config={circle:'city' as const,mode:'secret' as const,deadline};
+    const id=(await createSignatureCallWithDatabase(pool,creator,'Synthetic signature poll','Synthetic question',config)).id;
+    return {id,creator,one,two,config};
+  }
+  it('signature defaults require explicit threshold/cooldown; collection defaults to 14 days',async()=>{
+    await saveSignatureSettings(pool,{fractionDao:null,fractionCity:null,days:14,cooldownDays:null});
+    expect(await readSignatureSettings(pool)).toEqual({fractionDao:null,fractionCity:null,days:14,cooldownDays:null});
+    await expect(createSignatureCallWithDatabase(pool,author,'Synthetic question','Synthetic body',{circle:'dao',mode:'secret',deadline:null})).rejects.toThrow('Signature settings are not configured');
+  });
+  it('excludes the author from the signature threshold and opens only on reaching it',async()=>{
+    const c=await signatureCircle();
+    const initial=(await view(c.id))!;expect(initial.call?.required).toBe(2);expect(initial.call?.population).toBe(3);expect(initial.call?.state).toBe('collecting');
+    await setSignatureWithDatabase(pool,c.id,c.creator,true);
+    expect((await view(c.id))?.call?.counted).toBe(0);
+    await setSignatureWithDatabase(pool,c.id,c.one,true);expect((await view(c.id))?.call?.state).toBe('collecting');
+    await expect(vote(c.id,c.one)).rejects.toMatchObject({code:'closed'});
+    await expect(pool.query("INSERT INTO proposal_votes(proposal_id,participant_id,choice) VALUES($1,$2,'yes')",[c.id,c.one])).rejects.toThrow('Poll has not been called');
+    await setSignatureWithDatabase(pool,c.id,c.two,true);expect((await view(c.id))?.call?.state).toBe('called');
+    expect((await view(c.id))?.turnout).toBe(0);await vote(c.id,c.one,'no');expect((await view(c.id))?.turnout).toBe(1);
+  });
+  it('signatures are public, are not votes, can be withdrawn before call and award nothing',async()=>{
+    const c=await signatureCircle();const ledger=(await pool.query('SELECT count(*) AS n FROM darus_ledger')).rows[0].n;
+    await setSignatureWithDatabase(pool,c.id,c.one,true);
+    expect((await view(c.id))?.call?.signatures.map(s=>s.participantId)).toEqual([c.one]);
+    expect((await view(c.id))?.turnout).toBe(0);
+    await setSignatureWithDatabase(pool,c.id,c.one,false);expect((await view(c.id))?.call?.signatures).toEqual([]);
+    expect((await pool.query('SELECT count(*) AS n FROM darus_ledger')).rows[0].n).toBe(ledger);
+  });
+  it('refuses out-of-circle, missing-city and former-member signatures',async()=>{
+    const c=await signatureCircle();
+    for(const id of [await member('Another synthetic place'),await member(null),await member('Synthetic place','left')])
+      await expect(setSignatureWithDatabase(pool,c.id,id,true)).rejects.toThrow('Signer is not eligible');
+    expect((await view(c.id))?.call?.counted).toBe(0);
+  });
+  it('DAO signature circle accepts an eligible participant from another city',async()=>{
+    await saveSignatureSettings(pool,{fractionDao:1,fractionCity:0.5,days:14,cooldownDays:1});
+    const id=(await createSignatureCallWithDatabase(pool,author,'Synthetic DAO poll','Synthetic question',{circle:'dao',mode:'open',deadline:null})).id;
+    const outsider=await member('Another synthetic place');await setSignatureWithDatabase(pool,id,outsider,true);
+    expect((await view(id))?.call?.counted).toBe(1);expect((await view(id))?.turnout).toBe(0);
+  });
+  it('serializes simultaneous threshold signatures, then forbids withdrawal',async()=>{
+    const c=await signatureCircle();await Promise.all([c.one,c.two].map(id=>setSignatureWithDatabase(pool,c.id,id,true)));
+    expect((await view(c.id))?.call?.state).toBe('called');expect((await view(c.id))?.call?.counted).toBe(2);
+    await expect(setSignatureWithDatabase(pool,c.id,c.one,false)).rejects.toMatchObject({code:'closed'});
+    await expect(pool.query("UPDATE proposals SET poll_call_state='collecting' WHERE id=$1",[c.id])).rejects.toThrow('Signature call state is immutable');
+    await expect(pool.query("UPDATE proposals SET poll_signatures_required=1 WHERE id=$1",[c.id])).rejects.toThrow('Signature configuration is immutable');
+  });
+  it('expires an uncalled question, enforces same-author same-circle cooldown, and distinguishes DAO/city',async()=>{
+    const c=await signatureCircle(0.5,new Date(Date.now()+1600));
+    await pool.query('SELECT pg_sleep(1.8)');await refreshSignatureCalls(pool);
+    expect((await view(c.id))?.call?.state).toBe('not_called');expect((await view(c.id))?.closedAt).toBeNull();expect((await view(c.id))?.result).toBeNull();
+    await expect(createSignatureCallWithDatabase(pool,c.creator,'Any changed question','Synthetic body',{...c.config,deadline:null})).rejects.toThrow('Signature call cooldown has not ended');
+    const other=(await createSignatureCallWithDatabase(pool,c.creator,'Other circle','Synthetic body',{circle:'dao',mode:'secret',deadline:null})).id;
+    expect((await view(other))?.call?.state).toBe('collecting');
+    await saveSignatureSettings(pool,{fractionDao:0.5,fractionCity:0.5,days:14,cooldownDays:0});
+    const retry=(await createSignatureCallWithDatabase(pool,c.creator,'Any question after explicit zero pause','Synthetic body',{...c.config,deadline:null})).id;
+    expect((await view(retry))?.call?.state).toBe('collecting');
+  },15000);
+  it('publishes distinct collection and called notices without ballots and without duplicates',async()=>{
+    const c=await signatureCircle();const sent:string[]=[];
+    const context={database:pool,bot:{send:async(_topic:number,text:string)=>{sent.push(text);return 123;},edit:async()=>{}},texts,baseUrl:base,settings:new Map([['topic.veche','12']])};
+    await announceSignatureCollection(context,c.id);await announceSignatureCollection(context,c.id);await announcePoll(context,c.id);
+    expect(sent).toHaveLength(1);expect(sent[0]).toContain(texts['veche.signature_meaning']);
+    await setSignatureWithDatabase(pool,c.id,c.one,true);await setSignatureWithDatabase(pool,c.id,c.two,true);await vote(c.id,c.one,'no');
+    await Promise.all([announcePoll(context,c.id),announcePoll(context,c.id)]);expect(sent).toHaveLength(2);
+    expect(sent[1]).toContain(texts['veche.announcement']);expect(sent.join(' ')).not.toContain(c.one);
+  });
+  it.skipIf(!http)('HTTP collection displays public support without revealing a secret ballot; create requires session and cannot skip threshold',async()=>{
+    const c=await signatureCircle();await setSignatureWithDatabase(pool,c.id,c.one,true);
+    const collecting=JSON.parse(await request('/api/veche/'+c.id));expect(collecting.call.signatures[0].participantId).toBe(c.one);expect(collecting.turnout).toBe(0);expect(collecting.result).toBeNull();
+    await setSignatureWithDatabase(pool,c.id,c.two,true);
+    const privateVoter=await member('Synthetic signature circle '+randomUUID());
+    // A legal voter can change residence to the fixed poll city; support and ballot remain different facts.
+    const city=(await pool.query('SELECT residence_name FROM participants WHERE id=$1',[c.creator])).rows[0].residence_name;
+    await pool.query('UPDATE participants SET residence_name=$2 WHERE id=$1',[privateVoter,city]);await vote(c.id,privateVoter,'no');
+    for(const closed of [false,true]){
+      if(closed)await closePollWithDatabase(pool,c.id,c.creator);
+      for(const payload of [await request('/api/veche/'+c.id),await request('/veche/'+c.id),await request('/veche/'+c.id,true)])expect(payload).not.toContain(privateVoter);
+    }
+    const unauthorized=await fetch(base+'/api/veche',{method:'POST',body:new URLSearchParams({circle:'dao',mode:'secret',timing:'permanent',title:'Synthetic call',body:'Synthetic body'}),redirect:'manual'});expect(unauthorized.status).toBe(401);
+    const response=await fetch(base+'/api/veche',{method:'POST',headers:{cookie,origin:base},body:new URLSearchParams({circle:'dao',mode:'secret',timing:'permanent',title:'Synthetic call',body:'Synthetic body',poll_call_state:'called'}),redirect:'manual'});
+    expect(response.status).toBe(303);
+    const location=new URL(response.headers.get('location')!);expect(location.pathname.startsWith('/veche/')).toBe(true);
+    const created=JSON.parse(await request('/api'+location.pathname));expect(created.call.state).toBe('collecting');expect(created.turnout).toBe(0);
+  },120000);
+  it('keeps the threshold proof after called signers change membership',async()=>{
+    const c=await signatureCircle();await setSignatureWithDatabase(pool,c.id,c.one,true);await setSignatureWithDatabase(pool,c.id,c.two,true);
+    await pool.query("UPDATE participants SET membership_status='left' WHERE id=$1",[c.one]);
+    expect((await view(c.id))?.call?.counted).toBe(2);expect((await view(c.id))?.call?.state).toBe('called');
+    await expect(pool.query('UPDATE proposals SET poll_signature_count_at_call=0 WHERE id=$1',[c.id])).rejects.toThrow('Signature call outcome is immutable');
+  });
+  it.skipIf(!http)('HTTP admin settings reject ordinary participants and foreign origin before writing',async()=>{
+    const ordinary=await member(), token=randomBytes(32).toString('base64url');
+    await pool.query("INSERT INTO sessions(token_hash,participant_id,expires_at) VALUES($1,$2,now()+interval '1 hour')",[createHash('sha256').update(token).digest('hex'),ordinary]);
+    const settings=(await pool.query('SELECT row_to_json(s) AS settings FROM veche_settings s')).rows;
+    const response=await fetch(base+'/api/admin/veche',{method:'POST',headers:{cookie:'dao_session='+token,origin:base},body:new URLSearchParams({quorumDao:'1'}),redirect:'manual'});
+    expect(response.status).toBe(403);
+    const csrf=await fetch(base+'/api/admin/veche',{method:'POST',headers:{cookie,origin:'https://foreign.invalid'},body:new URLSearchParams({quorumDao:'1'}),redirect:'manual'});expect(csrf.status).toBe(403);
+    const page=await fetch(base+'/admin/veche',{headers:{cookie:'dao_session='+token},redirect:'manual'});expect(page.status).toBe(307);expect(page.headers.get('location')).toContain('/profile');
+    expect((await pool.query('SELECT row_to_json(s) AS settings FROM veche_settings s')).rows).toEqual(settings);
+  },60000);
+
 });

@@ -4,16 +4,25 @@ import { UserText } from "./user-text";
 import { LocalDateTime } from "./local-date-time";
 
 // Receives only the safe domain projection; no private ballot is available in this tree.
-export function PollContent({ poll, texts, canVote = false, canClose = false }: {
-  poll: PollView; texts: InterfaceTextValues; canVote?: boolean; canClose?: boolean;
+export function PollContent({ poll, texts, canVote = false, canClose = false, canSign = false, signed = false }: {
+  poll: PollView; texts: InterfaceTextValues; canVote?: boolean; canClose?: boolean; canSign?: boolean; signed?: boolean;
 }) {
   const choiceText = (choice: VoteChoice) => texts[`veche.${choice}`];
   return <section>
     <h1>{poll.title}</h1><UserText text={poll.body} />
-    <p>{texts[`veche.${poll.circle}`]} · {texts[`veche.${poll.mode}`]} · {texts[poll.closedAt ? "veche.closed" : "veche.running"]}</p>
+    <p>{texts[`veche.${poll.circle}`]} · {texts[`veche.${poll.mode}`]} · {texts[poll.call?.state === "collecting" ? "veche.collecting" : poll.call?.state === "not_called" ? "veche.not_called" : poll.closedAt ? "veche.closed" : "veche.running"]}</p>
     <p>{poll.deadline ? <LocalDateTime value={poll.deadline} /> : texts["veche.permanent"]}</p>
+    {poll.call ? <section>
+      <p>{texts["veche.signature_meaning"]}</p>
+      <p>{texts["veche.signature_count"]}: {poll.call.counted} · {texts["veche.signature_required"]}: {poll.call.required}</p>
+      <LocalDateTime value={poll.call.deadline} />
+      <ul>{poll.call.signatures.map(signer => <li key={signer.participantId}>{signer.displayName}</li>)}</ul>
+      {poll.call.state === "collecting" && (canSign || signed) ? <form action={`/api/veche/${poll.id}/signatures`} method="post">
+        <button className="button secondary" name="support" value={signed ? "off" : "on"}>{texts[signed ? "veche.signature_withdraw" : "veche.signature_support"]}</button>
+      </form> : null}
+    </section> : null}
     <p>{texts["veche.turnout"]}: {poll.turnout}</p>
-    {!poll.closedAt ? <>
+    {!poll.closedAt && (!poll.call || poll.call.state === "called") ? <>
       <p>{texts["veche.hidden"]}</p>
       {canVote ? <form action={`/api/veche/${poll.id}`} method="post">
         {(["yes", "no", "abstain"] as const).map(choice => <button className="button secondary" key={choice} name="choice" value={choice}>{choiceText(choice)}</button>)}

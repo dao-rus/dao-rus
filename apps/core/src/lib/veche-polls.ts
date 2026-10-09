@@ -1,12 +1,13 @@
 import type { ProposalDatabase, ProposalDatabaseClient } from "./proposals";
 
-export type PollConfig = { circle: "dao" | "city"; mode: "secret" | "open"; deadline: Date | null };
+export type PollConfig = { circle: "dao" | "city"; mode: "secret" | "open"; deadline: Date | null; bySignatures?: boolean };
 export type VoteChoice = "yes" | "no" | "abstain";
 export class VecheError extends Error { constructor(readonly code: "invalid" | "ineligible" | "closed" | "forbidden" | "missing") { super(`Veche ${code}`); } }
 export type VecheSettings = { inactivityDays: number | null; quorumDao: number; quorumCity: number };
 export type PollView = {
   id: string; title: string; body: string; authorId: string; circle: "dao" | "city"; mode: "secret" | "open";
   deadline: string | null; closedAt: string | null; turnout: number;
+  call: null | { state: "collecting" | "called" | "not_called"; deadline: string; required: number; population: number; counted: number; signatures: Array<{ participantId: string; displayName: string }> };
   result: null | { counts: Record<VoteChoice, number>; eligible: number; quorum: number; quorumReached: boolean };
   // This property exists ONLY for a closed open poll. There is no own-choice projection.
   publicVotes?: Array<{ participantId: string; displayName: string; choice: VoteChoice }>;
@@ -43,7 +44,7 @@ export async function closeDuePolls(database: ProposalDatabase): Promise<void> {
   const client = await database.connect();
   try {
     const rows = (await client.query(`SELECT id FROM proposals,veche_settings s
-      WHERE poll_circle IS NOT NULL AND poll_closed_at IS NULL AND
+      WHERE poll_circle IS NOT NULL AND (poll_call_state IS NULL OR poll_call_state='called') AND poll_closed_at IS NULL AND
       (poll_deadline<=clock_timestamp() OR (poll_deadline IS NULL AND s.inactivity_days IS NOT NULL
         AND poll_last_new_vote_at+make_interval(days=>s.inactivity_days)<=clock_timestamp())) ORDER BY id`)).rows;
     for (const row of rows) await client.query("SELECT veche_close_poll($1)", [row.id]);
@@ -55,9 +56,12 @@ export async function castVoteWithDatabase(database: ProposalDatabase, id: strin
   let blocked: VecheError | null = null;
   try {
     await client.query("BEGIN");
-    await client.query("SELECT veche_close_poll($1)", [id]);
+    await client.query("SELECT veche_refresh_call($1)", [id]);
+    const callState = (await client.query("SELECT poll_call_state FROM proposals WHERE id=$1", [id])).rows[0]?.poll_call_state;
+    if (!callState || callState === "called") await client.query("SELECT veche_close_poll($1)", [id]);
     const row = (await client.query("SELECT poll_circle,poll_city,poll_closed_at FROM proposals WHERE id=$1 FOR UPDATE", [id])).rows[0];
     if (!row || !row.poll_circle) blocked = new VecheError("missing");
+    else if (callState && callState !== "called") blocked = new VecheError("closed");
     else if (row.poll_closed_at) blocked = new VecheError("closed");
     else {
       const voter = (await client.query("SELECT veche_eligible(p,$2,$3) AS eligible FROM participants p WHERE id=$1 FOR SHARE", [participantId, row.poll_circle, row.poll_city])).rows[0];
@@ -75,9 +79,9 @@ export async function closePollWithDatabase(database: ProposalDatabase, id: stri
   const client = await database.connect();
   try {
     await client.query("BEGIN");
-    const row = (await client.query("SELECT author_participant_id,poll_circle,poll_deadline FROM proposals WHERE id=$1 FOR UPDATE", [id])).rows[0];
+    const row = (await client.query("SELECT author_participant_id,poll_circle,poll_deadline,poll_call_state FROM proposals WHERE id=$1 FOR UPDATE", [id])).rows[0];
     if (!row || !row.poll_circle) throw new VecheError("missing");
-    if (String(row.author_participant_id).toLowerCase() !== authorId.toLowerCase() || row.poll_deadline) throw new VecheError("forbidden");
+    if (String(row.author_participant_id).toLowerCase() !== authorId.toLowerCase() || row.poll_deadline || (row.poll_call_state && row.poll_call_state !== "called")) throw new VecheError("forbidden");
     await client.query("SELECT veche_close_poll($1,$2)", [id, authorId]);
     await client.query("COMMIT");
   } catch (error) { await client.query("ROLLBACK"); throw error; }
@@ -90,14 +94,22 @@ export async function getPollViewWithDatabase(database: ProposalDatabase, id: st
   const client = await database.connect();
   try {
     await client.query("BEGIN");
-    await client.query("SELECT veche_close_poll($1)", [id]);
-    const p = (await client.query(`SELECT id,title,body,author_participant_id,poll_circle,poll_mode,poll_deadline,poll_closed_at,poll_eligible_count,poll_quorum
+    await client.query("SELECT veche_refresh_call($1)", [id]);
+    const callState = (await client.query("SELECT poll_call_state FROM proposals WHERE id=$1", [id])).rows[0]?.poll_call_state;
+    if (!callState || callState === "called") await client.query("SELECT veche_close_poll($1)", [id]);
+    const p = (await client.query(`SELECT id,title,body,author_participant_id,poll_circle,poll_mode,poll_deadline,poll_closed_at,poll_eligible_count,poll_quorum,poll_call_state,poll_signature_deadline,poll_signatures_required,poll_signature_population,poll_signature_count_at_call
       FROM proposals WHERE id=$1 AND poll_circle IS NOT NULL FOR SHARE`, [id])).rows[0];
     if (!p) { await client.query("COMMIT"); return null; }
     const iso = (date: unknown) => date ? new Date(String(date)).toISOString() : null;
     const turnout = Number((await client.query("SELECT count(*) AS n FROM proposal_votes WHERE proposal_id=$1", [id])).rows[0].n);
     const view: PollView = { id: String(p.id), title: String(p.title), body: String(p.body), authorId: String(p.author_participant_id),
-      circle: p.poll_circle as PollView["circle"], mode: p.poll_mode as PollView["mode"], deadline: iso(p.poll_deadline), closedAt: iso(p.poll_closed_at), turnout, result: null };
+      circle: p.poll_circle as PollView["circle"], mode: p.poll_mode as PollView["mode"], deadline: iso(p.poll_deadline), closedAt: iso(p.poll_closed_at), turnout, call: null, result: null };
+    if (p.poll_call_state) {
+      const signatures = (await client.query(`SELECT s.participant_id,p.display_name FROM proposal_signatures s JOIN participants p ON p.id=s.participant_id WHERE s.proposal_id=$1 ORDER BY s.created_at,s.participant_id`, [id])).rows;
+      view.call = { state: p.poll_call_state as NonNullable<PollView["call"]>["state"], deadline: iso(p.poll_signature_deadline)!, required: Number(p.poll_signatures_required), population: Number(p.poll_signature_population),
+        counted: p.poll_signature_count_at_call !== null ? Number(p.poll_signature_count_at_call) : Number((await client.query("SELECT veche_signature_count(p) AS n FROM proposals p WHERE id=$1", [id])).rows[0].n),
+        signatures: signatures.map(row => ({ participantId: String(row.participant_id), displayName: String(row.display_name) })) };
+    }
     if (view.closedAt) {
       const counts: Record<VoteChoice, number> = { yes: 0, no: 0, abstain: 0 };
       for (const row of (await client.query("SELECT choice,count(*) AS n FROM proposal_votes WHERE proposal_id=$1 GROUP BY choice", [id])).rows) counts[row.choice as VoteChoice] = Number(row.n);
@@ -113,7 +125,7 @@ export async function getPollViewWithDatabase(database: ProposalDatabase, id: st
 }
 export async function canVoteInPoll(database: Reader, id: string, participantId: string): Promise<boolean> {
   const row = (await database.query(`SELECT veche_eligible(member,p.poll_circle,p.poll_city) AS eligible
-    FROM proposals p,participants member WHERE p.id=$1 AND member.id=$2 AND p.poll_circle IS NOT NULL AND p.poll_closed_at IS NULL`, [id, participantId])).rows[0];
+    FROM proposals p,participants member WHERE p.id=$1 AND member.id=$2 AND p.poll_circle IS NOT NULL AND p.poll_closed_at IS NULL AND (p.poll_call_state IS NULL OR p.poll_call_state='called')`, [id, participantId])).rows[0];
   return row?.eligible === true;
 }
 export async function getPollView(id: string) { const { pool } = await import("./db"); return getPollViewWithDatabase(pool, id); }

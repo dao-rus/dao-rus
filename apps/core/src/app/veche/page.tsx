@@ -1,3 +1,6 @@
+import { pool } from "@/lib/db";
+import { readSignatureSettings } from "@/lib/veche-signatures";
+import { SignatureCallForm } from "@/components/signature-call-form";
 import { hasPrototypeAdminAccess } from "@/lib/config";
 import { readInterfaceTexts } from "@/lib/interface-texts";
 import { getAwardBadges } from "@/lib/award-views";
@@ -17,7 +20,7 @@ export const dynamic = "force-dynamic";
 export const metadata: Metadata = { title: "Вече" };
 
 type ProposalsPageProps = {
-  searchParams: Promise<{ proposal_create?: string }>;
+  searchParams: Promise<{ proposal_create?: string; call?: string }>;
 };
 
 const createMessages: Record<string, string> = {
@@ -42,6 +45,7 @@ export default async function ProposalsPage({ searchParams }: ProposalsPageProps
       params.proposal_create === "not_eligible"
     : false;
   const proposalCreationAllowed = canCreateProposal(participant);
+  const [signatureSettings, callAuthor] = await Promise.all([readSignatureSettings(pool), pool.query("SELECT btrim(COALESCE(residence_name,''))<>'' AS has_city FROM participants WHERE id=$1", [participant.id])]);
 
   return (
     <main className="shell">
@@ -55,6 +59,8 @@ export default async function ProposalsPage({ searchParams }: ProposalsPageProps
           </div>
         </div>
 
+        {params.call === "failed" ? <p className="formError">{texts["veche.call_failed"]}</p> : null}
+        {proposalCreationAllowed && callAuthor.rows[0]?.has_city ? <SignatureCallForm texts={texts} settings={signatureSettings} /> : null}
         {proposalCreationAllowed ? (
           <form className="proposalForm" action="/api/proposals" method="post">
             <label htmlFor="proposal-title">Заголовок</label>

@@ -1,3 +1,4 @@
+import { readSignatureSettings } from "@/lib/veche-signatures";
 import Link from "next/link";
 import { redirect } from "next/navigation";
 import { getCurrentParticipant } from "@/lib/session";
@@ -13,7 +14,7 @@ export default async function VecheSettingsPage({ searchParams }: { searchParams
   const participant = await getCurrentParticipant();
   if (!participant) redirect("/");
   if (!hasPrototypeAdminAccess(participant.id)) redirect("/profile");
-  const [settings, { values: texts }, query] = await Promise.all([readVecheSettings(pool), readInterfaceTexts(), searchParams]);
+  const [settings, { values: texts }, query, signatures] = await Promise.all([readVecheSettings(pool), readInterfaceTexts(), searchParams, readSignatureSettings(pool)]);
   return <main className="shell"><section className="card profile"><CoreNavigation />
     <AdminCrumbs href="/admin/veche" texts={texts} /><h1>{texts["veche.settings"]}</h1>
     {query.outcome ? <p role="status">{texts[query.outcome === "saved" ? "veche.saved" : "veche.invalid"]}</p> : null}
@@ -25,7 +26,14 @@ export default async function VecheSettingsPage({ searchParams }: { searchParams
         <label htmlFor={`quorum${circle}`}>{texts[circle === "Dao" ? "veche.quorum_dao" : "veche.quorum_city"]}</label>
         <input id={`quorum${circle}`} name={`quorum${circle}`} type="number" min="0" max="1" step="0.000001" required defaultValue={settings[`quorum${circle}`]} />
       </div>)}
-      <p>{texts["veche.quorum_hint"]}</p><button className="button primary">{texts["veche.save"]}</button>
+      <p>{texts["veche.quorum_hint"]}</p>
+      {(["Dao", "City"] as const).map(circle => <div className="interfaceField" key={circle}>
+        <label htmlFor={`fraction${circle}`}>{texts[circle === "Dao" ? "veche.signature_dao" : "veche.signature_city"]}</label>
+        <input id={`fraction${circle}`} name={`fraction${circle}`} type="number" min="0.000001" max="1" step="0.000001" defaultValue={signatures[`fraction${circle}`] ?? ""} />
+      </div>)}
+      <label htmlFor="signatureDays">{texts["veche.signature_days"]}</label><input id="signatureDays" name="signatureDays" type="number" min="1" max="36500" step="1" defaultValue={signatures.days} required />
+      <label htmlFor="signatureCooldown">{texts["veche.signature_cooldown"]}</label><input id="signatureCooldown" name="signatureCooldown" type="number" min="0" max="36500" step="1" defaultValue={signatures.cooldownDays ?? ""} />
+      <p>{texts["veche.signature_unset"]}</p><button className="button primary">{texts["veche.save"]}</button>
     </form><Link href="/veche">{texts["veche.back"]}</Link>
   </section></main>;
 }

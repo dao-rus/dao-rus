@@ -1,3 +1,4 @@
+import { parseSignatureSettings, saveSignatureSettings } from "@/lib/veche-signatures";
 import { NextRequest, NextResponse } from "next/server";
 import { appBaseUrl, hasPrototypeAdminAccess } from "@/lib/config";
 import { getCurrentParticipant } from "@/lib/session";
@@ -14,7 +15,15 @@ export async function POST(request: NextRequest) {
   try {
     const form = await request.formData();
     const settings = parseVecheSettings({ inactivityDays: form.get("inactivityDays"), quorumDao: form.get("quorumDao"), quorumCity: form.get("quorumCity") });
-    await saveVecheSettings(pool, settings);
+    const signatures = parseSignatureSettings({ fractionDao: form.get("fractionDao"), fractionCity: form.get("fractionCity"), days: form.get("signatureDays"), cooldownDays: form.get("signatureCooldown") });
+    const client = await pool.connect();
+    try {
+      await client.query("BEGIN");
+      await saveVecheSettings(client, settings);
+      await saveSignatureSettings(client, signatures);
+      await client.query("COMMIT");
+    } catch (error) { await client.query("ROLLBACK"); throw error; }
+    finally { client.release(); }
     url.searchParams.set("outcome", "saved");
   } catch (error) {
     if (!(error instanceof VecheError)) throw error;
