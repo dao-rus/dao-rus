@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { telegramReceptionConfig } from "../../../../lib/config";
 import { TelegramMiniAppAuthError, verifyTelegramMiniAppInitData } from "../../../../lib/telegram-mini-app";
 import { ReceptionApplicationError, getReceptionApplication, saveReceptionApplication } from "../../../../lib/reception-applications";
+import { pool } from "../../../../lib/db";
 
 export const runtime = "nodejs";
 
@@ -15,8 +16,10 @@ async function handle(request: Request, write = false, updateOnly = false) {
   const authorization = request.headers.get("authorization");
   if (!authorization?.startsWith("tma ")) return response({ error: "unauthorized" }, 401);
   let telegramUserId: string;
+  let profile;
   try {
-    telegramUserId = verifyTelegramMiniAppInitData(authorization.slice(4), token).telegramUserId;
+    profile = verifyTelegramMiniAppInitData(authorization.slice(4), token);
+    telegramUserId = profile.telegramUserId;
   } catch (error) {
     if (error instanceof TelegramMiniAppAuthError) return response({ error: "unauthorized" }, 401);
     throw error;
@@ -32,7 +35,7 @@ async function handle(request: Request, write = false, updateOnly = false) {
     if (raw.length > 8_000) return response({ error: "invalid_form" }, 400);
     let input: unknown;
     try { input = JSON.parse(raw); } catch { return response({ error: "invalid_form" }, 400); }
-    const { application, created } = await saveReceptionApplication(telegramUserId, input, updateOnly);
+    const { application, created } = await saveReceptionApplication(telegramUserId, input, updateOnly, pool, profile);
     return response({ application }, created ? 201 : 200);
   } catch (error) {
     if (error instanceof ReceptionApplicationError) {

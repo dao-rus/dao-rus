@@ -41,6 +41,7 @@ describe.skipIf(!databaseUrl)("Reception applications on isolated PostgreSQL", (
     }
     const participant = (await db.query("INSERT INTO participants(display_name) VALUES ('Preserved profile') RETURNING *")).rows[0];
     await db.query("BEGIN;" + readFileSync(new URL("052_reception_applications.sql", directory), "utf8") + ";COMMIT;");
+    await db.query("BEGIN;" + readFileSync(new URL("053_reception_publication.sql", directory), "utf8") + ";COMMIT;");
     expect((await db.query("SELECT * FROM participants WHERE id=$1", [participant.id])).rows[0]).toEqual(participant);
   }, 30000);
   beforeEach(async () => { await db.query("TRUNCATE reception_applications CASCADE"); });

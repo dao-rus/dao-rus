@@ -30,6 +30,7 @@ type RelayRow = {
 function fakeDatabase() {
   const rows = new Map<number, RelayRow>();
   const query = vi.fn(async (sql: string, values?: unknown[]) => {
+    if (sql.includes("reception_application_deliveries")) return { rowCount: 0, rows: [] };
     if (sql.includes("SELECT private_chat_id")) {
       const row = [...rows.values()].find((candidate) =>
         candidate.forumChatId === values?.[0] && (candidate.forumMessageId === values?.[1] || candidate.headingId === values?.[1]) &&
@@ -89,6 +90,15 @@ function fakeBot(): ReceptionRelayBot {
 }
 
 describe("Reception relay", () => {
+  it("routes replies to a confirmed application through the existing relay", async () => {
+    const { database, query } = fakeDatabase();
+    const original = query.getMockImplementation()!;
+    query.mockImplementation(async (sql, values) => sql.includes("reception_application_deliveries")
+      ? { rowCount: 1, rows: [{ private_chat_id: "42" }] } : original(sql, values));
+    const bot = fakeBot();
+    expect(await relayReceptionUpdate(forumReply(), database, bot)).toBe("sent");
+    expect(bot.copyMessage).toHaveBeenCalledWith(expect.objectContaining({ chatId: "42" }));
+  });
   beforeEach(() => { receptionConfig.topicId = "77"; });
 
   it("relays a text message into the configured topic as one message, name on top, and keeps only routing IDs", async () => {

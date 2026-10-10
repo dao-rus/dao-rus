@@ -12,6 +12,7 @@ export type AdminGroup = { key: string; title: string; sections: AdminSection[] 
 
 export const adminGroups: AdminGroup[] = [
   { key: "people", title: "Люди", sections: [
+    { href: "/admin/reception", title: interfaceTextFields.find(field => field.key === "reception.admin.title")!.defaultValue, hint: interfaceTextFields.find(field => field.key === "reception.admin.hint")!.defaultValue, titleKey: "reception.admin.title", hintKey: "reception.admin.hint", access: "admin" },
     { href: "/admin/participants", title: "Реестр ДАО", hint: "Участники, их статусы и присутствие в Telegram", access: "admin" },
     { href: "/admin/verification-roots", title: "Начальное ядро доверия", hint: "Кто стоит у истока подтверждения личности", access: "admin" },
     { href: "/admin/guardian/arrivals", title: "История прибытия", hint: "Кто и когда вступил в форум", access: "admin" },

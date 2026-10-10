@@ -1,6 +1,8 @@
 import type { Pool } from "pg";
 import { pool } from "./db";
 import { inspectTelegramParticipantById, TelegramParticipantIdentityConflictError } from "./telegram-participant";
+import type { TelegramIdentityProfile } from "./identity";
+import { receptionTelegramName, receptionTelegramUsername } from "./reception-telegram-profile";
 
 export class ReceptionApplicationError extends Error {
   constructor(public readonly code: "invalid_form" | "not_found" | "rate_limit" | "identity_conflict") {
@@ -51,8 +53,10 @@ export async function saveReceptionApplication(
   input: unknown,
   updateOnly = false,
   database: Pool = pool,
+  telegramProfile?: TelegramIdentityProfile,
 ) {
   const form = validateReceptionForm(input);
+  if (telegramProfile && telegramProfile.telegramUserId !== telegramUserId) throw new ReceptionApplicationError("identity_conflict");
   const client = await database.connect();
   try {
     await client.query("BEGIN");
@@ -82,25 +86,28 @@ export async function saveReceptionApplication(
       participantId = miniAppIdentity.participant_id;
     }
     let created = false;
+    const name = telegramProfile ? receptionTelegramName(telegramProfile.firstName, telegramProfile.lastName) : existing?.telegram_name ?? null;
+    const username = telegramProfile ? receptionTelegramUsername(telegramProfile.username) : existing?.telegram_username ?? null;
     if (!existing) {
       const result = await client.query(`INSERT INTO reception_applications
-        (telegram_user_id, participant_id, city, occupation, age, publish_age, write_window_started_at)
-        VALUES ($1,$2,$3,$4,$5,$6,$7) RETURNING id`,
-      [telegramUserId, participantId, form.city, form.occupation, form.age, form.publishAge, now]);
+        (telegram_user_id, participant_id, city, occupation, age, publish_age, write_window_started_at, telegram_name, telegram_username)
+        VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9) RETURNING id`,
+      [telegramUserId, participantId, form.city, form.occupation, form.age, form.publishAge, now, name, username]);
       await client.query(`INSERT INTO reception_application_deliveries(application_id, kind)
         VALUES ($1, 'publication')`, [result.rows[0].id]);
       created = true;
     } else {
       const changed = existing.city !== form.city || existing.occupation !== form.occupation
-        || existing.age !== form.age || existing.publish_age !== form.publishAge;
+        || existing.age !== form.age || existing.publish_age !== form.publishAge
+        || existing.telegram_name !== name || existing.telegram_username !== username;
       await client.query(`UPDATE reception_applications SET participant_id=$2, city=$3, occupation=$4,
         age=$5, publish_age=$6, revision=revision+$7,
         updated_at=CASE WHEN $7=1 THEN $8 ELSE updated_at END,
-        write_window_started_at=$9, write_window_count=$10 WHERE telegram_user_id=$1`,
+        write_window_started_at=$9, write_window_count=$10, telegram_name=$11, telegram_username=$12 WHERE telegram_user_id=$1`,
       [telegramUserId, participantId, form.city, form.occupation, form.age, form.publishAge,
         changed ? 1 : 0, now, sameWindow ? existing.write_window_started_at : now,
-        sameWindow ? existing.write_window_count + 1 : 1]);
-      // Preserve confirmed/ambiguous delivery state. A later stage reconciles revisions explicitly.
+        sameWindow ? existing.write_window_count + 1 : 1, name, username]);
+      // Preserve confirmed/ambiguous delivery state. The worker reconciles revisions without a new send.
     }
     const application = (await client.query(selectApplication, [telegramUserId])).rows[0];
     await client.query("COMMIT");

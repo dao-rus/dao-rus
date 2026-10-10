@@ -3,7 +3,7 @@
 import { useEffect, useRef, useState, type FormEvent } from "react";
 import type { InterfaceTextValues } from "../../../lib/interface-texts";
 
-type Application = { city: string; occupation: string; age: number | null; publishAge: boolean };
+type Application = { city: string; occupation: string; age: number | null; publishAge: boolean; publicationStatus?: string; revision?: number; publishedRevision?: number | null };
 type TelegramApp = { initData?: string; ready?: () => void; expand?: () => void };
 type Mode = "loading" | "ready" | "browser" | "expired" | "load_error";
 
@@ -16,6 +16,7 @@ export function ReceptionApplicationForm({ texts, botUrl }: { texts: InterfaceTe
   const [existing, setExisting] = useState(false);
   const [saving, setSaving] = useState(false);
   const [saved, setSaved] = useState(false);
+  const [publication, setPublication] = useState<Application | null>(null);
   const [error, setError] = useState("");
   const [retry, setRetry] = useState(0);
   const initData = useRef("");
@@ -44,6 +45,7 @@ export function ReceptionApplicationForm({ texts, botUrl }: { texts: InterfaceTe
         const body = await response.json() as { application: Application | null };
         if (!active) return;
         if (body.application) {
+          setPublication(body.application);
           setCity(body.application.city); setOccupation(body.application.occupation);
           setAge(body.application.age === null ? "" : String(body.application.age));
           setPublishAge(body.application.publishAge); setExisting(true); setSaved(true);
@@ -80,7 +82,8 @@ export function ReceptionApplicationForm({ texts, botUrl }: { texts: InterfaceTe
           : "Не удалось подтвердить сохранение. Попробуйте ещё раз: повтор не создаст дубль.");
         return;
       }
-      setExisting(true); setSaved(true);
+      const body = await response.json() as { application: Application };
+      setPublication(body.application); setExisting(true); setSaved(true);
     } catch { setError("Не удалось подтвердить сохранение. Проверьте соединение и попробуйте ещё раз: повтор не создаст дубль."); }
     finally { savingLock.current = false; setSaving(false); }
   }
@@ -114,7 +117,9 @@ export function ReceptionApplicationForm({ texts, botUrl }: { texts: InterfaceTe
       </dl>
     </section>
     {error && <p className="formError" role="alert">{error}</p>}
-    {saved && <p className="formNotice" role="status">{t("reception.apply.saved")}</p>}
+    {saved && <p className="formNotice" role="status">{t(publication?.publicationStatus === "needs_review" ? "reception.apply.review"
+      : publication?.publicationStatus === "delivered" && publication.revision === publication.publishedRevision ? "reception.apply.delivered"
+      : publication?.publishedRevision ? "reception.apply.edit_pending" : "reception.apply.saved")}</p>}
     <button className="button primary" disabled={saving} type="submit">{saving ? "Сохраняем…" : t(existing ? "reception.apply.update" : "reception.apply.submit")}</button>
   </form>;
 }

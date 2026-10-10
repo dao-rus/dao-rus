@@ -51,6 +51,7 @@ export function telegramReceptionConfig() {
   return {
     token: env("TELEGRAM_RECEPTION_BOT_TOKEN"),
     miniAppEnabled: env("TELEGRAM_RECEPTION_MINI_APP_ENABLED") === "true",
+    publicationsEnabled: env("TELEGRAM_RECEPTION_PUBLICATIONS_ENABLED") === "true",
     webhookSecret: env("TELEGRAM_RECEPTION_WEBHOOK_SECRET"),
     forumChatId: env("TELEGRAM_FORUM_CHAT_ID"),
     topicId: env("TELEGRAM_RECEPTION_TOPIC_ID"),

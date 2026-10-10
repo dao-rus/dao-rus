@@ -16,6 +16,14 @@ async function submit() { await act(async () => renderer.root.findByType("form")
 const rendered = () => JSON.stringify(renderer.toJSON());
 
 describe("Reception candidate form", () => {
+  it.each([
+    ["delivered", 2, 2, "reception.apply.delivered"],
+    ["delivered", 3, 2, "reception.apply.edit_pending"],
+    ["needs_review", 2, null, "reception.apply.review"],
+  ] as const)("shows confirmed or uncertain delivery honestly: %s revision %s", async (publicationStatus, revision, publishedRevision, key) => {
+    fetchMock.mockResolvedValue(json({ application: { city: "Тверь", occupation: "Мастер", age: null, publishAge: false, publicationStatus, revision, publishedRevision } }));
+    await mount(); expect(rendered()).toContain(texts[key]);
+  });
   beforeEach(() => {
     (globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
     vi.stubGlobal("window", { Telegram: { WebApp: { initData: "synthetic-init-data", ready, expand: vi.fn() } } });

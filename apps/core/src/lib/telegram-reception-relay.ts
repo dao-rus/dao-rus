@@ -156,11 +156,18 @@ export async function relayReceptionUpdate(
     const reply = record(message.reply_to_message);
     if (!safeInteger(reply?.message_id)) return "ignored";
     replyForumMessageId = reply.message_id;
-    const mapping = await database.query(
+    let mapping = await database.query(
       `SELECT private_chat_id FROM reception_relay_updates
         WHERE forum_chat_id = $1 AND status = 'sent'
           AND (forum_message_id = $2 OR forum_heading_message_id = $2)
         LIMIT 1`,
+      [forumChatId, replyForumMessageId],
+    );
+    if (!mapping.rowCount) mapping = await database.query(
+      `SELECT a.telegram_user_id AS private_chat_id FROM reception_application_deliveries d
+       JOIN reception_applications a ON a.id=d.application_id
+       WHERE d.kind='publication' AND d.delivered_revision IS NOT NULL
+         AND d.telegram_chat_id=$1 AND d.telegram_message_id=$2 LIMIT 1`,
       [forumChatId, replyForumMessageId],
     );
     if (!mapping.rowCount) return "ignored";
