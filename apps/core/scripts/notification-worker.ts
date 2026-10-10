@@ -5,7 +5,7 @@ import { closeDuePolls } from "../src/lib/veche-polls";
 import { pool } from "../src/lib/db";
 import { telegramNotificationsEnabled } from "../src/lib/config";
 import { expireStaleDeliveries, processNextNotificationDelivery } from "../src/lib/notification-delivery";
-import { expireReceptionPublicationClaims, processNextReceptionPublication } from "../src/lib/reception-publication";
+import { expireReceptionPublicationClaims, processNextReceptionPublication, processNextReceptionInvitation } from "../src/lib/reception-publication";
 import { telegramReceptionConfig } from "../src/lib/config";
 
 const POLL_INTERVAL_MS = 5000;
@@ -38,6 +38,10 @@ async function main() {
       if (telegramReceptionConfig().publicationsEnabled) {
         await expireReceptionPublicationClaims(pool);
         await processNextReceptionPublication(pool);
+      }
+      if (telegramReceptionConfig().guardianInvitesEnabled) {
+        await expireReceptionPublicationClaims(pool, "invitation");
+        await processNextReceptionInvitation(pool);
       }
       for (const id of await expireStaleDeliveries(pool)) {
         console.log(JSON.stringify({ deliveryId: id, status: "unknown", errorCode: "claim_expired" }));

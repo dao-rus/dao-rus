@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { appBaseUrl, hasPrototypeAdminAccess } from "@/lib/config";
 import { getCurrentParticipant } from "@/lib/session";
-import { ReceptionAdminError, reviewReceptionDelivery } from "@/lib/reception-admin";
+import { ReceptionAdminError, reviewReceptionDelivery, requestReceptionInvitation } from "@/lib/reception-admin";
 
 export const runtime = "nodejs";
 export async function POST(request: NextRequest) {
@@ -12,9 +12,11 @@ export async function POST(request: NextRequest) {
   const form = await request.formData();
   const id = String(form.get("id") ?? "");
   try {
-    await reviewReceptionDelivery(participant.id, {
+    if (form.get("action") === "invite") await requestReceptionInvitation(participant.id, id);
+    else await reviewReceptionDelivery(participant.id, {
       id, version: Number(form.get("version")), action: String(form.get("action")) as "inspect" | "confirm" | "retry",
       verified: form.get("verified") === "on", messageId: String(form.get("messageId") ?? ""),
+      ...(form.has("kind") ? { kind: String(form.get("kind")) as "publication" | "invitation" } : {}),
     });
     const url = new URL("/admin/reception", appBaseUrl());
     url.searchParams.set("review", id);

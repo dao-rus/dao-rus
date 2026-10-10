@@ -24,6 +24,6 @@ describe("Reception journal server page", () => {
     expect(html).toContain("&lt;script&gt;unsafe&lt;/script&gt;"); expect(html).not.toContain("<script>");
     expect(html).toContain('name="version" value="7"'); expect(html).toContain('name="messageId"');
     expect(html).toContain('value="confirm"'); expect(html).toContain('value="retry"'); expect(html).toMatch(/<input(?=[^>]*name="verified")(?=[^>]*required="")[^>]*>/);
-    expect(html).not.toContain("Пригласить"); expect(html).not.toContain("Возраст:");
+    expect(html).toContain('value="invite"'); expect(html).not.toContain("Возраст:");
   });
 });

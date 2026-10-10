@@ -21,7 +21,7 @@ vi.mock("./config", () => ({
 
 const participantId = "10000000-0000-4000-8000-000000000001";
 
-function fakeDatabase(hasIdentity = true) {
+function fakeDatabase(hasIdentity = true, hasApplication = false) {
   const state: {
     status?: string;
     observedAt?: Date;
@@ -37,6 +37,7 @@ function fakeDatabase(hasIdentity = true) {
   let createdIdentities = 0;
   const client = {
     async query(sql: string, values?: unknown[]) {
+      if (sql.includes("FROM reception_applications")) return { rowCount: hasApplication ? 1 : 0, rows: hasApplication ? [{ id: "application" }] : [] };
       if (sql.includes("SELECT event_type, payload FROM events")) return { rowCount: history.length, rows: history };
       if (sql.includes("FROM telegram_roster_entries")) return { rowCount: 0, rows: [] };
       if (sql.includes("FROM external_identities")) return identityParticipantId
@@ -90,6 +91,12 @@ function fakeDatabase(hasIdentity = true) {
 }
 
 describe("forum onboarding", () => {
+  it.each(["start", "login"] as const)("never auto-invites an applicant through %s", async source => {
+    const { database, state } = fakeDatabase(true, true);
+    const bot: ForumBot = { getMember: vi.fn(async () => false), sendInvite: vi.fn(async () => "sent" as const) };
+    await checkForumAndInvite("42", source, database, bot);
+    expect(bot.sendInvite).not.toHaveBeenCalled(); expect(state.attemptedAt).toBeUndefined();
+  });
   beforeEach(() => { config.invitesEnabled = true; });
 
   it("records incomplete onboarding and claims only one invitation", async () => {
@@ -143,8 +150,7 @@ describe("forum onboarding", () => {
   });
 
   it("does not query Telegram for an unknown Core identity", async () => {
-    const { database } = fakeDatabase();
-    database.query = async () => ({ rowCount: 0, rows: [] });
+    const { database } = fakeDatabase(false);
     const bot: ForumBot = {
       getMember: vi.fn(async () => false),
       sendInvite: vi.fn(async () => "sent" as const),

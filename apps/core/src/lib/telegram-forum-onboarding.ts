@@ -6,7 +6,7 @@ type QueryResult = { rowCount: number | null; rows: Array<Record<string, unknown
 export type ForumDatabase = {
   connect(): Promise<{
     query(text: string, values?: unknown[]): Promise<QueryResult>;
-    release(): void;
+    release(destroy?: boolean): void;
   }>;
   query(text: string, values?: unknown[]): Promise<QueryResult>;
 };
@@ -186,8 +186,30 @@ export async function checkForumAndInvite(
   database: ForumDatabase = pool,
   bot?: ForumBot,
 ): Promise<void> {
+  const { token, forumChatId } = telegramReceptionConfig();
+  if (!token || !forumChatId || !validUserId(userId) || !validTelegramId(forumChatId)) return;
+  const c = await database.connect();
+  let locked = false;
+  let destroy = false;
+  try {
+    // Same lock as application submission/Guardian decisions: no check-then-send race.
+    await c.query("SELECT pg_advisory_lock(hashtextextended($1,0))", [`reception-application:${userId}`]);
+    locked = true;
+    const bound: ForumDatabase = { query: c.query.bind(c), connect: async () => ({ query: c.query.bind(c), release: () => {} }) };
+    await checkForumAndInviteLocked(userId, source, bound, bot);
+  } finally {
+    if (locked) {
+      try { await c.query("SELECT pg_advisory_unlock(hashtextextended($1,0))", [`reception-application:${userId}`]); }
+      catch { destroy = true; }
+    }
+    c.release(destroy);
+  }
+}
+
+async function checkForumAndInviteLocked(userId: string, source: "login" | "start", database: ForumDatabase, bot?: ForumBot): Promise<void> {
   const { token, forumChatId, forumInviteUrl, guardianInvitesEnabled } = telegramReceptionConfig();
   if (!token || !forumChatId || !validUserId(userId) || !validTelegramId(forumChatId)) return;
+  const application = await database.query("SELECT id FROM reception_applications WHERE telegram_user_id=$1", [userId]);
   const identity = await database.query(
     `SELECT participant_id FROM external_identities
       WHERE provider = 'telegram' AND external_user_id = $1 LIMIT 1`,
@@ -198,7 +220,7 @@ export async function checkForumAndInvite(
   const observedAt = new Date();
   const joined = await reception.getMember(forumChatId, userId);
   const observation = await observeForumMembership(database, userId, joined, observedAt,
-    forumInviteUrl && guardianInvitesEnabled ? source : null);
+    forumInviteUrl && guardianInvitesEnabled && !application.rowCount ? source : null);
   if (!observation?.shouldInvite || !forumInviteUrl) return;
   // A join may have arrived after the first check but before the invitation claim.
   const stillAbsent = !(await reception.getMember(forumChatId, userId));

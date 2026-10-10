@@ -49,6 +49,40 @@ export default async function ReceptionJournal({ searchParams }: { searchParams?
               <button name="action" value="retry">{texts["reception.admin.retry"]}</button></form>
           </> : null}
         </section> : null}
+        <section>
+          <h3>{texts["reception.invitation.title"]}</h3>
+          <p>Решение: {a.requested_at ? `Пригласить · ${date(a.requested_at)}` : "Не принято"}<br />
+            Доставка: {!a.invitation_status ? "Не запрошена" : a.invitation_error_code === "already_joined" ? "Уже вступил"
+              : a.invitation_status === "delivered" ? "Приглашение отправлено"
+              : a.invitation_status === "needs_review" ? "Требует проверки" : statuses[a.invitation_status]}</p>
+          <p>{texts["reception.invitation.meaning"]}</p>
+          {a.forum_status === "joined" ? <p>Форум: уже вступил (последнее наблюдение Telegram).</p> : null}
+          {!a.invitation_status ? <form action="/api/admin/reception" method="post"><input type="hidden" name="id" value={a.id} />
+            <button name="action" value="invite">{texts["reception.invitation.invite"]}</button></form> : null}
+          {a.invitation_error_code ? <p role="status">{receptionDeliveryErrors[a.invitation_error_code] ?? "Telegram отклонил запрос."}</p> : null}
+          {a.invitation_status ? <form action="/api/admin/reception" method="post">
+            <input type="hidden" name="id" value={a.id} /><input type="hidden" name="version" value={a.invitation_version} />
+            <input type="hidden" name="kind" value="invitation" /><button name="action" value="inspect">{texts["reception.admin.inspect"]}</button>
+          </form> : null}
+          {params?.review === a.id && a.invitation_status ? <>
+            <p>{texts["reception.invitation.review"]}</p>
+            <dl><dt>Личный chat / message ID</dt><dd>{a.invitation_chat_id ?? "—"} / {a.invitation_message_id ?? "—"}</dd>
+              <dt>Попытка / число попыток</dt><dd>{date(a.invitation_attempted_at)} / {a.invitation_attempts}</dd><dt>Следующий повтор</dt><dd>{date(a.invitation_retry_at)}</dd></dl>
+            {a.invitation_status === "needs_review" ? <>
+              <form action="/api/admin/reception" method="post"><input type="hidden" name="id" value={a.id} />
+                <input type="hidden" name="version" value={a.invitation_version} /><input type="hidden" name="kind" value="invitation" />
+                <label>ID проверенного сообщения <input name="messageId" inputMode="numeric" pattern="[0-9]+" required /></label>
+                <label><input type="checkbox" name="verified" required />{texts["reception.invitation.present"]}</label>
+                <button name="action" value="confirm">{texts["reception.admin.confirm"]}</button>
+              </form>
+              <form action="/api/admin/reception" method="post"><input type="hidden" name="id" value={a.id} />
+                <input type="hidden" name="version" value={a.invitation_version} /><input type="hidden" name="kind" value="invitation" />
+                <label><input type="checkbox" name="verified" required />{texts["reception.invitation.absent"]}</label>
+                <button name="action" value="retry">{texts["reception.admin.retry"]}</button>
+              </form>
+            </> : null}
+          </> : null}
+        </section>
       </article>;
     })}
     <nav aria-label="Страницы заявок">
