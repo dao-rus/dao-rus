@@ -39,6 +39,8 @@ const interfaceTextFieldDefinitions = [
 {"section":"Вече","key":"veche.ui_paid_button","label":"Созвать сразу за {price} DARUS","defaultValue":"Созвать сразу за {price} DARUS","multiline":false,"pageLabel":"Вече","pageHref":"/veche"},
 {"section":"Вече","key":"veche.ui_paid_consequence","label":"Тариф списывается без возврата и распределяется между проголосовавшими за внимание.","defaultValue":"Тариф списывается без возврата и распределяется между проголосовавшими за внимание.","multiline":false,"pageLabel":"Вече","pageHref":"/veche"},
 {"section":"Вече","key":"veche.ui_balance","label":"На балансе {balance} DARUS","defaultValue":"На балансе {balance} DARUS","multiline":false,"pageLabel":"Вече","pageHref":"/veche"},
+{"section":"Вече","key":"veche.missing_city","label":"Участие без города","defaultValue":"Вы не указали место жительства — участие в Вече недоступно.","multiline":false,"pageLabel":"Вече","pageHref":"/veche"},
+{"section":"Вече","key":"veche.specify_city","label":"Ссылка на город","defaultValue":"Указать город","multiline":false,"pageLabel":"Вече","pageHref":"/veche"},
 {"section":"Вече","key":"veche.ui_missing_city","label":"Укажите город в профиле, чтобы созывать вече.","defaultValue":"Укажите город в профиле, чтобы созывать вече.","multiline":false,"pageLabel":"Вече","pageHref":"/veche"},
 {"section":"Вече","key":"veche.ui_not_member","label":"Созывать вече может действующий участник ДАО.","defaultValue":"Созывать вече может действующий участник ДАО.","multiline":false,"pageLabel":"Вече","pageHref":"/veche"},
 {"section":"Вече","key":"veche.ui_frozen_reason","label":"Право созыва заморожено решением Вече.","defaultValue":"Право созыва заморожено решением Вече.","multiline":false,"pageLabel":"Вече","pageHref":"/veche"},

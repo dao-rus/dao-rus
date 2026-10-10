@@ -1,3 +1,4 @@
+import {VecheMissingCity} from "@/components/veche-missing-city";
 import Link from "next/link";
 import {redirect} from "next/navigation";
 import {pool} from "@/lib/db";
@@ -19,7 +20,7 @@ export default async function VechePage({searchParams}:{searchParams:Promise<{ca
  const archive=proposals.filter(p=>!p.hasPoll);
  return <main className="shell"><section className="card proposalsPage"><CoreNavigation current="veche"/>
   <h1>{texts['veche.ui_heading']}</h1><p>{texts['veche.ui_intro']}</p>
-  {availability.quotes.length||(availability.reason&&availability.opened)?<Link className="button primary" href="/veche/new">{texts['veche.ui_new']}</Link>:<p>{texts['veche.ui_not_open']}</p>}
+  {!availability.city?<><button className="button primary" disabled>{texts['veche.ui_new']}</button><VecheMissingCity texts={texts}/></>:availability.quotes.length||(availability.reason&&availability.opened)?<Link className="button primary" href="/veche/new">{texts['veche.ui_new']}</Link>:<p>{texts['veche.ui_not_open']}</p>}
   {query.call==='failed'?<p role="status">{texts['veche.call_failed']}</p>:null}
   {(['collecting','running','closed'] as const).map(group=>{
    const rows=questions.filter(q=>group==='closed'?['closed','not_called'].includes(q.state):q.state===group);if(!rows.length)return null;

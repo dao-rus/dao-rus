@@ -21,7 +21,7 @@ export default async function PollPage({ params, searchParams }: { params: Promi
   const signatureEligible = poll.call?.state === "collecting" && (await pool.query("SELECT veche_eligible(member,p.poll_circle,p.poll_city) AS eligible FROM proposals p,participants member WHERE p.id=$1 AND member.id=$2", [poll.id, participant.id])).rows[0]?.eligible === true;
   const {own,signed} = await ownProposalFlags(pool,poll.id,participant.id);
   const canVote = !poll.closedAt && await canVoteInPoll(pool, poll.id, participant.id);
-  const [ownVote,meta,guardian]=await Promise.all([readOwnVote(pool,poll.id,participant.id),pool.query('SELECT poll_city,poll_announcement_message_id,poll_collection_announcement_message_id FROM proposals WHERE id=$1',[poll.id]),readGuardianSettingsWithDatabase(pool)]);
+  const [ownVote,meta,guardian]=await Promise.all([readOwnVote(pool,poll.id,participant.id),pool.query(`SELECT poll_city,poll_announcement_message_id,poll_collection_announcement_message_id,(SELECT NULLIF(btrim(residence_name),'') IS NULL FROM participants WHERE id=$2) AS missing_city FROM proposals WHERE id=$1`,[poll.id,participant.id]),readGuardianSettingsWithDatabase(pool)]);
   const message=meta.rows[0].poll_announcement_message_id??meta.rows[0].poll_collection_announcement_message_id;
   const topic=topicFor(guardian,'topic.veche');
   const forumUrl=message&&topic?forumMessageLink(telegramReceptionConfig().forumChatId,topic,Number(message)):null;
@@ -30,6 +30,6 @@ export default async function PollPage({ params, searchParams }: { params: Promi
     {query.outcome ? <p role="status">{texts[query.outcome === "saved" ? "veche.vote_saved" : "veche.vote_failed"]}</p> : null}
     {query.signature ? <p role="status">{texts[query.signature === "saved" ? "veche.signature_saved" : "veche.signature_failed"]}</p> : null}
     {own?<p>{texts["veche.own_question"]}</p>:null}
-    <PollContent ownVote={ownVote} audience={poll.circle==="dao"?texts["veche.ui_all_dao"]:String(meta.rows[0].poll_city)} forumUrl={forumUrl} poll={poll} texts={texts} canVote={canVote} canMark={canVote && !own && poll.empty.enabled} marked={!poll.closedAt && (!poll.call || poll.call.state === "called") && poll.empty.marks.some(m=>m.participantId===participant.id)} canSign={signatureEligible} signed={signed} canClose={!poll.closedAt && !poll.deadline && (!poll.call || poll.call.state === "called") && own} />
+    <PollContent missingCity={meta.rows[0].missing_city===true} ownVote={ownVote} audience={poll.circle==="dao"?texts["veche.ui_all_dao"]:String(meta.rows[0].poll_city)} forumUrl={forumUrl} poll={poll} texts={texts} canVote={canVote} canMark={canVote && !own && poll.empty.enabled} marked={!poll.closedAt && (!poll.call || poll.call.state === "called") && poll.empty.marks.some(m=>m.participantId===participant.id)} canSign={signatureEligible} signed={signed} canClose={!poll.closedAt && !poll.deadline && (!poll.call || poll.call.state === "called") && own} />
   </section></main>;
 }

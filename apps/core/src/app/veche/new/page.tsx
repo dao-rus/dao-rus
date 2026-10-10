@@ -1,3 +1,4 @@
+import {VecheMissingCity} from "@/components/veche-missing-city";
 import {UserText} from "@/components/user-text";
 import Link from "next/link";
 import {redirect} from "next/navigation";
@@ -14,7 +15,8 @@ export default async function NewVeche({searchParams}:{searchParams:Promise<Reco
  const [query,availability,{values:texts}]=await Promise.all([searchParams,readCallAvailability(pool,actor.id),readInterfaceTexts()]);
  const text=(key:string,values:Record<string,string|number>={})=>Object.entries(values).reduce((s,[k,v])=>s.replaceAll('{'+k+'}',String(v)),texts[('veche.ui_'+key) as keyof typeof texts]);
  const shell=(content:React.ReactNode)=><main className="shell"><section className="card profile"><CoreNavigation current="veche"/><Link href="/veche">{texts['veche.back']}</Link><h1>{text('new')}</h1>{content}</section></main>;
- if(availability.reason)return shell(<p>{text(availability.reason==='city'?'missing_city':availability.reason==='frozen'?'frozen_reason':'not_member')} {availability.reason==='city'?<Link href="/profile">{texts['home.profile_button']}</Link>:availability.decisionId?<Link href={`/veche/${availability.decisionId}`}>{text('decision_link')}</Link>:null}</p>);
+ if(!availability.city)return shell(<VecheMissingCity texts={texts}/>);
+ if(availability.reason)return shell(<p>{text(availability.reason==='frozen'?'frozen_reason':'not_member')} {availability.decisionId?<Link href={`/veche/${availability.decisionId}`}>{text('decision_link')}</Link>:null}</p>);
  if(!availability.quotes.length)return shell(<p>{text('not_open')}</p>);
  if(availability.quotes.every(q=>q.price===null&&q.cooldownUntil!==null)){
   const until=availability.quotes.map(q=>q.cooldownUntil!).sort()[0];return shell(<p>{text('cooldown')} <LocalDateTime value={until}/></p>);

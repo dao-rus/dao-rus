@@ -516,4 +516,22 @@ describe.skipIf(!databaseUrl)("Veche invariants on isolated PostgreSQL", () => {
    const collection=await request('/veche/'+id);expect(collection).not.toContain(texts['veche.turnout']+': 0');
    const custom=await request(wizardHref({...v,duration:'custom'},4));expect(custom).toContain('type="datetime-local"');expect(await request(wizardHref(v,4))).not.toContain('type="datetime-local"');
   },120000);
+  it.skipIf(!http)('missing city explains all three pages and disables actions while another city retains eligibility text',async()=>{
+   await saveSignatureSettings(pool,{fractionDao:0.05,fractionCity:0.05,minimumDao:5,minimumCity:5,days:14,cooldownDays:1});
+   await pool.query('UPDATE veche_settings SET empty_fraction=0.5 WHERE singleton');
+   const noCity=await member(null),other=await member('Synthetic other locality');
+   async function session(id:string){const token=randomBytes(32).toString('base64url');await pool.query("INSERT INTO sessions(token_hash,participant_id,expires_at) VALUES($1,$2,now()+interval '1 hour')",[createHash('sha256').update(token).digest('hex'),id]);return 'dao_session='+token;}
+   const noCityCookie=await session(noCity),otherCookie=await session(other);
+   const running=await poll({circle:'city'}),collecting=(await createSignatureCallWithDatabase(pool,author,'Synthetic collection','Synthetic body',{circle:'dao',mode:'secret',deadline:null})).id;
+   for(const path of ['/veche','/veche/new','/veche/'+running,'/veche/'+collecting]){
+    const html=await request(path,false,{cookie:noCityCookie});expect(html).toContain(texts['veche.missing_city']);expect(html).toContain('href="/profile#residence-name"');expect(html).toContain(texts['veche.specify_city']);expect(html).not.toContain(texts['veche.ineligible']);
+    expect(html).not.toMatch(/<form[^>]*action="\/api\/veche/);
+    if(path==='/veche')expect(html).toMatch(/<button[^>]*disabled[^>]*>Созвать вече<\/button>/);
+   }
+   const profile=await request('/profile',false,{cookie:noCityCookie});expect(profile).toContain('id="residence-name"');
+   const outside=await request('/veche/'+running,false,{cookie:otherCookie});expect(outside).toContain(texts['veche.ineligible']);expect(outside).not.toContain(texts['veche.missing_city']);
+   await vote(running,author);await close(running);
+   const result=await request('/veche/'+running,false,{cookie:noCityCookie});expect(result.replace(/<!--.*?-->/g,'')).toContain('100%');expect(result).toContain('Synthetic question');
+  },120000);
+
 });
