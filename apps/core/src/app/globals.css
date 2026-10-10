@@ -9,6 +9,20 @@
   --accent-ink: #ffffff;
 }
 
+.receptionApply { padding: max(20px, env(safe-area-inset-top)) max(16px, env(safe-area-inset-right)) max(24px, env(safe-area-inset-bottom)) max(16px, env(safe-area-inset-left)); }
+.receptionApply .card { max-width: 620px; padding: clamp(20px, 4vw, 36px); min-width: 0; }
+.receptionApply h1 { font-size: clamp(28px, 6vw, 42px); line-height: 1.12; }
+.receptionForm { display: grid; gap: 16px; }
+.receptionForm fieldset { border: 0; padding: 0; margin: 0; display: grid; gap: 10px; min-width: 0; }
+.receptionForm input:not([type="checkbox"]) { width: 100%; min-width: 0; min-height: 44px; padding: 10px 12px; border: 1px solid var(--line); border-radius: 10px; background: #fff; font-size: 16px; }
+.receptionConsent { display: flex; align-items: flex-start; gap: 10px; margin-top: 8px; line-height: 1.5; }
+.receptionConsent input { flex: none; width: 20px; height: 20px; margin-top: 2px; }
+.receptionPreview { border: 1px solid var(--line); border-radius: 12px; padding: 16px; overflow-wrap: anywhere; }
+.receptionPreview h2 { margin: 0 0 12px; font-size: 20px; }
+.receptionPreview dl { margin: 0; }
+.receptionPreview dt { color: var(--muted); margin-top: 10px; font-size: 13px; }
+.receptionPreview dd { margin: 4px 0 0; }
+
 * { box-sizing: border-box; }
 html, body { margin: 0; min-height: 100%; }
 body {

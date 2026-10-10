@@ -4,15 +4,26 @@ import type { SignalReader } from "./signals";
 
 // What the reception bot says to a person on the way in. The relay itself only moves
 // messages; without these three lines an applicant talks into silence.
-export type ReceptionSender = (telegramUserId: string, text: string, button?: ForumButton) => Promise<void>;
+export type ReceptionButton = ForumButton | { text: string; web_app: { url: string } };
+export type ReceptionSender = (telegramUserId: string, text: string, button?: ReceptionButton) => Promise<void>;
 type Base = { settings: GuardianSettings; texts: InterfaceTextValues; send: ReceptionSender };
 
 // "Запустить": invite a stranger to introduce themselves. A current forum member is not asked again.
-export async function greetOnStart(deps: Base & { isMember: () => Promise<boolean> }, telegramUserId: string): Promise<boolean> {
+export async function greetOnStart(deps: Base & { isMember: () => Promise<boolean>; applyButton?: ReceptionButton }, telegramUserId: string): Promise<boolean> {
   if (!featureEnabled(deps.settings, "reception_greeting")) return false;
   if (await deps.isMember().catch(() => false)) return false;
-  await deps.send(telegramUserId, deps.texts["reception.greeting"]);
+  if (deps.applyButton) await deps.send(telegramUserId, deps.texts["reception.greeting"], deps.applyButton);
+  else await deps.send(telegramUserId, deps.texts["reception.greeting"]);
   return true;
+}
+
+export function receptionApplicationButton(baseUrl: string, enabled: boolean, text: string): ReceptionButton | undefined {
+  if (!enabled) return undefined;
+  try {
+    const url = new URL("/reception/apply", baseUrl);
+    if (url.protocol !== "https:" || url.username || url.password) return undefined;
+    return { text, web_app: { url: url.toString() } };
+  } catch { return undefined; }
 }
 
 // After an introduction was relayed: one acknowledgement, not one per message of a long story.
@@ -61,7 +72,7 @@ export function joinedUserId(update: unknown): string | null {
 async function production() {
   const [{ telegramReceptionConfig, appBaseUrl }, { readGuardianSettings }, { readInterfaceTexts }, { pool }] = await Promise.all([
     import("./config"), import("./guardian-forum"), import("./interface-texts"), import("./db")]);
-  const { token, forumChatId } = telegramReceptionConfig();
+  const { token, forumChatId, miniAppEnabled } = telegramReceptionConfig();
   if (!token) return null;
   const send: ReceptionSender = async (telegramUserId, text, button) => {
     const response = await fetch(`https://api.telegram.org/bot${token}/sendMessage`, {
@@ -72,7 +83,7 @@ async function production() {
     const data = await response.json().catch(() => null) as { ok?: boolean; description?: string } | null;
     if (!data?.ok) throw new Error(`Reception bot message was not delivered: ${data?.description ?? response.status}`);
   };
-  return { token, forumChatId, send, database: pool, baseUrl: appBaseUrl(),
+  return { token, forumChatId, miniAppEnabled, send, database: pool, baseUrl: appBaseUrl(),
     settings: await readGuardianSettings(), texts: (await readInterfaceTexts()).values };
 }
 
@@ -81,9 +92,11 @@ export async function onReceptionStart(telegramUserId: string): Promise<void> {
     const context = await production();
     if (!context) return;
     const { receptionBot } = await import("./telegram-forum-onboarding");
-    await greetOnStart({ ...context, isMember: () => context.forumChatId
+    const applyButton = receptionApplicationButton(context.baseUrl, context.miniAppEnabled, context.texts["reception.apply.button"]);
+    const greeted = await greetOnStart({ ...context, applyButton, isMember: () => context.forumChatId
       ? receptionBot(context.token).getMember(context.forumChatId, telegramUserId) : Promise.resolve(false) }, telegramUserId);
-  } catch (error) { console.error("Reception greeting failed", error); }
+    if (!greeted && applyButton) await context.send(telegramUserId, context.texts["reception.apply.start"], applyButton);
+  } catch { console.error("Reception greeting failed"); }
 }
 export async function onReceptionRelayed(privateChatId: string): Promise<void> {
   try {

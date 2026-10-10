@@ -13,7 +13,7 @@ import { isNewcomerWithDatabase, setForumAnnouncementWithDatabase, syncNewcomerA
 import { openDiscussion, readDiscussionLinkWithDatabase, syncDiscussion } from "./signal-discussion";
 import { archiveSignalWithDatabase, createSignalWithDatabase, updateSignalWithDatabase } from "./signals";
 import { encodeStartPath } from "./mini-app-start";
-import { acknowledgeIntroduction, greetOnStart, joinedUserId, welcomeAfterJoining } from "./reception-voice";
+import { acknowledgeIntroduction, greetOnStart, joinedUserId, welcomeAfterJoining, type ReceptionButton } from "./reception-voice";
 
 const databaseUrl = process.env.GUARDIAN_FORUM_TEST_DATABASE_URL;
 const schema = `guardian_forum_test_${randomUUID().replaceAll("-", "")}`;
@@ -220,9 +220,9 @@ describe.skipIf(!databaseUrl)("Guardian forum routes on real PostgreSQL", () => 
   });
 
   it("lets the reception bot greet, acknowledge once and welcome once", async () => {
-    const said: Array<{ to: string; text: string; button?: { text: string; url: string } }> = [];
+    const said: Array<{ to: string; text: string; button?: ReceptionButton }> = [];
     let refuse = false;
-    const send = async (to: string, text: string, button?: { text: string; url: string }) => { if (refuse) throw new Error("403"); said.push({ to, text, button }); };
+    const send = async (to: string, text: string, button?: ReceptionButton) => { if (refuse) throw new Error("403"); said.push({ to, text, button }); };
     const base = { settings: topics, texts, send };
     const off = { settings: settingsOf({ "feature.reception_greeting": "off", "feature.reception_welcome": "off" }), texts, send };
 
