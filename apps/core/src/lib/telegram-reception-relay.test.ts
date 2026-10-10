@@ -1,5 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import {
+  receptionErrorCode,
   receptionRelayBot,
   relayReceptionUpdate,
   type ReceptionRelayBot,
@@ -45,6 +46,7 @@ function fakeDatabase() {
       });
       return { rowCount: 1, rows: [{ update_id: updateId }] };
     }
+    if (sql.includes("SET forum_heading_message_id=")) rows.get(Number(values?.[0]))!.headingId=Number(values?.[1]);
     if (sql.includes("SET status = 'sent'")) {
       const row = rows.get(Number(values?.[0]))!;
       row.status = "sent";
@@ -189,7 +191,7 @@ describe("Reception relay", () => {
     // Telegram refuses the formatting: the same text is sent once more without it.
     const picky: ReceptionRelayBot = {
       sendAttribution: vi.fn(async (input: { entities?: unknown[] }) => input.entities?.length
-        ? { status: "failed" as const, errorCode: "telegram_400" } : { status: "sent" as const, messageId: 700 }),
+        ? { status: "failed" as const, errorCode: "telegram_400_parse_entities" } : { status: "sent" as const, messageId: 700 }),
       copyMessage: vi.fn(),
     };
     expect(await relayReceptionUpdate(privateMessage(2, { text: "Привет сайт", entities }), database, picky)).toBe("sent");
@@ -198,6 +200,12 @@ describe("Reception relay", () => {
     expect(picky.copyMessage).not.toHaveBeenCalled();
   });
 
+  it.each(['network_or_timeout','telegram_500','invalid_response','telegram_403','telegram_400'])('never blindly repeats a formatted message after %s',async errorCode=>{
+    const {database,rows}=fakeDatabase();const bot:ReceptionRelayBot={sendAttribution:vi.fn(async()=>({status:'failed' as const,errorCode})),copyMessage:vi.fn()};
+    await relayReceptionUpdate(privateMessage(99,{entities:[{type:'bold',offset:0,length:3}]}),database,bot);
+    expect(bot.sendAttribution).toHaveBeenCalledTimes(1);expect(rows.get(99)?.status).toBe('failed');
+    expect(await relayReceptionUpdate(privateMessage(99),database,bot)).toBe('duplicate');expect(bot.sendAttribution).toHaveBeenCalledTimes(1);
+  });
   it("falls back to the name line plus a copy when the text would not fit into one message", async () => {
     const { database, rows } = fakeDatabase();
     const bot = fakeBot();
@@ -237,7 +245,7 @@ describe("Reception relay", () => {
     expect(await relayReceptionUpdate(privateMessage(1, { text: undefined, dice: { emoji: "🎲" } }), database, bot)).toBe("unsupported");
     expect(rows.get(1)?.status).toBe("unsupported");
     expect(await relayReceptionUpdate(privateMessage(2, { text: undefined, photo: [{ file_id: "photo" }] }), database, bot)).toBe("failed");
-    expect(rows.get(2)).toMatchObject({ status: "failed", errorCode: "telegram_400" });
+    expect(rows.get(2)).toMatchObject({ status: "failed", errorCode: "telegram_400", headingId:500 });
     expect(bot.copyMessage).toHaveBeenCalledTimes(1);
     expect(bot.sendAttribution).toHaveBeenCalledTimes(1);
   });
@@ -279,6 +287,11 @@ describe("Reception relay", () => {
 });
 
 describe("copyMessage Bot API adapter", () => {
+  it('keeps actionable categories without retaining arbitrary text or private data',()=>{
+    expect(receptionErrorCode({error_code:400,description:"Bad Request: can't parse entities: private content"})).toBe('telegram_400_parse_entities');
+    expect(receptionErrorCode({error_code:400,description:'private text nobody should see'})).toBe('telegram_400');
+    expect(receptionErrorCode({error_code:429,parameters:{retry_after:30}})).toBe('telegram_429_retry_after_30');
+  });
   beforeEach(() => vi.stubGlobal("fetch", vi.fn()));
   afterEach(() => vi.unstubAllGlobals());
 

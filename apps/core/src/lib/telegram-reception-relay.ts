@@ -46,6 +46,28 @@ function attribution(from: Record<string, unknown>): string {
   return `От: ${name}${username ? ` (@${username})` : ""}`;
 }
 
+// Retain only allowlisted diagnostic categories, never Telegram's arbitrary response text.
+export function receptionErrorCode(body: Record<string, unknown>): string {
+  const code = safeInteger(body.error_code) ? `telegram_${body.error_code}` : "invalid_response";
+  const description = typeof body.description === "string" ? body.description.toLowerCase() : "";
+  const reasons: Array<[string, string]> = [
+    ["can't parse entities", "parse_entities"], ["message thread not found", "topic_not_found"],
+    ["topic_closed", "topic_closed"], ["not enough rights", "posting_forbidden"],
+    ["bot was kicked", "bot_kicked"], ["bot is not a member", "bot_not_member"],
+    ["bot was blocked", "bot_blocked"], ["chat not found", "chat_not_found"],
+    ["message to copy not found", "source_not_found"], ["message can't be copied", "source_not_copyable"],
+    ["message is too long", "message_too_long"], ["unauthorized", "unauthorized"],
+  ];
+  const reason = reasons.find(([fragment]) => description.includes(fragment))?.[1];
+  const parameters = record(body.parameters);
+  const delay = safeInteger(parameters?.retry_after) && parameters.retry_after > 0 ? parameters.retry_after : null;
+  return code + (reason ? `_${reason}` : "") + (code === "telegram_429" && delay ? `_retry_after_${delay}` : "");
+}
+
+export function deterministicReceptionFailure(code: string | null): boolean {
+  return /^(attribution_)?telegram_(400|401|403|404|429)(_|$)/.test(code ?? "");
+}
+
 async function botMessage(token: string, method: "sendMessage" | "copyMessage", params: object): Promise<CopyResult> {
   try {
     const response = await fetch(`https://api.telegram.org/bot${token}/${method}`, {
@@ -60,8 +82,7 @@ async function botMessage(token: string, method: "sendMessage" | "copyMessage", 
     if (body?.ok === true && safeInteger(result?.message_id)) {
       return { status: "sent", messageId: result.message_id };
     }
-    return { status: "failed", errorCode: safeInteger(body?.error_code)
-      ? `telegram_${body.error_code}` : "invalid_response" };
+    return { status: "failed", errorCode: receptionErrorCode(body ?? {}) };
   } catch {
     // A timeout may occur after Telegram accepted the message. Do not resend automatically.
     return { status: "failed", errorCode: "network_or_timeout" };
@@ -183,13 +204,16 @@ export async function relayReceptionUpdate(
         }) : [];
         const single = await relayBot.sendAttribution({ chatId: forumChatId, text: prefix + message.text, entities, ...topic });
         // Telegram may refuse some formatting from a bot; the words matter more than the styling.
-        return single.status === "failed" && entities.length
+        return single.status === "failed" && single.errorCode === "telegram_400_parse_entities" && entities.length
           ? relayBot.sendAttribution({ chatId: forumChatId, text: prefix + message.text, ...topic }) : single;
       }
       const heading = await relayBot.sendAttribution({ chatId: forumChatId, text: name, ...topic });
       if (heading.status === "failed") {
         return { status: "failed", errorCode: `attribution_${heading.errorCode}` };
       }
+      // Save the successful heading before the second external call, also when the copy fails.
+      await database.query(`UPDATE reception_relay_updates SET forum_heading_message_id=$2,
+        updated_at=now() WHERE update_id=$1 AND status='pending'`, [updateId, heading.messageId]);
       const copy = await relayBot.copyMessage({
         chatId: forumChatId, fromChatId: String(privateChatId),
         messageId: sourceMessageId, ...topic,
@@ -206,6 +230,8 @@ export async function relayReceptionUpdate(
          updated_at = now() WHERE update_id = $1 AND status = 'pending'`,
       [updateId, copied.errorCode],
     );
+    console.error(JSON.stringify({event:"reception_relay_failed",updateId,direction,errorCode:copied.errorCode,
+      recovery:deterministicReceptionFailure(copied.errorCode)?"fix_cause_then_manual_recovery":"verify_delivery_before_manual_recovery"}));
     return "failed";
   }
   await database.query(
