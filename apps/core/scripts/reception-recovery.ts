@@ -2,6 +2,8 @@ import {pool} from "../src/lib/db";
 import {telegramReceptionConfig} from "../src/lib/config";
 import {recoverReceptionDelivery,type RecoveryRow} from "../src/lib/reception-recovery";
 
+async function main(){
+
 const args=process.argv.slice(2),apply=args.includes('--apply'),confirmedNotDelivered=args.includes('--confirmed-not-delivered');
 const updateId=args[args.indexOf('--update')+1];
 if(!args.includes('--update')||!/^\d+$/.test(updateId??''))throw new Error('Usage: reception-recovery.ts --update <ID> [--apply] [--confirmed-not-delivered]');
@@ -22,3 +24,5 @@ try {
  }
 }catch(error){console.error(error instanceof Error?error.message:'Recovery failed');process.exitCode=1;}
 finally {await pool.end();}
+}
+main().catch(error=>{const message=error instanceof Error?error.message:"";console.error(message.startsWith("Usage:")||message==="Reception token is not configured"?message:"Reception CLI failed; check configuration and database connectivity");process.exitCode=1;});
