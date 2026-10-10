@@ -4,7 +4,8 @@ import { interfaceTextFields, type InterfaceTextValues } from "../lib/interface-
 import { PrivateMessagesLink } from "./private-messages-link";
 import { CoreNavigation } from "./core-navigation";
 
-const mocks = vi.hoisted(() => ({ getCurrentParticipant: vi.fn(), countUnreadNotifications: vi.fn() }));
+const mocks = vi.hoisted(() => ({ getCurrentParticipant: vi.fn(), countUnreadNotifications: vi.fn(), countPendingVeche:vi.fn() }));
+vi.mock("../lib/veche-presentation",()=>({countPendingVeche:mocks.countPendingVeche}));
 vi.mock("../lib/session", () => ({ getCurrentParticipant: mocks.getCurrentParticipant }));
 vi.mock("../lib/notifications", () => ({ countUnreadNotifications: mocks.countUnreadNotifications }));
 
@@ -32,6 +33,7 @@ describe("CoreNavigation", () => {
     vi.clearAllMocks();
     mocks.getCurrentParticipant.mockResolvedValue({ id: "participant" });
     mocks.countUnreadNotifications.mockResolvedValue(0);
+    mocks.countPendingVeche.mockResolvedValue(0);
   });
   it("links all main sections, respects editable labels and marks the current one", async () => {
     const texts = Object.fromEntries(interfaceTextFields.map((field) => [field.key, field.defaultValue])) as InterfaceTextValues;
@@ -53,6 +55,12 @@ describe("CoreNavigation", () => {
     expect(mocks.countUnreadNotifications).toHaveBeenCalledWith("participant");
   });
 
+  it("shows actionable Veche count and omits zero",async()=>{
+    mocks.countPendingVeche.mockResolvedValue(3);
+    const texts=Object.fromEntries(interfaceTextFields.map(f=>[f.key,f.defaultValue])) as InterfaceTextValues;
+    expect(links(await CoreNavigation({texts})).find(l=>l.href==='/veche')?.label).toBe('Вече 3');
+    expect(mocks.countPendingVeche).toHaveBeenCalledWith('participant');
+  });
   it("marks Nearby as the current section", async () => {
     const texts = Object.fromEntries(interfaceTextFields.map((field) => [field.key, field.defaultValue])) as InterfaceTextValues;
     const navigation = await CoreNavigation({ current: "nearby", texts });

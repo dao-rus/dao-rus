@@ -1,3 +1,5 @@
+import {wizardValues,invalidWizardStep,wizardDeadline,wizardHref,readCallAvailability} from "@/lib/veche-presentation";
+import {pool} from "@/lib/db";
 import { createPaidCall } from "@/lib/veche-finance";
 import { afterPollCalled } from "@/lib/veche-announcement";
 import { NextRequest, NextResponse } from "next/server";
@@ -15,11 +17,19 @@ export async function POST(request:NextRequest){
  let url=new URL("/veche",appBaseUrl());
  try{
    const form=await request.formData();
-   const deadline=form.get("timing")==="permanent"?null:new Date(String(form.get("deadline"))+"+03:00");
+   let wizard:ReturnType<typeof wizardValues>|null=null;
+   if(form.get('wizard')==='yes'){
+    wizard=wizardValues(Object.fromEntries([...form.entries()].map(([k,v])=>[k,String(v)])));
+    const available=await readCallAvailability(pool,participant.id);
+    const invalid=invalidWizardStep(wizard,5,available.quotes.map(q=>q.circle));
+    if(invalid)return NextResponse.redirect(new URL(wizardHref(wizard,invalid,{error:'1'}),appBaseUrl()),303);
+    url=new URL(wizardHref(wizard,6,{error:'create'}),appBaseUrl());
+   }
+   const deadline=wizard?wizardDeadline(wizard):form.get("timing")==="permanent"?null:new Date(String(form.get("deadline"))+"+03:00");
    const paid=form.get("path")==="paid";
    const proposal=await (paid?createPaidCall:createSignatureCall)(participant.id,form.get("title"),form.get("body"),{circle:form.get("circle") as PollConfig["circle"],mode:form.get("mode") as PollConfig["mode"],deadline,authorVisibility:form.get("authorVisibility")==="anonymous"?"anonymous":"public"});
    if(paid)await afterPollCalled(proposal.id);else await afterSignatureCallChanged(proposal.id);
    url=new URL(`/veche/${proposal.id}`,appBaseUrl());
- }catch{url.searchParams.set("call","failed");}
+ }catch{if(url.pathname!=="/veche/new")url.searchParams.set("call","failed");}
  return NextResponse.redirect(url,303);
 }

@@ -1,3 +1,4 @@
+import {readCallAvailability,readOwnVote,countPendingVecheWithDatabase,wizardHref,wizardValues} from "./veche-presentation";
 import { parseEmptySettings,readEmptySettings,saveEmptySettings,setEmptyMarkWithDatabase,readEmptySignals,readPublicFreezes,recordFreezeWithDatabase } from "./veche-empty";
 import { readFinanceSettings,saveFinanceSettings,createPaidCallWithDatabase } from "./veche-finance";
 import { getVisibleDarusBookWithDatabase } from "./darus-holds";
@@ -469,5 +470,50 @@ describe.skipIf(!databaseUrl)("Veche invariants on isolated PostgreSQL", () => {
    const denied=await fetch(base+'/api/veche',{method:'POST',headers:{cookie:'dao_session='+token,origin:base},body:new URLSearchParams({circle:'dao',mode:'secret',timing:'permanent',title:'Q',body:'B',path:'signatures'}),redirect:'manual'});expect(denied.headers.get('location')).toContain('failed');
    expect(await request('/veche',false,{cookie:'dao_session='+token})).not.toContain('action="/api/veche"');
    expect(serverOutput).not.toContain(c.creator);await recordFreezeWithDatabase(pool,author,a,decision,'unfreeze',null);
+  },120000);
+
+  it('presentation quotes use the creation snapshot formula and include unaffordable configured tariffs',async()=>{
+   const city='Synthetic preview '+randomUUID(),creator=await member(city);await member(city);await member(city);
+   await saveSignatureSettings(pool,{fractionDao:0.5,fractionCity:0.5,minimumDao:5,minimumCity:5,days:14,cooldownDays:1});
+   const client=await pool.connect();try{await client.query('BEGIN');const settings=await readFinanceSettings(client);await saveFinanceSettings(client,author,{...settings,tariffBaseCity:'0.001',tariffMultiplierCity:'1'});await client.query('COMMIT');}finally{client.release();}
+   const availability=await readCallAvailability(pool,creator),quote=availability.quotes.find(q=>q.circle==='city')!;expect(quote).toMatchObject({required:5,population:3,days:14,price:'0.003000',affordable:false});
+   const id=(await createSignatureCallWithDatabase(pool,creator,'Preview','Body',{circle:'city',mode:'secret',deadline:null})).id;
+   expect((await pool.query('SELECT poll_rule_snapshot FROM proposals WHERE id=$1',[id])).rows[0].poll_rule_snapshot).toMatchObject({required:quote.required,population:quote.population,days:quote.days});
+   const noCity=await member(null);expect((await readCallAvailability(pool,noCity)).reason).toBe('city');
+  });
+  it('menu counts only available unsigned/unvoted questions and owns only the session ballot',async()=>{
+   const creator=await member('Synthetic badge '+randomUUID()),voter=await member((await pool.query('SELECT residence_name FROM participants WHERE id=$1',[creator])).rows[0].residence_name);
+   const before=await countPendingVecheWithDatabase(pool,voter),id=(await createProposalWithDatabase(pool,creator,'Badge','Body',{circle:'city',mode:'secret',deadline:null})).id;
+   expect(await countPendingVecheWithDatabase(pool,voter)).toBe(before+1);await vote(id,voter,'no');expect(await countPendingVecheWithDatabase(pool,voter)).toBe(before);
+   expect(await readOwnVote(pool,id,voter)).toBe('no');expect(await readOwnVote(pool,id,creator)).toBeNull();expect(JSON.stringify(await view(id))).not.toContain(voter);
+   const collecting=(await createSignatureCallWithDatabase(pool,creator,'Badge signatures','Body',{circle:'city',mode:'secret',deadline:null})).id;
+   expect(await countPendingVecheWithDatabase(pool,voter)).toBe(before+1);await setSignatureWithDatabase(pool,collecting,voter,true);expect(await countPendingVecheWithDatabase(pool,voter)).toBe(before);
+  });
+  it.skipIf(!http)('own secret choice is session-only in actual HTML/RSC, uncached, absent from foreign pages and shared API',async()=>{
+   const voter=await member(),id=await poll();await vote(id,voter,'no');const token=randomBytes(32).toString('base64url');await pool.query("INSERT INTO sessions(token_hash,participant_id,expires_at) VALUES($1,$2,now()+interval '1 hour')",[createHash('sha256').update(token).digest('hex'),voter]);
+   const phrase=texts['veche.ui_own_vote'].replace('{choice}',texts['veche.no']);
+   for(const closed of [false,true]){
+    if(closed)await close(id);
+    for(const rsc of [false,true]){
+     const own=await request('/veche/'+id,rsc,{cookie:'dao_session='+token});expect(own).toContain(phrase);expect(await request('/veche/'+id,rsc)).not.toContain(phrase);
+    }
+    const api=await request('/api/veche/'+id,false,{cookie:'dao_session='+token});expect(api).not.toContain(voter);expect(JSON.parse(api)).not.toHaveProperty('ownVote');
+   }
+   const response=await fetch(base+'/veche/'+id,{headers:{cookie:'dao_session='+token}});expect(response.headers.get('cache-control')).toMatch(/no-store|no-cache/);
+  },120000);
+  it.skipIf(!http)('six server steps show exact threshold, preserve input and submit through existing API without a stored draft',async()=>{
+   await saveSignatureSettings(pool,{fractionDao:0.05,fractionCity:0.05,minimumDao:5,minimumCity:5,days:14,cooldownDays:1});
+   const v=wizardValues({title:'Synthetic wizard title',body:'Synthetic wizard body',circle:'dao',mode:'secret',duration:'7',authorVisibility:'public'});
+   const before=Number((await pool.query('SELECT count(*) AS n FROM proposals')).rows[0].n);
+   for(let step=1;step<=6;step++){const page=await request(wizardHref(v,step));expect(page).toContain(texts['veche.ui_step'].replace('{step}',String(step)));if(step<6)expect(page).toContain('method="get"');}
+   expect(Number((await pool.query('SELECT count(*) AS n FROM proposals')).rows[0].n)).toBe(before);
+   const quote=(await readCallAvailability(pool,author)).quotes.find(q=>q.circle==='dao')!,review=await request(wizardHref(v,6));
+   expect(review).toContain(texts['veche.ui_sign_consequence'].replace('{required}',String(quote.required)).replace('{audience}',texts['veche.ui_signature_audience_dao']).replace('{days}',String(quote.days)));
+   const invalid=await fetch(base+wizardHref({...v,title:''},6),{headers:{cookie},redirect:'manual'});expect(invalid.status).toBe(307);expect(new URL(invalid.headers.get('location')!,base).searchParams.get('step')).toBe('1');
+   const response=await fetch(base+'/api/veche',{method:'POST',headers:{cookie,origin:base},body:new URLSearchParams({...v,wizard:'yes',path:'signatures'}),redirect:'manual'});expect(response.status).toBe(303);const id=new URL(response.headers.get('location')!).pathname.split('/').at(-1)!;
+   expect((await pool.query('SELECT poll_rule_snapshot FROM proposals WHERE id=$1',[id])).rows[0].poll_rule_snapshot).toMatchObject({required:quote.required,days:quote.days,population:quote.population});
+   const page=await request('/veche');expect(page).not.toContain('Governance · Proposal v0.1');expect(page).not.toContain('action="/api/proposals"');expect(page).not.toContain(v.body);expect(page).toContain(texts['veche.ui_collecting_group']);
+   const collection=await request('/veche/'+id);expect(collection).not.toContain(texts['veche.turnout']+': 0');
+   const custom=await request(wizardHref({...v,duration:'custom'},4));expect(custom).toContain('type="datetime-local"');expect(await request(wizardHref(v,4))).not.toContain('type="datetime-local"');
   },120000);
 });

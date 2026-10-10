@@ -1,3 +1,4 @@
+import { countPendingVeche } from "../lib/veche-presentation";
 import Link from "next/link";
 import { readInterfaceTexts, type InterfaceTextValues } from "../lib/interface-texts";
 import { countUnreadNotifications } from "../lib/notifications";
@@ -14,6 +15,7 @@ export async function CoreNavigation({ current, texts: providedTexts }: {
 }) {
   const texts = providedTexts ?? (await readInterfaceTexts()).values;
   const participant = await getCurrentParticipant();
+  const vecheCount = participant ? await countPendingVeche(participant.id) : 0;
   const unreadCount = participant ? await countUnreadNotifications(participant.id) : 0;
   // A reward that arrived while the participant was away falls from the top of whatever page they open next.
   const reward = participant ? await readPendingReward(participant.id).catch(() => null) : null;
@@ -29,7 +31,7 @@ export async function CoreNavigation({ current, texts: providedTexts }: {
     <nav className="coreNavigation" aria-label="Основные разделы">
       {links.map(({ section, href, label }) => (
         <Link key={section} className="button secondary" href={href}
-          aria-current={current === section ? "page" : undefined}>{label}</Link>
+          aria-current={current === section ? "page" : undefined}>{label}{section === "veche" && vecheCount > 0 ? <span className="navigationBadge"> {vecheCount}</span> : null}</Link>
       ))}
       {participant ? <PrivateMessagesLink label={texts["nav.private_messages"]}
         unreadCount={unreadCount} current={current === "notifications"} /> : null}
