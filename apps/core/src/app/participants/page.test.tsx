@@ -91,6 +91,8 @@ describe("/participants", () => {
       "participants.sort_verification": "Топ-верификация",
       "participants.sort_reputation": "Топ-репутация",
       "participants.sort_joined": "Дата вступления",
+      "participants.sort_joined_oldest": "Сначала старые",
+      "participants.sort_joined_newest": "Сначала новые",
       "participants.sort_core": "Ядро",
     } });
     mocks.listCommunityPosts.mockResolvedValue([]);
@@ -192,6 +194,53 @@ describe("/participants", () => {
     expect(hrefs(page)).toContain("/participants?interest=%D0%B8%D1%81%D1%82%D0%BE%D1%80%D0%B8%D1%8F&q=%D0%90%D0%BD%D0%BD%D0%B0&sort=reputation");
     expect(hrefs(page)).toContain("/participants?interest=%D0%B8%D1%81%D1%82%D0%BE%D1%80%D0%B8%D1%8F&q=%D0%90%D0%BD%D0%BD%D0%B0&sort=core");
     expect(hrefs(page)).toContain("/participants?interest=%D0%B8%D1%81%D1%82%D0%BE%D1%80%D0%B8%D1%8F&sort=verification");
+  });
+
+  it.each([undefined, "asc", "desc"] as const)("preserves joined direction %s and filters in links", async (dir) => {
+    mocks.getCurrentParticipant.mockResolvedValue({ id: "viewer" });
+    mocks.listParticipantsDirectory.mockResolvedValue([]);
+    const page = await ParticipantsPage({ searchParams: Promise.resolve({
+      q: "Анна", interest: "история", residence_name: "Казань", residence_type: "город",
+      residence_country: "Россия", sort: "joined", dir,
+    }) });
+    const direction = dir ?? "asc";
+    expect(mocks.listParticipantsDirectory).toHaveBeenCalledWith("Анна", expect.objectContaining({ sort: "joined", dir: direction }));
+    expect(textContent(page)).toContain("Сначала старые");
+    expect(textContent(page)).toContain("Сначала новые");
+    function directionLinks(node: ReactNode): Array<{ href: string; current?: string; text: string }> {
+      if (Array.isArray(node)) return node.flatMap(directionLinks);
+      if (!isValidElement(node)) return [];
+      const props = node.props as { href?: string; children?: ReactNode; "aria-current"?: string };
+      const text = textContent(props.children);
+      return [...(props.href && (text === "Сначала старые" || text === "Сначала новые")
+        ? [{ href: props.href, current: props["aria-current"], text }] : []), ...directionLinks(props.children)];
+    }
+    const links = directionLinks(page);
+    expect(links).toHaveLength(2);
+    links.forEach((link, index) => {
+      const query = new URL(link.href, "https://core.daorus.org").searchParams;
+      expect(Object.fromEntries(query)).toEqual({ q: "Анна", interest: "история", residence_name: "Казань",
+        residence_type: "город", residence_country: "Россия", sort: "joined", dir: index === 0 ? "asc" : "desc" });
+      expect(link.current).toBe(query.get("dir") === direction ? "page" : undefined);
+    });
+    hrefs(page).filter((href) => href.startsWith("/participants?")).forEach((href) => {
+      const query = new URL(href, "https://core.daorus.org").searchParams;
+      if (query.get("sort") !== "joined") expect(query.has("dir")).toBe(false);
+    });
+  });
+
+  it("hides joined direction and ignores dir for other sorts", async () => {
+    mocks.getCurrentParticipant.mockResolvedValue({ id: "viewer" });
+    mocks.listParticipantsDirectory.mockResolvedValue([]);
+    const page = await ParticipantsPage({ searchParams: Promise.resolve({ sort: "reputation", dir: "desc" }) });
+    expect(textContent(page)).not.toContain("Сначала старые");
+    expect(textContent(page)).not.toContain("Сначала новые");
+    expect(mocks.listParticipantsDirectory).toHaveBeenCalledWith("", expect.not.objectContaining({ dir: expect.anything() }));
+    expect(hrefs(page)).toContain("/participants?sort=joined&dir=asc");
+    hrefs(page).forEach((href) => {
+      const query = new URL(href, "https://core.daorus.org").searchParams;
+      if (query.get("sort") !== "joined") expect(query.has("dir")).toBe(false);
+    });
   });
 
   it("shows the count of found Core visitors", async () => {

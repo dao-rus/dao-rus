@@ -17,7 +17,7 @@ export type ParticipantDirectoryEntry = {
 };
 
 export type DirectorySort = "name" | "verification" | "reputation" | "core" | "joined";
-type DirectoryFilters = { interest?: string; residence?: Residence | null; viewerParticipantId?: string; sort?: DirectorySort };
+export type DirectoryFilters = { interest?: string; residence?: Residence | null; viewerParticipantId?: string; sort?: DirectorySort; dir?: "asc" | "desc" };
 
 type QueryResult = {
   rows: Array<Record<string, unknown>>;
@@ -37,8 +37,7 @@ export async function listParticipantsDirectoryWithDatabase(
   const residence = filters.residence;
   const orderBy = filters.sort === "verification" ? "verification_points DESC, "
     : filters.sort === "reputation" ? "positive_count DESC, "
-    // Longest in the DAO first; people whose join date history does not reach go last.
-    : filters.sort === "joined" ? "joined_at ASC NULLS LAST, " : "";
+    : filters.sort === "joined" ? `joined_at ${filters.dir === "desc" ? "DESC" : "ASC"} NULLS LAST, ` : "";
   const coreOnly = filters.sort === "core" ? `AND EXISTS (
           SELECT 1 FROM events core_login
            WHERE core_login.participant_id = participant.id

@@ -17,7 +17,7 @@ export const dynamic = "force-dynamic";
 export const metadata: Metadata = { title: "Сеть" };
 
 type ParticipantsPageProps = {
-  searchParams: Promise<{ q?: string; interest?: string; residence_name?: string; residence_type?: string; residence_country?: string; post?: string; sort?: string }>;
+  searchParams: Promise<{ q?: string; interest?: string; residence_name?: string; residence_type?: string; residence_country?: string; post?: string; sort?: string; dir?: string }>;
 };
 
 function residenceFromQuery(params: Awaited<ParticipantsPageProps["searchParams"]>): Residence | null {
@@ -44,6 +44,7 @@ export default async function ParticipantsPage({ searchParams }: ParticipantsPag
   const community = communityFromParams(params);
   const sort: DirectorySort = params.sort === "verification" || params.sort === "reputation" || params.sort === "core" || params.sort === "joined"
     ? params.sort : "name";
+  const dir: "asc" | "desc" = sort === "joined" && params.dir === "desc" ? "desc" : "asc";
   const filterParams = new URLSearchParams();
   if (interestFilter) filterParams.set("interest", interestFilter);
   if (residenceFilter) {
@@ -53,15 +54,17 @@ export default async function ParticipantsPage({ searchParams }: ParticipantsPag
   }
   const filterAndSortParams = new URLSearchParams(filterParams);
   if (sort !== "name") filterAndSortParams.set("sort", sort);
+  if (sort === "joined") filterAndSortParams.set("dir", dir);
   const filterHref = filterAndSortParams.size ? `/participants?${filterAndSortParams.toString()}` : "/participants";
-  const sortHref = (choice: DirectorySort) => {
+  const sortHref = (choice: DirectorySort, direction: "asc" | "desc" = dir) => {
     const query = new URLSearchParams(filterParams);
     if (q) query.set("q", q);
     if (choice !== "name") query.set("sort", choice);
+    if (choice === "joined") query.set("dir", direction);
     return query.size ? `/participants?${query.toString()}` : "/participants";
   };
   const directoryFilters = { interest: interestFilter, residence: residenceFilter, viewerParticipantId: viewer.id,
-    ...(sort !== "name" ? { sort } : {}) };
+    ...(sort !== "name" ? { sort } : {}), ...(sort === "joined" ? { dir } : {}) };
   const [participants, { values: texts }, posts] = await Promise.all([
     listParticipantsDirectory(q, directoryFilters),
     readInterfaceTexts(),
@@ -112,6 +115,7 @@ export default async function ParticipantsPage({ searchParams }: ParticipantsPag
             <input type="hidden" name="residence_country" value={residenceFilter.country} />
           </> : null}
           {sort !== "name" ? <input type="hidden" name="sort" value={sort} /> : null}
+          {sort === "joined" ? <input type="hidden" name="dir" value={dir} /> : null}
           <div>
             <input
               id="participants-search"
@@ -131,6 +135,15 @@ export default async function ParticipantsPage({ searchParams }: ParticipantsPag
               {texts[`participants.sort_${choice}`]}
             </Link>
           ))}
+          {sort === "joined" ? <div className="participantsJoinedDirection">
+            <Link href={sortHref("joined", "asc")} aria-current={dir === "asc" ? "page" : undefined}>
+              {texts["participants.sort_joined_oldest"]}
+            </Link>
+            <span aria-hidden="true">|</span>
+            <Link href={sortHref("joined", "desc")} aria-current={dir === "desc" ? "page" : undefined}>
+              {texts["participants.sort_joined_newest"]}
+            </Link>
+          </div> : null}
         </nav>
 
         <div className={community ? "communityColumns" : undefined}>

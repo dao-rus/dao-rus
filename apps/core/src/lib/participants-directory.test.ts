@@ -166,6 +166,18 @@ describe("participants directory", () => {
     expect(orders[2]).not.toContain("FROM events core_login");
   });
 
+  it.each([undefined, "asc", "desc"] as const)("orders joined with direction %s and NULL dates last", async (dir) => {
+    let sql = "";
+    await listParticipantsDirectoryWithDatabase({ async query(text) { sql = text; return { rows: [] }; } }, "", { sort: "joined", dir });
+    expect(sql).toContain(`ORDER BY joined_at ${dir === "desc" ? "DESC" : "ASC"} NULLS LAST, lower(participant.display_name), participant.id`);
+  });
+
+  it("ignores direction for other sorts", async () => {
+    let sql = "";
+    await listParticipantsDirectoryWithDatabase({ async query(text) { sql = text; return { rows: [] }; } }, "", { sort: "name", dir: "desc" });
+    expect(sql).toContain("ORDER BY lower(participant.display_name), participant.id");
+  });
+
   it("limits the Core view to Participants who logged in, ordered by name", async () => {
     let sql = "";
     await listParticipantsDirectoryWithDatabase({
