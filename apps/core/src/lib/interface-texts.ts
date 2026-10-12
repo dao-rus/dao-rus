@@ -1,6 +1,15 @@
 import { signalPresentationDefaults, signalGroupDefaults } from "./signal-presentation";
 
 const interfaceTextFieldDefinitions = [
+  { section: "Уведомления", key: "notifications.title", label: "Заголовок ленты", defaultValue: "Уведомления", multiline: false },
+  { section: "Уведомления", key: "notifications.unread_count", label: "Счётчик непрочитанных", defaultValue: "Непрочитанных", multiline: false },
+  { section: "Уведомления", key: "notifications.all", label: "Все уведомления", defaultValue: "Все", multiline: false },
+  { section: "Уведомления", key: "notifications.unread", label: "Непрочитанные уведомления", defaultValue: "Непрочитанные", multiline: false },
+  { section: "Уведомления", key: "notifications.message", label: "Описание сообщения", defaultValue: "Сообщение от Хранителя", multiline: false },
+  { section: "Уведомления", key: "notifications.mark_all", label: "Массовая отметка прочтения", defaultValue: "Отметить все прочитанными", multiline: false },
+  { section: "Уведомления", key: "notifications.mark_read", label: "Отметка прочтения", defaultValue: "Отметить прочитанным", multiline: false },
+  { section: "Уведомления", key: "notifications.empty", label: "Пустая лента", defaultValue: "Уведомлений пока нет.", multiline: false },
+  { section: "Уведомления", key: "notifications.empty_unread", label: "Нет непрочитанных", defaultValue: "Непрочитанных уведомлений нет.", multiline: false },
 {"section":"Вече","key":"veche.ui_three_days","label":"3 дня","defaultValue":"3 дня","multiline":false,"pageLabel":"Вече","pageHref":"/veche"},
 {"section":"Вече","key":"veche.ui_signature_audience_dao","label":"всего ДАО","defaultValue":"всего ДАО","multiline":false,"pageLabel":"Вече","pageHref":"/veche"},
 {"section":"Вече","key":"veche.ui_signature_audience_city","label":"города {city}","defaultValue":"города {city}","multiline":false,"pageLabel":"Вече","pageHref":"/veche"},
@@ -589,6 +598,7 @@ const pageContextBySection: Record<(typeof interfaceTextFieldDefinitions)[number
   "Навигация": { pageLabel: "Общий интерфейс" },
   "Главная": { pageLabel: "Главная", pageHref: "/" },
   "Сеть": { pageLabel: "Сеть", pageHref: "/participants" },
+  "Уведомления": { pageLabel: "Уведомления", pageHref: "/notifications" },
   "Рядом": { pageLabel: "Рядом", pageHref: "/nearby" },
   "Сообщества": { pageLabel: "Сообщества", pageHref: "/participants" },
   "Обмен": { pageLabel: "Обмен", pageHref: "/exchange" },

@@ -111,6 +111,18 @@ describe("Core notifications", () => {
     expect(rows[0].actionLabel).toBe("Добавить интересы");
     expect(rows[1].actionLabel).toBeNull();
   });
+  it("previews only recipient-owned message snapshots, with no source lookup", async () => {
+    const db = { query: vi.fn().mockResolvedValue({ rowCount: 3, rows: [
+      { id: "message", text: "Дословный **текст**", source_type: "admin", notification_type: "guardian.technical_broadcast", created_at: "2026-10-04", read_at: null },
+      { id: "blind", text: "Вам ответили", source_type: "system", notification_type: "relay.response", created_at: "2026-10-04", read_at: null },
+      { id: "award", text: "Предложена награда", source_type: "admin", notification_type: "award.offered", created_at: "2026-10-04", read_at: null },
+    ] }) };
+    const entries = await listNotificationsWithDatabase(db, "recipient", true);
+    expect(entries.map(n => n.preview)).toEqual(["Дословный **текст**", null, null]);
+    expect(db.query).toHaveBeenCalledTimes(1);
+    expect(db.query.mock.calls[0][0]).toContain("AND read_at IS NULL");
+    expect(db.query.mock.calls[0][0]).not.toContain("JOIN");
+  });
 
   it("marks only its recipient's notification read and preserves the original read time", async () => {
     let readAt: string | null = null;

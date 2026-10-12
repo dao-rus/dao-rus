@@ -22,6 +22,7 @@ describe.skipIf(!databaseUrl)("notification claim on isolated PostgreSQL", () =>
     const migrations = new URL("../../migrations/", import.meta.url);
     await pool.query(readFileSync(new URL("027_notifications.sql", migrations), "utf8"));
     await pool.query(readFileSync(new URL("028_notification_processing.sql", migrations), "utf8"));
+    await pool.query(readFileSync(new URL("029_guardian_campaigns.sql", migrations), "utf8"));
     await pool.query("INSERT INTO participants(id) VALUES ($1)", [participantId]);
     await pool.query(
       `INSERT INTO notifications(id,participant_id,notification_type,text,source_type)

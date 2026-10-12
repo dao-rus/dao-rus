@@ -17,6 +17,7 @@ export type Notification = {
   actionLabel: string | null;
   createdAt: Date;
   readAt: Date | null;
+  preview: string | null;
 };
 
 export type CreateNotification = {
@@ -89,11 +90,13 @@ export async function createNotificationWithDatabase(
 export async function listNotificationsWithDatabase(
   database: Pick<NotificationDatabase, "query">,
   participantId: string,
+  unreadOnly = false,
 ): Promise<Notification[]> {
   const result = await database.query(
-    `SELECT id, text, action_url, action_label, created_at, read_at
+    `SELECT id, text, action_url, action_label, created_at, read_at, source_type, notification_type, campaign_id
        FROM notifications
       WHERE participant_id = $1::uuid AND visible_in_inbox
+        ${unreadOnly ? "AND read_at IS NULL" : ""}
       ORDER BY (read_at IS NOT NULL), created_at DESC, id DESC`,
     [participantId],
   );
@@ -104,6 +107,10 @@ export async function listNotificationsWithDatabase(
     actionLabel: row.action_label ? String(row.action_label) : null,
     createdAt: new Date(String(row.created_at)),
     readAt: row.read_at ? new Date(String(row.read_at)) : null,
+    // These are recipient-owned message snapshots, not content fetched through an action URL.
+    // System notices (especially Blind Relay/Closer) retain their content-free description.
+    preview: row.campaign_id || (row.source_type === "admin" && row.notification_type !== "award.offered")
+      ? String(row.text) : null,
   }));
 }
 
@@ -143,9 +150,49 @@ export async function createNotification(input: CreateNotification): Promise<str
   return createNotificationWithDatabase(pool, input);
 }
 
-export async function listNotifications(participantId: string): Promise<Notification[]> {
+export async function listNotifications(participantId: string, unreadOnly = false): Promise<Notification[]> {
   const { pool } = await import("./db");
-  return listNotificationsWithDatabase(pool, participantId);
+  return listNotificationsWithDatabase(pool, participantId, unreadOnly);
+}
+
+export async function openNotificationWithDatabase(
+  database: Pick<NotificationDatabase, "connect">, participantId: string, notificationId: string,
+): Promise<{ actionUrl: string | null } | null> {
+  const client = await database.connect();
+  try {
+    await client.query("BEGIN");
+    const found = await client.query(
+      `SELECT action_url FROM notifications WHERE id = $1::uuid AND participant_id = $2::uuid
+        AND visible_in_inbox FOR UPDATE`, [notificationId, participantId]);
+    if (!found.rowCount) { await client.query("COMMIT"); return null; }
+    let actionUrl: string | null;
+    try { actionUrl = safeActionUrl(found.rows[0].action_url as string | null); }
+    catch { throw new NotificationValidationError("Invalid notification action URL"); }
+    await client.query(`UPDATE notifications SET read_at = now()
+      WHERE id = $1::uuid AND participant_id = $2::uuid AND visible_in_inbox AND read_at IS NULL`,
+      [notificationId, participantId]);
+    await client.query("COMMIT");
+    return { actionUrl };
+  } catch (error) { await client.query("ROLLBACK"); throw error; }
+  finally { client.release(); }
+}
+
+export async function markAllNotificationsReadWithDatabase(
+  database: Pick<NotificationDatabase, "query">, participantId: string,
+): Promise<number> {
+  const result = await database.query(`UPDATE notifications SET read_at = now()
+    WHERE participant_id = $1::uuid AND visible_in_inbox AND read_at IS NULL RETURNING id`, [participantId]);
+  return result.rowCount ?? 0;
+}
+
+export async function openNotification(participantId: string, notificationId: string) {
+  const { pool } = await import("./db");
+  return openNotificationWithDatabase(pool, participantId, notificationId);
+}
+
+export async function markAllNotificationsRead(participantId: string) {
+  const { pool } = await import("./db");
+  return markAllNotificationsReadWithDatabase(pool, participantId);
 }
 
 export async function countUnreadNotifications(participantId: string): Promise<number> {
