@@ -1,10 +1,15 @@
 import { notFound } from "next/navigation";
+import type { Metadata } from "next";
 import { getCurrentParticipant } from "@/lib/session";
 import { getOwnAwardOffers, getPublicAward } from "@/lib/award-views";
 import { readInterfaceTexts } from "@/lib/interface-texts";
 import { AwardContent, AwardInstancePanel } from "@/components/award-content";
 export const dynamic = "force-dynamic";
-export const metadata = { title: "Награда ДАО Русь" };
+export async function generateMetadata({ params }: { params: Promise<{ slug: string }> }): Promise<Metadata> {
+    const { slug } = await params;
+    const publicAward = await getPublicAward(slug);
+    return { title: publicAward ? `${publicAward.award.name} — ДАО Русь` : "Награда — ДАО Русь" };
+}
 export default async function PublicAwardPage({ params }: {
     params: Promise<{
         slug: string;
