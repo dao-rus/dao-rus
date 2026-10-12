@@ -44,6 +44,14 @@ session and selects only the recipient's instance. Login returns only to an allo
 internal path. Recipient POST routes derive the actor from the session and enforce
 same-origin protection. Final rejection additionally requires explicit confirmation.
 
+Recipient forms use the existing Core progressive-form convention: plain POST still
+redirects, while `Accept: application/json` returns the authorized instance or a safe
+error code. The shared recipient panel updates its local state and feedback near the
+controls, then calls `router.refresh()` for server projections without navigation.
+Pending submissions share one lock; failures preserve checkbox choices. This uses the
+same browser flow in Telegram Mini App and an ordinary browser, with no Telegram-only
+notification mechanism.
+
 Public lists select only accepted list opt-ins; nickname badges select only accepted
 name opt-ins. Private reasons, addresses and refusal history stay in recipient and
 authorized Founder views. Badges are loaded once for all names on a page and passed

@@ -11,7 +11,7 @@ vi.mock("@/components/user-text", async () => import("../../../components/user-t
 vi.mock("@/components/local-date-time", () => ({ LocalDateTime: ({ value }: {
         value: string;
     }) => <time>{value}</time> }));
-vi.mock("next/navigation", () => ({ notFound: () => { throw new Error("NOT_FOUND"); } }));
+vi.mock("next/navigation", () => ({ useRouter: () => ({ refresh: vi.fn() }), notFound: () => { throw new Error("NOT_FOUND"); } }));
 import Page from "./page";
 const id = "10000000-0000-4000-8000-000000000001", date = new Date("2026-10-07T12:00:00Z");
 const award = { id, slug: "test", name: "Test award", imageUrl: "/test.png", establishedOn: "2026-10-07", description: "Public", criterion: "Public", publicAddress: "Public", kind: "historical" as const, historicalCutoffAt: null, founderParticipantId: id, charterVersion: 1, createdAt: date };

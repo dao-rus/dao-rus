@@ -7,7 +7,7 @@ vi.mock("@/lib/interface-texts", async () => { const m = await import("../../../
 vi.mock("@/components/award-content", async () => import("../../../components/award-content"));
 vi.mock("@/components/user-text", async () => import("../../../components/user-text"));
 vi.mock("@/components/local-date-time", () => ({ LocalDateTime: ({ value }: { value: string }) => <time>{value}</time> }));
-vi.mock("next/navigation", () => ({ notFound: () => { throw new Error("NOT_FOUND"); } }));
+vi.mock("next/navigation", () => ({ useRouter: () => ({ refresh: vi.fn() }), notFound: () => { throw new Error("NOT_FOUND"); } }));
 import Page from "./page";
 const id = "10000000-0000-4000-8000-000000000001", other = "20000000-0000-4000-8000-000000000002", date = new Date("2026-10-07T12:00:00Z");
 const award = { id, name: "First wave", slug: "wave", imageUrl: "/test.png", establishedOn: "2026-10-07", description: "Public description", criterion: "Public criterion", publicAddress: "Public greeting", kind: "historical" as const, historicalCutoffAt: null, founderParticipantId: id, charterVersion: 1, createdAt: date };

@@ -563,6 +563,18 @@ const interfaceTextFieldDefinitions = [
   { section: "Награды", key: "award.notifyAction", label: "Кнопка в уведомлении о предложенной награде", defaultValue: "Открыть предложение", multiline: false },
   { section: "Награды", key: "award.notified", label: "Уведомления поставлены в очередь.", defaultValue: "Уведомления поставлены в очередь.", multiline: false },
   { section: "Награды", key: "award.nothingToNotify", label: "Новых уведомлений нет: все получатели уже уведомлены или ответили на предложение.", defaultValue: "Новых уведомлений нет: все получатели уже уведомлены или ответили на предложение.", multiline: false },
+  { section: "Награды", key: "award.visibility_saved", label: "Настройки сохранены", defaultValue: "Настройки сохранены", multiline: false },
+  { section: "Награды", key: "award.saving", label: "Сохраняем…", defaultValue: "Сохраняем…", multiline: false },
+  { section: "Награды", key: "award.processing", label: "Выполняем действие…", defaultValue: "Выполняем действие…", multiline: false },
+  { section: "Награды", key: "award.accept_saved", label: "Награда принята", defaultValue: "Награда принята", multiline: false },
+  { section: "Награды", key: "award.decline_saved", label: "Вы отказались от предложения. Принять награду можно позднее.", defaultValue: "Вы отказались от предложения. Принять награду можно позднее.", multiline: false },
+  { section: "Награды", key: "award.reject_saved", label: "Награда окончательно отвергнута. Запись сохранена в вашей истории.", defaultValue: "Награда окончательно отвергнута. Запись сохранена в вашей истории.", multiline: false },
+  { section: "Награды", key: "award.session_expired", label: "Сессия завершилась. Войдите в Core заново и повторите действие.", defaultValue: "Сессия завершилась. Войдите в Core заново и повторите действие.", multiline: false },
+  { section: "Награды", key: "award.action_forbidden", label: "Нет доступа к этому предложению. Проверьте, под каким профилем вы вошли.", defaultValue: "Нет доступа к этому предложению. Проверьте, под каким профилем вы вошли.", multiline: false },
+  { section: "Награды", key: "award.offer_unavailable", label: "Предложение награды недоступно.", defaultValue: "Предложение награды недоступно.", multiline: false },
+  { section: "Награды", key: "award.action_state", label: "Состояние награды изменилось. Обновите страницу и проверьте её статус.", defaultValue: "Состояние награды изменилось. Обновите страницу и проверьте её статус.", multiline: false },
+  { section: "Награды", key: "award.action_invalid", label: "Не удалось выполнить действие. Проверьте настройки и подтверждение.", defaultValue: "Не удалось выполнить действие. Проверьте настройки и подтверждение.", multiline: false },
+  { section: "Награды", key: "award.action_error", label: "Не удалось подтвердить сохранение. Проверьте соединение и повторите попытку.", defaultValue: "Не удалось подтвердить сохранение. Проверьте соединение и повторите попытку.", multiline: false },
 ] as const;
 
 type PageContext = { pageLabel: string; pageHref?: string };
