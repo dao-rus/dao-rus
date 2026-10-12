@@ -23,6 +23,6 @@ export default async function PublicAwardPage({ params }: {
     {own ? <section aria-labelledby="award-own-offer"><h2 id="award-own-offer">{texts["award.ownOffer"]}</h2>
       <AwardInstancePanel instance={own.instance} awarderName={own.awarderName} texts={texts}/></section> : null}
     {!actor ? <p><a className="button secondary" href={`/api/auth/telegram/start?next=${encodeURIComponent(`/awards/${publicAward.award.slug}`)}`}>{texts["award.loginIfOffered"]}</a></p> : null}
-    <h2>{texts["award.recipients"]}</h2>{publicAward.recipients.length ? <ul>{publicAward.recipients.map(person => <li key={person.id}>{person.name}</li>)}</ul> : <p>{texts["award.empty"]}</p>}
+    {publicAward.recipients.length ? <ul>{publicAward.recipients.map(person => <li key={person.id}>{person.name}</li>)}</ul> : null}
   </section></main>;
 }
