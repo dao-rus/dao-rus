@@ -9,7 +9,7 @@ export function AwardContent({ award, texts }: {
     award: Award;
     texts: InterfaceTextValues;
 }) {
-    return <><div className="eyebrow">ДАО Русь</div><h1>{award.name}</h1>
+    return <><div className="eyebrow"><Link href="/">ДАО Русь</Link></div><h1>{award.name}</h1>
     <img className="awardImage" src={award.imageUrl} alt={award.name} width={240} height={240}/>
     <p>{texts["award.establishedOn"]}: {award.establishedOn} · {texts[`award.${award.kind}`]}</p>
     {award.historicalCutoffAt ? <p>{texts["award.historicalCutoffAt"]}: <LocalDateTime value={award.historicalCutoffAt.toISOString()}/></p> : null}
