@@ -19,12 +19,21 @@ and POST addition. Historical bounds are inclusive calendar dates in Europe/Mosc
 Only `forum.joined` events with `telegram_export` or `chat_member` provenance supply
 the first known date; Core profile creation and roster import time are never used.
 Approximate export evidence is labelled as first known presence (already present
-by that date), not as a proven exact join. Unknown dates allow manual addition/remint.
+by that date), not as a proven exact join. Unknown dates allow manual addition/remint. With a date bound, results sort by
+historical date, Russian display name and stable Participant ID; unknown dates
+form a separate manual-review section after the dated matches, respecting the
+other filters and never authorizing a date-range POST selection. Select all means
+only selectable rows in the currently displayed table. Add redirects retain the
+search filters. Draft rows have collapsed text editors and bulk removal; a
+separate preparation area shows reasons and conflicts before explicit finalization.
 
 Clear and bulk exclusion lock the draft and set candidate status to `excluded`,
 preserving reasons, personal addresses and source. They never delete candidates,
-batches or award instances. Excluded records can be restored explicitly through
-the existing editor; selected additions never silently restore exclusions. The
+batches or award instances. The database guard prohibits candidate deletion, so `excluded` is an internal
+removal marker, hidden from the draft UI. Ordinary manual or selected addition
+includes a removed row again, preserving its source and private texts. There is
+no excluded list or restoration action. No existing rows are rewritten on deploy.
+The
 server re-resolves the selected audience and audits changed candidate IDs. Finalized
 batches remain immutable, including under concurrent requests.
 

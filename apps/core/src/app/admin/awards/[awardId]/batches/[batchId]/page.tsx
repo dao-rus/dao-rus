@@ -44,24 +44,31 @@ export default async function AwardBatchPage({ params, searchParams }: {
     }
     const options = draft ? await selectParticipantAudienceWithDatabase(pool, {}, "awards") : null;
     const results = draft && query.search === "1" && !searchError ? await selectParticipantAudienceWithDatabase(pool, rule, "awards") : null;
-    const included = candidates.rows.filter(c => c.status === "included"), excluded = candidates.rows.filter(c => c.status === "excluded");
-    const statusByPerson = new Map(candidates.rows.map(c => [String(c.participant_id), String(c.status)]));
+    const included = candidates.rows.filter(c => c.status === "included");
+    const dates = new Map(options?.audience.map(p => [p.id, p.joinedOn]));
+    if (draft && (rule.joinedFrom || rule.joinedTo)) included.sort((a, b) => {
+      return (dates.get(String(a.participant_id)) ?? "9999").localeCompare(dates.get(String(b.participant_id)) ?? "9999")
+        || String(a.display_name).localeCompare(String(b.display_name), "ru") || String(a.participant_id).localeCompare(String(b.participant_id));
+    });
+    const statusByPerson = new Map(included.map(c => [String(c.participant_id), String(c.status)]));
     const dateSource = (person: { joinedSource?: string | null; joinedApproximate?: boolean }) =>
         person.joinedSource === "telegram_export" ? texts[person.joinedApproximate ? "award.joinApproximate" : "award.joinExport"]
         : person.joinedSource === "chat_member" ? texts["award.joinWebhook"] : texts["award.joinUnknown"];
     const fields = Object.entries(rule).flatMap(([name, value]) => (Array.isArray(value) ? value : value ? [value] : []).map(value => ({ name, value: String(value) })));
     const selectionLabels = { name: texts["award.person"], date: texts["award.joinDate"], source: texts["award.joinSource"], status: texts["award.selectionStatus"],
         unknown: texts["award.joinUnknown"], selectAll: texts["award.selectPage"], deselect: texts["award.deselect"], selected: texts["award.selectedCount"],
-        confirm: texts["award.excludeConfirm"], empty: texts["award.searchEmpty"] };
+        confirm: texts["award.removeConfirm"], empty: texts["award.searchEmpty"] };
     const canFinalize = candidates.rows.some(c => c.status === "included") && candidates.rows.every(c => c.status === "excluded" || (!c.instance_id && String(c.reason).trim()));
     const hidden = (action: string) => <><input type="hidden" name="batchId" value={batchId}/><input type="hidden" name="action" value={action}/></>;
-    const renderCandidate = (candidate: typeof candidates.rows[number]) => <article className="awardCandidate" key={candidate.id}><h3>{candidate.display_name}</h3><p>{candidate.participant_id}</p>
-      <p>{texts["award.source"]}: {texts[`award.${candidate.source as "filter" | "manual"}`]} · {texts[`award.${candidate.status as "included" | "excluded"}`]}</p>
-      {draft ? <><p className="formError">{candidate.instance_id ? texts["award.conflict"] : null}</p><form className="awardForm" action="/api/admin/awards/batches" method="post">{hidden("edit")}<input type="hidden" name="candidateId" value={candidate.id}/>
-        <select name="status" defaultValue={candidate.status}><option value="included">{texts["award.included"]}</option><option value="excluded">{texts["award.excluded"]}</option></select>
+    const renderCandidate = (candidate: typeof candidates.rows[number]) => <article className="awardCandidate" key={candidate.id}>{!draft ? <h3>{candidate.display_name}</h3> : null}
+      <p>{texts["award.source"]}: {texts[`award.${candidate.source as "filter" | "manual"}`]}</p>
+      {draft ? <><details><summary>{texts["award.editCandidate"]}</summary><p className="formError">{candidate.instance_id ? texts["award.conflict"] : null}</p><form className="awardForm" action="/api/admin/awards/batches" method="post">{hidden("edit")}<input type="hidden" name="candidateId" value={candidate.id}/>
+        <input type="hidden" name="status" value="included"/>
         <label>{texts["award.reason"]}<textarea name="reason" defaultValue={candidate.reason} maxLength={2000}/></label>
         <label>{texts["award.personalAddress"]}<textarea name="personalAddress" defaultValue={candidate.personal_address} maxLength={10000}/></label>
-        <button type="submit" className="button secondary">{texts["award.save"]}</button></form></> : <>
+        <button type="submit" className="button secondary">{texts["award.save"]}</button></form></details>
+        <form action="/api/admin/awards/batches" method="post">{hidden("remove_selected")}<input type="hidden" name="candidateIds" value={candidate.id}/><input type="hidden" name="confirm" value="on"/>
+          <button type="submit" className="button secondary">{texts["award.removeOne"]}</button></form></> : <>
         <h4>{texts["award.reason"]}</h4><UserText text={candidate.reason}/><h4>{texts["award.personalAddress"]}</h4><UserText text={candidate.personal_address}/>
         {candidate.instance_batch === batchId ? <><p>{texts[`award.${candidate.instance_status as "offered" | "declined" | "accepted" | "rejected"}`]}</p>
           {([['offered_at', 'offeredAt'], ['declined_at', 'declinedAt'], ['accepted_at', 'acceptedAt'], ['rejected_at', 'rejectedAt']] as const).map(([column, key]) => candidate[column] ? <p key={column}>{texts[`award.${key}`]}: <LocalDateTime value={candidate[column].toISOString()}/></p> : null)}
@@ -86,32 +93,41 @@ export default async function AwardBatchPage({ params, searchParams }: {
         <AwardCandidateSelection key={JSON.stringify(rule)} batchId={batchId} action="add_selected" filters={fields}
           labels={{ ...selectionLabels, submit: texts["award.addSelected"] }} rows={results.audience.map(person => ({
             id: person.id, name: person.displayName, joinedOn: person.joinedOn ?? null, source: dateSource(person),
-            status: statusByPerson.has(person.id) ? texts[statusByPerson.get(person.id) === "included" ? "award.included" : "award.excluded"] : texts["award.notAdded"],
+            status: statusByPerson.has(person.id) ? texts["award.included"] : texts["award.notAdded"],
             disabled: statusByPerson.has(person.id),
-          }))} /></> : null}
+          }))} />
+        {results.unknownDates.length > 0 ? <section><h3>{texts["award.unknownReview"]} ({results.unknownDates.length})</h3>
+          <p className="muted">{texts["award.unknownReviewHint"]}</p>
+          <div className="awardSelection"><div className="awardSelectionTable"><table><thead><tr><th>{texts["award.person"]}</th><th>{texts["award.joinDate"]}</th><th>{texts["award.selectionStatus"]}</th></tr></thead>
+          <tbody>{results.unknownDates.map(person => <tr key={person.id}><td>{person.displayName}<br/><small>{person.id}</small></td><td>{texts["award.joinUnknown"]}</td>
+            <td>{texts[statusByPerson.has(person.id) ? "award.included" : "award.notAdded"]}</td></tr>)}</tbody></table></div></div>
+        </section> : null}</> : null}
       <form className="awardForm" action="/api/admin/awards/batches" method="post">{hidden("add")}<label>{texts["award.manual"]}<input name="participantId" list="award-participants" required placeholder="Participant UUID"/></label>
         <datalist id="award-participants">{options.audience.map(person => <option key={person.id} value={person.id}>{person.displayName}</option>)}</datalist><button type="submit" className="button secondary">{texts["award.manual"]}</button></form></> : null}
-    <h2>{texts["award.candidates"]} ({included.length})</h2>
+    <h2>{texts["award.currentCandidates"]} ({included.length})</h2>
     {draft && included.length > 0 ? <>
-      <p className="muted">{texts["award.clearHint"]}</p>
+      <p className="muted">{texts["award.clearDraftHint"]}</p>
       <form className="awardForm" action="/api/admin/awards/batches" method="post">{hidden("clear")}
-        <label><input type="checkbox" name="confirm" required />{texts["award.clearConfirm"]}</label>
-        <button className="button secondary" type="submit">{texts["award.clearCandidates"]}</button>
+        <label><input type="checkbox" name="confirm" required />{texts["award.clearDraftConfirm"]}</label>
+        <button className="button secondary" type="submit">{texts["award.clearDraft"]}</button>
       </form>
-      <AwardCandidateSelection batchId={batchId} action="exclude_selected" labels={{ ...selectionLabels, submit: texts["award.excludeSelected"] }}
+      <AwardCandidateSelection batchId={batchId} action="remove_selected" labels={{ ...selectionLabels, submit: texts["award.removeSelected"] }}
         rows={included.map(candidate => {
           const person = options?.audience.find(p => p.id === candidate.participant_id);
           return { id: String(candidate.id), name: String(candidate.display_name), joinedOn: person?.joinedOn ?? null,
-            source: person ? dateSource(person) : texts["award.joinUnknown"], status: texts["award.included"] };
+            source: person ? dateSource(person) : texts["award.joinUnknown"], status: texts["award.included"], details: renderCandidate(candidate) };
         })} />
     </> : null}
 
-    {included.map(renderCandidate)}
-    {excluded.length ? <details><summary>{texts["award.excluded"]} ({excluded.length})</summary>{excluded.map(renderCandidate)}</details> : null}
+    {!draft ? included.map(renderCandidate) : null}
     {!draft ? <form className="awardForm" action="/api/admin/awards/batches" method="post">{hidden("notify")}
       <p>{texts["award.notifyHint"]}</p><button type="submit" className="button secondary">{texts["award.notify"]}</button></form> : null}
-    {draft ? <form className="awardForm" action="/api/admin/awards/batches" method="post">{hidden("finalize")}
+    {draft ? <section className="awardPreparation"><h2>{texts["award.prepareBatch"]}</h2><p>{texts["award.prepareHint"]}</p>
+      <div className="awardSelection"><div className="awardSelectionTable"><table><thead><tr><th>{texts["award.person"]}</th><th>{texts["award.reason"]}</th><th>{texts["award.selectionStatus"]}</th></tr></thead>
+        <tbody>{included.map(candidate => <tr key={candidate.id}><td>{candidate.display_name}</td><td><UserText text={candidate.reason}/></td>
+          <td>{candidate.instance_id ? texts["award.conflict"] : !String(candidate.reason).trim() ? texts["award.reasonMissing"] : texts["award.ready"]}</td></tr>)}</tbody></table></div></div>
+      <form className="awardForm" action="/api/admin/awards/batches" method="post">{hidden("finalize")}
       <label><input type="checkbox" name="confirm" required/>{texts["award.finalizeWarning"]}</label><button type="submit" className="button primary" disabled={!canFinalize}>{texts["award.finalize"]}</button>
-      {!canFinalize ? <p>{texts["award.invalid"]}</p> : null}</form> : null}
+      {!canFinalize ? <p>{texts["award.invalid"]}</p> : null}</form></section> : null}
   </section></main>;
 }

@@ -884,3 +884,7 @@ div.userText > :last-child { margin-bottom: 0; }
   text-decoration: underline; text-underline-offset: 2px; font-size: 14px;
 }
 @media (max-width: 560px) { .publicProfileWrite { justify-self: stretch; } }
+
+.awardSelection > form { display: grid; gap: 12px; }
+.awardSelection .awardCandidate { margin: 0; padding: 0; border: 0; }
+.awardPreparation { margin-top: 32px; border-top: 1px solid var(--line); padding-top: 20px; }

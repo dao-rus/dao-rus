@@ -37,7 +37,8 @@ export async function addSelectedAwardCandidatesWithDatabase(database: AwardData
         if (selected.some(person => !allowed.has(person))) throw new AwardValidationError("Selection no longer matches search");
         const changed = await client.query(`INSERT INTO award_candidates(batch_id,participant_id,source)
           SELECT $1, person, 'filter' FROM unnest($2::uuid[]) person
-          ON CONFLICT(batch_id,participant_id) DO NOTHING RETURNING id`, [batchId, selected]);
+          ON CONFLICT(batch_id,participant_id) DO UPDATE SET status='included'
+          WHERE award_candidates.status='excluded' RETURNING id`, [batchId, selected]);
         await client.query("UPDATE award_batches SET audience_rule=$2::jsonb WHERE id=$1", [batchId, JSON.stringify(filters)]);
         if (changed.rowCount) await client.query(`INSERT INTO events(event_type,participant_id,payload)
           VALUES ('award.candidates_added',$1,$2::jsonb)`, [actor, JSON.stringify({ batch_id: batchId, candidate_ids: changed.rows.map(r => r.id) })]);
@@ -111,7 +112,7 @@ export async function addAwardCandidateWithDatabase(database: AwardDatabase, act
         await lockDraft(client, batchId);
         if (!(await client.query("SELECT id FROM participants WHERE id=$1", [recipient])).rowCount)
             throw new AwardNotFoundError("Participant not found");
-        await client.query("INSERT INTO award_candidates(batch_id,participant_id,source) VALUES ($1,$2,'manual') ON CONFLICT(batch_id,participant_id) DO NOTHING", [batchId, recipient]);
+        await client.query("INSERT INTO award_candidates(batch_id,participant_id,source) VALUES ($1,$2,'manual') ON CONFLICT(batch_id,participant_id) DO UPDATE SET status='included' WHERE award_candidates.status='excluded'", [batchId, recipient]);
     });
 }
 export async function editAwardCandidateWithDatabase(database: AwardDatabase, actorId: string, batchId: string, candidateId: string, input: {

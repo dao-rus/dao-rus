@@ -34,9 +34,13 @@ export async function POST(request: NextRequest) {
         path = `/admin/awards/${parent.rows[0].award_id}/batches/${batch}`;
         if (action === "snapshot")
             await snapshotAwardAudience(actor.id, batch, filters());
-        else if (action === "add_selected")
+        else if (action === "add_selected") {
             await addSelectedAwardCandidates(actor.id, batch, form.getAll("participantIds"), filters());
-        else if (action === "exclude_selected" || action === "clear") {
+            const query = new URLSearchParams({ search: "1" });
+            for (const [name, value] of Object.entries(filters())) for (const item of Array.isArray(value) ? value : value ? [value] : []) query.append(name, item);
+            return awardRedirect(`${path}?${query}`, "saved");
+        }
+        else if (action === "remove_selected" || action === "exclude_selected" || action === "clear") {
             if (form.get("confirm") !== "on") throw new AwardValidationError("Confirm exclusion");
             await excludeAwardCandidates(actor.id, batch, action === "clear" ? null : form.getAll("candidateIds"));
         }

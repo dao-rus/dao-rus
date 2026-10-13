@@ -128,12 +128,20 @@ export async function selectParticipantAudienceWithDatabase(
     if (condition === "unverified") return !person.verified;
     return !person.activeSignalKinds.includes(condition.slice("without_".length));
   };
-  const audience = participants.filter((person) =>
-    (scope !== "awards" || ((!filters.joinedFrom || (person.joinedOn != null && person.joinedOn >= filters.joinedFrom))
-      && (!filters.joinedTo || (person.joinedOn != null && person.joinedOn <= filters.joinedTo)))) &&
+  const matchingProfiles = participants.filter((person) =>
     (!filters.membership || person.membership === filters.membership) && (!filters.verification || person.verified === (filters.verification === "verified")) && (!filters.city || (person.residence !== null && cityKey(person.residence) === filters.city))
     && (selectedInterests.size === 0 || person.interests.some((interest) => selectedInterests.has(interest.key)))
     && (filters.conditions ?? []).every(condition => matches(person, condition)));
+
+  const dateFilter = scope === "awards" && Boolean(filters.joinedFrom || filters.joinedTo);
+  const byName = (a: typeof participants[number], b: typeof participants[number]) =>
+    a.displayName.localeCompare(b.displayName, "ru") || a.id.localeCompare(b.id);
+  const audience = matchingProfiles.filter(person => !dateFilter || (person.joinedOn != null
+    && (!filters.joinedFrom || person.joinedOn >= filters.joinedFrom)
+    && (!filters.joinedTo || person.joinedOn <= filters.joinedTo)));
+  if (dateFilter) audience.sort((a, b) => (a.joinedOn ?? "9999").localeCompare(b.joinedOn ?? "9999") || byName(a, b));
+  // Unknown evidence is shown for manual review, never authorized as a range match.
+  const unknownDates = dateFilter ? matchingProfiles.filter(person => person.joinedOn == null).sort(byName) : [];
 
   return {
     missingCity: participants.filter((person) => person.residence === null),
@@ -144,5 +152,6 @@ export async function selectParticipantAudienceWithDatabase(
     cities,
     interests,
     audience,
+    unknownDates,
   };
 }

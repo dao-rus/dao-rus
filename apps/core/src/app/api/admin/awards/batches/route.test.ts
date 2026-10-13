@@ -15,17 +15,21 @@ beforeEach(()=>{vi.clearAllMocks();vi.stubEnv("APP_BASE_URL","http://localhost:3
 afterEach(()=>vi.unstubAllEnvs());
 describe("draft selection POST",()=>{
  it("requires confirmation before clear and bulk exclusion",async()=>{
-  await POST(request("clear")); await POST(request("exclude_selected",{candidateIds:actor}));
+  await POST(request("clear")); await POST(request("remove_selected",{candidateIds:actor}));
   expect(mocks.exclude).not.toHaveBeenCalled(); expect(mocks.finalize).not.toHaveBeenCalled();
   const response=await POST(request("clear",{confirm:"on"}));
   expect(mocks.exclude).toHaveBeenCalledWith(actor,batch,null);
   expect(response.headers.get("location")).toBe(`http://localhost:3000/admin/awards/${award}/batches/${batch}?award_update=saved`);
  });
  it("forwards selected people and filters with the session actor",async()=>{
-  await POST(request("add_selected",{participantIds:actor,joinedFrom:"2023-10-13",joinedTo:"2024-04-13",actorId:"attacker"}));
+  const response = await POST(request("add_selected",{participantIds:actor,joinedFrom:"2023-10-13",joinedTo:"2024-04-13",actorId:"attacker"}));
+  const redirect = new URL(response.headers.get("location")!);
+  expect(redirect.searchParams.get("joinedFrom")).toBe("2023-10-13");
+  expect(redirect.searchParams.get("joinedTo")).toBe("2024-04-13");
+  expect(redirect.searchParams.get("search")).toBe("1");
   expect(mocks.add).toHaveBeenCalledWith(actor,batch,[actor],expect.objectContaining({joinedFrom:"2023-10-13",joinedTo:"2024-04-13"}));
   expect(mocks.finalize).not.toHaveBeenCalled();
-  await POST(request("exclude_selected",{candidateIds:actor,confirm:"on"}));
+  await POST(request("remove_selected",{candidateIds:actor,confirm:"on"}));
   expect(mocks.exclude).toHaveBeenCalledWith(actor,batch,[actor]);
  });
  it("denies guests, technical admins without Founder capability and cross-origin writes",async()=>{

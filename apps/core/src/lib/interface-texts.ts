@@ -1,6 +1,20 @@
 import { signalPresentationDefaults, signalGroupDefaults } from "./signal-presentation";
 
 const interfaceTextFieldDefinitions = [
+  { section: "Награды", key: "award.removeSelected", label: "Удалить выбранных из черновика", defaultValue: "Удалить выбранных из черновика", multiline: false },
+  { section: "Награды", key: "award.removeConfirm", label: "Подтверждаю удаление выбранных из этого черновика. Их можно будет добавить снова.", defaultValue: "Подтверждаю удаление выбранных из этого черновика. Их можно будет добавить снова.", multiline: false },
+  { section: "Награды", key: "award.removeOne", label: "Удалить из черновика", defaultValue: "Удалить из черновика", multiline: false },
+  { section: "Награды", key: "award.clearDraft", label: "Удалить всех из черновика", defaultValue: "Удалить всех из черновика", multiline: false },
+  { section: "Награды", key: "award.clearDraftConfirm", label: "Подтверждаю удаление всех кандидатов из этого черновика. Завершённые выпуски и награды сохраняются.", defaultValue: "Подтверждаю удаление всех кандидатов из этого черновика. Завершённые выпуски и награды сохраняются.", multiline: false },
+  { section: "Награды", key: "award.clearDraftHint", label: "Удаление меняет только текущий список этого черновика. Кандидата можно найти и добавить снова.", defaultValue: "Удаление меняет только текущий список этого черновика. Кандидата можно найти и добавить снова.", multiline: false },
+  { section: "Награды", key: "award.currentCandidates", label: "Текущие кандидаты", defaultValue: "Текущие кандидаты", multiline: false },
+  { section: "Награды", key: "award.unknownReview", label: "Дата неизвестна — ручная проверка", defaultValue: "Дата неизвестна — ручная проверка", multiline: false },
+  { section: "Награды", key: "award.unknownReviewHint", label: "Эти участники не являются совпадениями с диапазоном дат. После проверки используйте ручное добавление.", defaultValue: "Эти участники не являются совпадениями с диапазоном дат. После проверки используйте ручное добавление.", multiline: false },
+  { section: "Награды", key: "award.editCandidate", label: "Изменить основание и обращение", defaultValue: "Изменить основание и обращение", multiline: false },
+  { section: "Награды", key: "award.prepareBatch", label: "Подготовка выпуска", defaultValue: "Подготовка выпуска", multiline: false },
+  { section: "Награды", key: "award.prepareHint", label: "Проверьте итоговый список и основания. Завершение выпуска создаёт предложения; уведомления отправляются отдельным действием.", defaultValue: "Проверьте итоговый список и основания. Завершение выпуска создаёт предложения; уведомления отправляются отдельным действием.", multiline: false },
+  { section: "Награды", key: "award.ready", label: "Готов к выпуску", defaultValue: "Готов к выпуску", multiline: false },
+  { section: "Награды", key: "award.reasonMissing", label: "Не заполнено основание", defaultValue: "Не заполнено основание", multiline: false },
   { section: "Награды", key: "award.joinFrom", label: "Вступил с", defaultValue: "Вступил с", multiline: false },
   { section: "Награды", key: "award.joinTo", label: "Вступил по", defaultValue: "Вступил по", multiline: false },
   { section: "Награды", key: "award.joinHint", label: "Обе даты включительно, по московскому времени. Источник — история Telegram. Первое свидетельство участия означает: человек был в форуме не позднее этой даты. Неизвестная дата не заменяется датой создания профиля; такого участника можно добавить вручную.", defaultValue: "Обе даты включительно, по московскому времени. Источник — история Telegram. Первое свидетельство участия означает: человек был в форуме не позднее этой даты. Неизвестная дата не заменяется датой создания профиля; такого участника можно добавить вручную.", multiline: false },
