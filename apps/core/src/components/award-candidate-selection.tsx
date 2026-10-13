@@ -1,7 +1,8 @@
 "use client";
 import { Fragment, useId, useState, type ReactNode } from "react";
+import Link from "next/link";
 
-export type CandidateSearchRow = { id: string; name: string; joinedOn: string | null; source: string; status: string; disabled?: boolean; details?: ReactNode };
+export type CandidateSearchRow = { id: string; participantId: string; name: string; joinedOn: string | null; source: string; status: string; disabled?: boolean; details?: ReactNode };
 export function AwardCandidateSelection({ batchId, action, rows, filters = [], labels }: {
   batchId: string; action: "add_selected" | "remove_selected"; rows: CandidateSearchRow[];
   filters?: Array<{ name: string; value: string }>;
@@ -31,7 +32,7 @@ export function AwardCandidateSelection({ batchId, action, rows, filters = [], l
         disabled={row.disabled} checked={selected.has(row.id)} onChange={event => {
           const checked = event.target.checked;
           setSelected(previous => { const next = new Set(previous); if (checked) next.add(row.id); else next.delete(row.id); return next; });
-        }} /> {row.name}</label></td>
+        }} /> <Link href={`/profile/${row.participantId}`}>{row.name}</Link></label></td>
       <td>{row.joinedOn ? row.joinedOn.split("-").reverse().join(".") : labels.unknown}</td>
       <td>{row.source}</td><td>{row.status}</td>
     </tr>{row.details ? <tr><td colSpan={4}>{row.details}</td></tr> : null}</Fragment>)}</tbody></table></div>

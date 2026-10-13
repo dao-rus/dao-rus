@@ -1,7 +1,9 @@
+import type { ReactNode } from "react";
 import { act, create, type ReactTestRenderer } from "react-test-renderer";
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import { AwardCandidateSelection } from "./award-candidate-selection";
-const rows=[{id:"a",name:"Анна",joinedOn:"2023-10-13",source:"Telegram",status:"Не добавлен"},{id:"b",name:"Борис",joinedOn:null,source:"Неизвестно",status:"Включён",disabled:true}];
+vi.mock("next/link", () => ({ default: ({ href, children }: { href: string; children: ReactNode }) => <a href={href}>{children}</a> }));
+const rows=[{id:"a",participantId:"participant-a",name:"Анна",joinedOn:"2023-10-13",source:"Telegram",status:"Не добавлен"},{id:"b",participantId:"participant-b",name:"Борис",joinedOn:null,source:"Неизвестно",status:"Включён",disabled:true}];
 const labels={name:"Участник",date:"Дата",source:"Источник",status:"Статус",unknown:"Дата неизвестна",selectAll:"Все",deselect:"Снять",selected:"Выбрано",submit:"Добавить",confirm:"Подтверждаю",empty:"Нет"};
 async function render(action:"add_selected"|"remove_selected",check:(view:ReactTestRenderer)=>Promise<void>) {
  const env=globalThis as typeof globalThis & {IS_REACT_ACT_ENVIRONMENT?:boolean};const old=env.IS_REACT_ACT_ENVIRONMENT;env.IS_REACT_ACT_ENVIRONMENT=true;
@@ -18,6 +20,7 @@ describe("candidate checkbox selection",()=>{
   expect(checks.map(c=>c.props.checked)).toEqual([true,false]);expect(submit().props.disabled).toBe(false);
   expect(view.root.findByType("output").children.join("")).toBe("Выбрано: 1");
   expect(view.root.findByProps({name:"joinedFrom"}).props.value).toBe("2023-10-13");
+  expect(view.root.findAllByType("a").map(link=>link.props.href)).toEqual(["/profile/participant-a","/profile/participant-b"]);
   await act(async()=>view.root.findAllByType("button").find(b=>b.children[0]==="Снять")!.props.onClick());
   expect(submit().props.disabled).toBe(true);
   await act(async()=>checks[0].props.onChange({target:{checked:true}}));expect(submit().props.disabled).toBe(false);

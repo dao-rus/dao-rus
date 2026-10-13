@@ -33,7 +33,7 @@ describe("award draft candidate search",()=>{
  it("shows checked selection component only after validated search with source/date",async()=>{
   const fields=props(await page({search:"1",joinedFrom:"2023-10-13",joinedTo:"2024-04-13"}));
   const selection=fields.find(p=>p.action==="add_selected");
-  expect(selection?.rows).toEqual([{id:"person",name:"Анна",joinedOn:"2023-10-13",source:"Telegram: сообщение о вступлении",status:"Не добавлен",disabled:false}]);
+  expect(selection?.rows).toEqual([{id:"person",participantId:"person",name:"Анна",joinedOn:"2023-10-13",source:"Telegram: сообщение о вступлении",status:"Не добавлен",disabled:false}]);
   expect(selection?.filters).toContainEqual({name:"joinedFrom",value:"2023-10-13"});
   expect(mocks.audience).toHaveBeenLastCalledWith(expect.anything(),expect.objectContaining({joinedTo:"2024-04-13"}),"awards");
  });
@@ -47,7 +47,8 @@ describe("award draft candidate search",()=>{
   mocks.query.mockImplementation(async(sql:string)=>({rows:sql.includes("FROM award_batches")?[batch]:[{...candidate,status:"included"}]}));
   fields=props(await page());
   expect(fields.some(p=>p.action==="remove_selected")).toBe(true);
-  const rows=fields.find(p=>p.action==="remove_selected")?.rows as Array<{details:ReactNode}>;
+  const rows=fields.find(p=>p.action==="remove_selected")?.rows as Array<{id:string;participantId:string;details:ReactNode}>;
+  expect(rows[0]).toMatchObject({id:"candidate",participantId:"person"});
   const editor=props(rows[0].details);
   expect(editor.some(p=>p.defaultValue==="Saved address")).toBe(true);
   expect(editor.some(p=>p.name==="status"&&p.type==="hidden"&&p.value==="included")).toBe(true);

@@ -100,7 +100,7 @@ export default async function AwardBatchPage({ params, searchParams }: {
       {results ? <><h3>{texts["award.searchResults"]} ({results.audience.length})</h3>
         <AwardCandidateSelection key={JSON.stringify(rule)} batchId={batchId} action="add_selected" filters={fields}
           labels={{ ...selectionLabels, submit: texts["award.addSelected"] }} rows={results.audience.map(person => ({
-            id: person.id, name: person.displayName, joinedOn: person.joinedOn ?? null, source: dateSource(person),
+            id: person.id, participantId: person.id, name: person.displayName, joinedOn: person.joinedOn ?? null, source: dateSource(person),
             status: statusByPerson.has(person.id) ? texts["award.included"] : texts["award.notAdded"],
             disabled: statusByPerson.has(person.id),
           }))} />
@@ -122,7 +122,7 @@ export default async function AwardBatchPage({ params, searchParams }: {
       <AwardCandidateSelection batchId={batchId} action="remove_selected" labels={{ ...selectionLabels, submit: texts["award.removeSelected"] }}
         rows={included.map(candidate => {
           const person = options?.audience.find(p => p.id === candidate.participant_id);
-          return { id: String(candidate.id), name: String(candidate.display_name), joinedOn: person?.joinedOn ?? null,
+          return { id: String(candidate.id), participantId: String(candidate.participant_id), name: String(candidate.display_name), joinedOn: person?.joinedOn ?? null,
             source: person ? dateSource(person) : texts["award.joinUnknown"], status: texts["award.included"], details: renderCandidate(candidate) };
         })} />
     </> : null}
