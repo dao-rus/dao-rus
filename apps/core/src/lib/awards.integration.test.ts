@@ -1,4 +1,4 @@
-import { createAwardBatchWithDatabase, snapshotAwardAudienceWithDatabase, addAwardCandidateWithDatabase, editAwardCandidateWithDatabase, finalizeAwardBatchWithDatabase, notifyAwardBatchRecipientsWithDatabase, addSelectedAwardCandidatesWithDatabase, excludeAwardCandidatesWithDatabase } from "./award-batches";
+import { fillEmptyAwardReasonsWithDatabase, createAwardBatchWithDatabase, snapshotAwardAudienceWithDatabase, addAwardCandidateWithDatabase, editAwardCandidateWithDatabase, finalizeAwardBatchWithDatabase, notifyAwardBatchRecipientsWithDatabase, addSelectedAwardCandidatesWithDatabase, excludeAwardCandidatesWithDatabase } from "./award-batches";
 import { getPublicAwardWithDatabase, getAwardBadgesWithDatabase, getOwnAwardOffersWithDatabase } from "./award-views";
 import { selectParticipantAudienceWithDatabase } from "./participant-audience";
 import { randomUUID } from "node:crypto";
@@ -53,6 +53,27 @@ describe.skipIf(!databaseUrl)("award foundation on real PostgreSQL", () => {
     await editAwardCandidateWithDatabase(pool,founder,batch,candidate.id,{status,reason,personalAddress:address});
     return candidate.id as string;
   }
+  it("fills only blank reasons for the whole batch and leaves finalized batches alone", async()=>{
+    const definition=await award();
+    const blank=await participant(), written=await participant();
+    const batch=await createAwardBatchWithDatabase(pool,founder,definition.id,"regular"), batchId=String(batch.id);
+    await addAwardCandidateWithDatabase(pool,founder,batchId,blank);
+    await addAwardCandidateWithDatabase(pool,founder,batchId,written);
+    await editedCandidate(batchId,written,"included","Личное основание","Личное обращение");
+    const filled=await fillEmptyAwardReasonsWithDatabase(pool,founder,batchId,"Участник Первой волны");
+    expect(filled).toBe(1);
+    const rows=(await pool.query("SELECT participant_id,reason,personal_address FROM award_candidates WHERE batch_id=$1",[batchId])).rows as Array<{participant_id:string;reason:string;personal_address:string}>;
+    const row=(person:string)=>rows.find(r=>r.participant_id===person)!;
+    expect(row(blank).reason).toBe("Участник Первой волны");
+    expect(row(written).reason).toBe("Личное основание");
+    expect(row(written).personal_address).toBe("Личное обращение");
+    expect(row(blank).personal_address).toBe("");
+    expect(await fillEmptyAwardReasonsWithDatabase(pool,founder,batchId,"Ещё раз")).toBe(0);
+    await expect(fillEmptyAwardReasonsWithDatabase(pool,await participant(),batchId,"Чужой")).rejects.toBeInstanceOf(AwardAccessError);
+    await expect(fillEmptyAwardReasonsWithDatabase(pool,founder,batchId,"   ")).rejects.toBeInstanceOf(AwardValidationError);
+    await finalizeAwardBatchWithDatabase(pool,founder,batchId);
+    await expect(fillEmptyAwardReasonsWithDatabase(pool,founder,batchId,"Поздно")).rejects.toBeInstanceOf(AwardTransitionError);
+  });
   it("runs a complete release, authenticated offer projection, both public opt-ins and irreversible rejection", async()=>{
     const images={original:Buffer.from([1]),thumbnail:Buffer.from([2])};
     const definition=await establishAwardWithDatabase(pool,founder,{slug:`e2e-${randomUUID()}`,name:"Знак Дара",imageUrl:"",images,establishedOn:"2026-10-07",description:"Public description",criterion:"Founder review",publicAddress:"Public greeting",kind:"open"});

@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { getCurrentParticipant } from "@/lib/session";
 import { hasAwardCapability } from "@/lib/award-access";
 import { id, AwardValidationError } from "@/lib/awards";
-import { createAwardBatch, snapshotAwardAudience, addAwardCandidate, editAwardCandidate, finalizeAwardBatch, notifyAwardBatchRecipients, addSelectedAwardCandidates, excludeAwardCandidates } from "@/lib/award-batches";
+import { createAwardBatch, snapshotAwardAudience, addAwardCandidate, editAwardCandidate, finalizeAwardBatch, notifyAwardBatchRecipients, addSelectedAwardCandidates, excludeAwardCandidates, fillEmptyAwardReasons } from "@/lib/award-batches";
 import { readInterfaceTexts } from "@/lib/interface-texts";
 import { awardRequestForbidden, awardRedirect, awardHttpError } from "@/lib/award-http";
 import type { AudienceCondition } from "@/lib/participant-audience";
@@ -46,6 +46,8 @@ export async function POST(request: NextRequest) {
         }
         else if (action === "add")
             await addAwardCandidate(actor.id, batch, id(form.get("participantId")));
+        else if (action === "fill_reason")
+            await fillEmptyAwardReasons(actor.id, batch, form.get("reason"));
         else if (action === "edit")
             await editAwardCandidate(actor.id, batch, id(form.get("candidateId")), { status: form.get("status"), reason: form.get("reason"), personalAddress: form.get("personalAddress") });
         else if (action === "finalize") {

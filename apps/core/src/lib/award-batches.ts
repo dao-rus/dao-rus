@@ -130,6 +130,26 @@ export async function editAwardCandidateWithDatabase(database: AwardDatabase, ac
             throw new AwardNotFoundError();
     });
 }
+// One reason for the whole release: it fills only the blanks, so a reason written for a particular
+// person by hand is never overwritten. The personal address stays personal and is not touched.
+export async function fillEmptyAwardReasonsWithDatabase(database: AwardDatabase, actorId: string, batchId: string, reason: unknown) {
+    const actor = id(actorId);
+    requireAwardCapability(actor, "award.batch.edit");
+    const value = text(reason, "reason", 2000);
+    return transaction(database, async (client) => {
+        await lockDraft(client, batchId);
+        const changed = await client.query(`UPDATE award_candidates SET reason=$2
+          WHERE batch_id=$1 AND status='included' AND btrim(reason)='' RETURNING id`, [id(batchId), value]);
+        if (changed.rowCount)
+            await client.query(`INSERT INTO events(event_type,participant_id,payload)
+              VALUES ('award.candidate_reasons_filled',$1,$2::jsonb)`,
+                [actor, JSON.stringify({ batch_id: batchId, candidate_ids: changed.rows.map(r => r.id) })]);
+        return changed.rowCount ?? 0;
+    });
+}
+export async function fillEmptyAwardReasons(actor: string, batch: string, reason: unknown) {
+    const { pool } = await import("./db"); return fillEmptyAwardReasonsWithDatabase(pool, actor, batch, reason);
+}
 export async function finalizeAwardBatchWithDatabase(database: AwardDatabase, actorId: string, batchId: string) {
     const actor = id(actorId);
     requireAwardCapability(actor, "award.batch.finalize");

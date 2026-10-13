@@ -58,7 +58,15 @@ export default async function AwardBatchPage({ params, searchParams }: {
     const selectionLabels = { name: texts["award.person"], date: texts["award.joinDate"], source: texts["award.joinSource"], status: texts["award.selectionStatus"],
         unknown: texts["award.joinUnknown"], selectAll: texts["award.selectPage"], deselect: texts["award.deselect"], selected: texts["award.selectedCount"],
         confirm: texts["award.removeConfirm"], empty: texts["award.searchEmpty"] };
-    const canFinalize = candidates.rows.some(c => c.status === "included") && candidates.rows.every(c => c.status === "excluded" || (!c.instance_id && String(c.reason).trim()));
+    // What exactly blocks the release, counted on the same rows the table below shows.
+    const missingReason = included.filter(c => !String(c.reason).trim()).length;
+    const conflicting = included.filter(c => c.instance_id).length;
+    const canFinalize = included.length > 0 && !missingReason && !conflicting;
+    const blockedReasons = [
+        included.length ? null : texts["award.blockedEmpty"],
+        missingReason ? texts["award.blockedReason"].replace("{count}", String(missingReason)) : null,
+        conflicting ? texts["award.blockedConflict"].replace("{count}", String(conflicting)) : null,
+    ].filter((line): line is string => Boolean(line));
     const hidden = (action: string) => <><input type="hidden" name="batchId" value={batchId}/><input type="hidden" name="action" value={action}/></>;
     const renderCandidate = (candidate: typeof candidates.rows[number]) => <article className="awardCandidate" key={candidate.id}>{!draft ? <h3>{candidate.display_name}</h3> : null}
       <p>{texts["award.source"]}: {texts[`award.${candidate.source as "filter" | "manual"}`]}</p>
@@ -123,11 +131,15 @@ export default async function AwardBatchPage({ params, searchParams }: {
     {!draft ? <form className="awardForm" action="/api/admin/awards/batches" method="post">{hidden("notify")}
       <p>{texts["award.notifyHint"]}</p><button type="submit" className="button secondary">{texts["award.notify"]}</button></form> : null}
     {draft ? <section className="awardPreparation"><h2>{texts["award.prepareBatch"]}</h2><p>{texts["award.prepareHint"]}</p>
+      {missingReason ? <form className="awardForm" action="/api/admin/awards/batches" method="post">{hidden("fill_reason")}
+        <label>{texts["award.bulkReason"]}<textarea name="reason" required maxLength={2000}/></label>
+        <p className="muted">{texts["award.bulkReasonHint"]}</p>
+        <button type="submit" className="button secondary">{texts["award.bulkReasonApply"]}</button></form> : null}
       <div className="awardSelection"><div className="awardSelectionTable"><table><thead><tr><th>{texts["award.person"]}</th><th>{texts["award.reason"]}</th><th>{texts["award.selectionStatus"]}</th></tr></thead>
         <tbody>{included.map(candidate => <tr key={candidate.id}><td>{candidate.display_name}</td><td><UserText text={candidate.reason}/></td>
           <td>{candidate.instance_id ? texts["award.conflict"] : !String(candidate.reason).trim() ? texts["award.reasonMissing"] : texts["award.ready"]}</td></tr>)}</tbody></table></div></div>
       <form className="awardForm" action="/api/admin/awards/batches" method="post">{hidden("finalize")}
       <label><input type="checkbox" name="confirm" required/>{texts["award.finalizeWarning"]}</label><button type="submit" className="button primary" disabled={!canFinalize}>{texts["award.finalize"]}</button>
-      {!canFinalize ? <p>{texts["award.invalid"]}</p> : null}</form></section> : null}
+      {blockedReasons.map(line => <p className="formError" key={line}>{line}</p>)}</form></section> : null}
   </section></main>;
 }

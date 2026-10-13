@@ -66,4 +66,23 @@ describe("award draft candidate search",()=>{
   const fields=props(await page({search:"1"}));
   expect(fields.some(p=>p.value==="clear"||p.action==="add_selected"||p.action==="remove_selected"||p.method==="get")).toBe(false);
  });
+
+ it("names what blocks the release and offers one reason for the whole batch",async()=>{
+  const blank={id:"c1",participant_id:"person",display_name:"Анна",source:"filter",status:"included",reason:"",personal_address:""};
+  mocks.query.mockImplementation(async(sql:string)=>({rows:sql.includes("FROM award_batches")?[batch]:[blank]}));
+  let fields=props(await page());
+  expect(fields.some(p=>p.name==="action"&&p.value==="fill_reason")).toBe(true);
+  expect(fields.some(p=>p.children==="Нельзя завершить выпуск: не заполнено основание награждения. Таких участников в черновике: 1.")).toBe(true);
+  expect(fields.some(p=>p.type==="submit"&&p.disabled===true)).toBe(true);
+  const conflicted={...blank,reason:"Участник Первой волны",instance_id:"instance"};
+  mocks.query.mockImplementation(async(sql:string)=>({rows:sql.includes("FROM award_batches")?[batch]:[conflicted]}));
+  fields=props(await page());
+  expect(fields.some(p=>typeof p.children==="string"&&String(p.children).includes("награда уже есть"))).toBe(true);
+  expect(fields.some(p=>p.name==="action"&&p.value==="fill_reason")).toBe(false);
+  const ready={...blank,reason:"Участник Первой волны"};
+  mocks.query.mockImplementation(async(sql:string)=>({rows:sql.includes("FROM award_batches")?[batch]:[ready]}));
+  fields=props(await page());
+  expect(fields.some(p=>p.type==="submit"&&p.disabled===true)).toBe(false);
+  expect(fields.some(p=>typeof p.children==="string"&&String(p.children).startsWith("Нельзя завершить выпуск"))).toBe(false);
+ });
 });
