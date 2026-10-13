@@ -850,6 +850,13 @@ div.userText > :last-child { margin-bottom: 0; }
 .awardForm label:has(input[type="checkbox"]) { display: flex; align-items: baseline; gap: .5rem; }
 .awardForm input[type="checkbox"] { width: auto; }
 .awardCandidate { border-top: 1px solid var(--border); padding: 1rem 0; }
+.awardSelection { display: grid; gap: 14px; margin: 20px 0; }
+.awardSelectionTable { overflow-x: auto; }
+.awardSelection table { width: 100%; border-collapse: collapse; text-align: left; font-size: 14px; }
+.awardSelection th, .awardSelection td { padding: 10px 8px; border-bottom: 1px solid var(--line); vertical-align: top; }
+.awardSelection label { display: flex; align-items: baseline; gap: 8px; }
+.awardSelection input[type="checkbox"] { width: auto; flex: none; }
+.awardSelection button[type="submit"] { justify-self: start; }
 
 /* Someone else's profile: who the person is and how to reach them first, trust below. */
 .publicProfileHead { display: grid; gap: 16px; }

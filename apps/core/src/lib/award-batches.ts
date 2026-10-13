@@ -3,6 +3,12 @@ import { selectParticipantAudienceWithDatabase, audienceConditions, type Audienc
 import { createNotificationWithDatabase } from "./notifications";
 import { AwardConflictError, AwardNotFoundError, AwardTransitionError, AwardValidationError, id, text, transaction, type AwardDatabase, type AwardDatabaseClient } from "./awards";
 export function validateAwardFilters(input: AudienceFilters): AudienceFilters {
+    for (const value of [input.joinedFrom, input.joinedTo]) {
+        if (value && (typeof value !== "string" || !/^\d{4}-\d{2}-\d{2}$/.test(value)
+            || !Number.isFinite(Date.parse(value + "T00:00:00Z")) || new Date(value + "T00:00:00Z").toISOString().slice(0, 10) !== value))
+            throw new AwardValidationError("Invalid join date");
+    }
+    if (input.joinedFrom && input.joinedTo && input.joinedFrom > input.joinedTo) throw new AwardValidationError("Invalid join date range");
     if (input.city && (typeof input.city !== "string" || input.city.length > 1000))
         throw new AwardValidationError("Invalid city");
     if (input.interests && (!Array.isArray(input.interests) || input.interests.length > 100 || input.interests.some(v => typeof v !== "string" || v.length > 200)))
@@ -13,7 +19,55 @@ export function validateAwardFilters(input: AudienceFilters): AudienceFilters {
         throw new AwardValidationError("Invalid verification");
     if (input.membership && !["none", "participant", "left", "excluded"].includes(input.membership))
         throw new AwardValidationError("Invalid membership");
-    return { city: input.city || undefined, interests: input.interests ?? [], conditions: input.conditions ?? [], verification: input.verification || undefined, membership: input.membership || undefined };
+    return { city: input.city || undefined, interests: input.interests ?? [], conditions: input.conditions ?? [], verification: input.verification || undefined, membership: input.membership || undefined,
+        joinedFrom: input.joinedFrom || undefined, joinedTo: input.joinedTo || undefined };
+}
+
+function selectedIds(values: unknown[]): string[] {
+    if (!Array.isArray(values) || !values.length || values.length > 5000) throw new AwardValidationError("Select candidates");
+    return [...new Set(values.map(value => id(value)))];
+}
+
+export async function addSelectedAwardCandidatesWithDatabase(database: AwardDatabase, actorId: string, batchId: string, participantIds: unknown[], input: AudienceFilters) {
+    const actor = id(actorId); requireAwardCapability(actor, "award.batch.edit");
+    const selected = selectedIds(participantIds), filters = validateAwardFilters(input);
+    return transaction(database, async client => {
+        await lockDraft(client, batchId);
+        const allowed = new Set((await selectParticipantAudienceWithDatabase(client, filters, "awards")).audience.map(p => p.id));
+        if (selected.some(person => !allowed.has(person))) throw new AwardValidationError("Selection no longer matches search");
+        const changed = await client.query(`INSERT INTO award_candidates(batch_id,participant_id,source)
+          SELECT $1, person, 'filter' FROM unnest($2::uuid[]) person
+          ON CONFLICT(batch_id,participant_id) DO NOTHING RETURNING id`, [batchId, selected]);
+        await client.query("UPDATE award_batches SET audience_rule=$2::jsonb WHERE id=$1", [batchId, JSON.stringify(filters)]);
+        if (changed.rowCount) await client.query(`INSERT INTO events(event_type,participant_id,payload)
+          VALUES ('award.candidates_added',$1,$2::jsonb)`, [actor, JSON.stringify({ batch_id: batchId, candidate_ids: changed.rows.map(r => r.id) })]);
+        return changed.rowCount ?? 0;
+    });
+}
+
+// Clearing a draft is exclusion, never deletion: retain notes and candidate history.
+export async function excludeAwardCandidatesWithDatabase(database: AwardDatabase, actorId: string, batchId: string, candidateIds: unknown[] | null) {
+    const actor = id(actorId); requireAwardCapability(actor, "award.batch.edit");
+    const selected = candidateIds === null ? null : selectedIds(candidateIds);
+    return transaction(database, async client => {
+        await lockDraft(client, batchId);
+        if (selected) {
+            const found = await client.query("SELECT id FROM award_candidates WHERE batch_id=$1 AND id=ANY($2::uuid[])", [batchId, selected]);
+            if (found.rows.length !== selected.length) throw new AwardNotFoundError();
+        }
+        const changed = await client.query(`UPDATE award_candidates SET status='excluded'
+          WHERE batch_id=$1 AND status='included' ${selected ? "AND id=ANY($2::uuid[])" : ""} RETURNING id`, selected ? [batchId, selected] : [batchId]);
+        if (changed.rowCount) await client.query(`INSERT INTO events(event_type,participant_id,payload)
+          VALUES ('award.candidates_excluded',$1,$2::jsonb)`, [actor, JSON.stringify({ batch_id: batchId, cleared: selected === null, candidate_ids: changed.rows.map(r => r.id) })]);
+        return changed.rowCount ?? 0;
+    });
+}
+
+export async function addSelectedAwardCandidates(actor: string, batch: string, people: unknown[], filters: AudienceFilters) {
+    const { pool } = await import("./db"); return addSelectedAwardCandidatesWithDatabase(pool, actor, batch, people, filters);
+}
+export async function excludeAwardCandidates(actor: string, batch: string, candidates: unknown[] | null) {
+    const { pool } = await import("./db"); return excludeAwardCandidatesWithDatabase(pool, actor, batch, candidates);
 }
 async function lockDraft(client: AwardDatabaseClient, batchId: string) {
     const result = await client.query("SELECT * FROM award_batches WHERE id=$1 FOR UPDATE", [id(batchId)]);

@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { getCurrentParticipant } from "@/lib/session";
 import { hasAwardCapability } from "@/lib/award-access";
 import { id, AwardValidationError } from "@/lib/awards";
-import { createAwardBatch, snapshotAwardAudience, addAwardCandidate, editAwardCandidate, finalizeAwardBatch, notifyAwardBatchRecipients } from "@/lib/award-batches";
+import { createAwardBatch, snapshotAwardAudience, addAwardCandidate, editAwardCandidate, finalizeAwardBatch, notifyAwardBatchRecipients, addSelectedAwardCandidates, excludeAwardCandidates } from "@/lib/award-batches";
 import { readInterfaceTexts } from "@/lib/interface-texts";
 import { awardRequestForbidden, awardRedirect, awardHttpError } from "@/lib/award-http";
 import type { AudienceCondition } from "@/lib/participant-audience";
@@ -18,6 +18,9 @@ export async function POST(request: NextRequest) {
     let path = "/admin/awards";
     try {
         const form = await request.formData(), action = form.get("action");
+        const filters = () => ({ city: String(form.get("city") || ""), interests: form.getAll("interests").map(String),
+            conditions: form.getAll("conditions") as AudienceCondition[], membership: String(form.get("membership") || ""),
+            verification: String(form.get("verification") || ""), joinedFrom: String(form.get("joinedFrom") || ""), joinedTo: String(form.get("joinedTo") || "") });
         if (action === "create") {
             const award = id(form.get("awardId"));
             path = `/admin/awards/${award}`;
@@ -30,10 +33,13 @@ export async function POST(request: NextRequest) {
             return new NextResponse("Not found", { status: 404 });
         path = `/admin/awards/${parent.rows[0].award_id}/batches/${batch}`;
         if (action === "snapshot")
-            await snapshotAwardAudience(actor.id, batch, {
-                city: String(form.get("city") || ""), interests: form.getAll("interests").map(String), conditions: form.getAll("conditions") as AudienceCondition[],
-                membership: String(form.get("membership") || ""), verification: String(form.get("verification") || ""),
-            });
+            await snapshotAwardAudience(actor.id, batch, filters());
+        else if (action === "add_selected")
+            await addSelectedAwardCandidates(actor.id, batch, form.getAll("participantIds"), filters());
+        else if (action === "exclude_selected" || action === "clear") {
+            if (form.get("confirm") !== "on") throw new AwardValidationError("Confirm exclusion");
+            await excludeAwardCandidates(actor.id, batch, action === "clear" ? null : form.getAll("candidateIds"));
+        }
         else if (action === "add")
             await addAwardCandidate(actor.id, batch, id(form.get("participantId")));
         else if (action === "edit")

@@ -1,4 +1,4 @@
-import { createAwardBatchWithDatabase, snapshotAwardAudienceWithDatabase, addAwardCandidateWithDatabase, editAwardCandidateWithDatabase, finalizeAwardBatchWithDatabase, notifyAwardBatchRecipientsWithDatabase } from "./award-batches";
+import { createAwardBatchWithDatabase, snapshotAwardAudienceWithDatabase, addAwardCandidateWithDatabase, editAwardCandidateWithDatabase, finalizeAwardBatchWithDatabase, notifyAwardBatchRecipientsWithDatabase, addSelectedAwardCandidatesWithDatabase, excludeAwardCandidatesWithDatabase } from "./award-batches";
 import { getPublicAwardWithDatabase, getAwardBadgesWithDatabase, getOwnAwardOffersWithDatabase } from "./award-views";
 import { selectParticipantAudienceWithDatabase } from "./participant-audience";
 import { randomUUID } from "node:crypto";
@@ -7,7 +7,7 @@ import { Pool } from "pg";
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
 import { applyMigration, createMigrationPlan, migrationFile } from "./migration-integrity";
 import {
-  AwardAccessError, AwardConflictError, AwardNotFoundError, AwardTransitionError,
+  AwardAccessError, AwardConflictError, AwardNotFoundError, AwardTransitionError, AwardValidationError,
   actOnAwardInstanceWithDatabase, awardInstancePublicity, establishAwardWithDatabase,
   getAwardInstanceWithDatabase, getAwardWithDatabase, offerAwardWithDatabase, setAwardVisibilityWithDatabase,
   type AwardInstance, type EstablishAwardInput,
@@ -126,6 +126,65 @@ describe.skipIf(!databaseUrl)("award foundation on real PostgreSQL", () => {
     const filters={city:JSON.stringify([city.toLowerCase(),"город","россия"]),membership:"left",verification:"unverified"};
     expect((await selectParticipantAudienceWithDatabase(pool,filters,"awards")).audience.map(p=>p.id)).toEqual([recipient]);
     expect((await selectParticipantAudienceWithDatabase(pool,filters,"guardian")).audience).toEqual([]);
+  });
+  it("searches historical calendar dates inclusively with provenance and never uses profile/import time", async () => {
+    const people = await Promise.all(Array.from({length:5},()=>participant("left")));
+    const city = `Historical-${randomUUID()}`;
+    await pool.query("UPDATE participants SET residence_name=$2,residence_type='город',residence_country='Россия' WHERE id=ANY($1::uuid[])", [people,city]);
+    const times = ["2023-10-12T21:00:00Z", "2024-04-13T20:59:59Z", "2024-04-13T21:00:00Z"];
+    for (const [index,time] of times.entries()) await pool.query(`INSERT INTO events(event_type,participant_id,payload)
+      VALUES ('forum.joined',$1,$2::jsonb)`, [people[index],JSON.stringify({source:"telegram_export",observed_at:time,approximate:index===1})]);
+    await pool.query(`INSERT INTO events(event_type,participant_id,payload) VALUES ('onboarding.forum_joined',$1,$2::jsonb)`,[people[3],JSON.stringify({source:"mtproto_roster",observed_at:times[0]})]);
+    await pool.query("UPDATE participants SET created_at='2023-11-01' WHERE id=ANY($1::uuid[])",[people.slice(3)]);
+    const filters={city:JSON.stringify([city.toLowerCase(),"город","россия"]),membership:"left",verification:"unverified",joinedFrom:"2023-10-13",joinedTo:"2024-04-13"};
+    const results=await selectParticipantAudienceWithDatabase(pool,filters,"awards");
+    expect(results.audience.map(p=>p.id).sort()).toEqual(people.slice(0,2).sort());
+    expect(results.audience.find(p=>p.id===people[0])).toMatchObject({joinedOn:"2023-10-13",joinedSource:"telegram_export",joinedApproximate:false});
+    expect(results.audience.find(p=>p.id===people[1])).toMatchObject({joinedOn:"2024-04-13",joinedApproximate:true});
+    const unfiltered=await selectParticipantAudienceWithDatabase(pool,{city:filters.city},"awards");
+    expect(unfiltered.audience).toHaveLength(5);
+    expect(unfiltered.audience.filter(p=>p.joinedOn===null)).toHaveLength(2);
+    const definition=await award(),batch=await createAwardBatchWithDatabase(pool,founder,definition.id,"regular");
+    expect((await pool.query("SELECT count(*)::int AS n FROM award_candidates WHERE batch_id=$1",[batch.id])).rows[0].n).toBe(0);
+    await expect(addSelectedAwardCandidatesWithDatabase(pool,founder,String(batch.id),[people[2]],filters)).rejects.toBeInstanceOf(AwardValidationError);
+    await addAwardCandidateWithDatabase(pool,founder,String(batch.id),people[4]);
+    expect((await pool.query("SELECT participant_id FROM award_candidates WHERE batch_id=$1",[batch.id])).rows[0].participant_id).toBe(people[4]);
+  });
+  it("adds only explicit selections idempotently, preserving exclusions and notes", async () => {
+    const definition=await award(),batch=await createAwardBatchWithDatabase(pool,founder,definition.id,"regular");
+    const [first,second,unselected]=await Promise.all([participant(),participant(),participant()]);
+    await addAwardCandidateWithDatabase(pool,founder,String(batch.id),first);
+    await editedCandidate(String(batch.id),first,"excluded","Original reason","Original address");
+    const attempts=await Promise.all([addSelectedAwardCandidatesWithDatabase(pool,founder,String(batch.id),[first,second,second],{}),addSelectedAwardCandidatesWithDatabase(pool,founder,String(batch.id),[first,second],{})]);
+    expect(attempts.sort()).toEqual([0,1]);
+    const candidates=(await pool.query("SELECT * FROM award_candidates WHERE batch_id=$1",[batch.id])).rows;
+    expect(candidates).toHaveLength(2);
+    expect(candidates.find(c=>c.participant_id===first)).toMatchObject({status:"excluded",source:"manual",reason:"Original reason",personal_address:"Original address"});
+    expect(candidates.some(c=>c.participant_id===unselected)).toBe(false);
+    expect((await pool.query("SELECT count(*)::int AS n FROM award_instances WHERE award_id=$1",[definition.id])).rows[0].n).toBe(0);
+    await expect(addSelectedAwardCandidatesWithDatabase(pool,second,String(batch.id),[unselected],{})).rejects.toBeInstanceOf(AwardAccessError);
+  });
+  it("clears by exclusion only inside a locked draft and keeps all award history intact", async () => {
+    const definition=await award(),batch=await createAwardBatchWithDatabase(pool,founder,definition.id,"regular"),other=await createAwardBatchWithDatabase(pool,founder,definition.id,"remint");
+    const [person,second]=await Promise.all([participant(),participant()]);
+    await addAwardCandidateWithDatabase(pool,founder,String(batch.id),person);
+    await addAwardCandidateWithDatabase(pool,founder,String(batch.id),second);
+    await addAwardCandidateWithDatabase(pool,founder,String(other.id),person);
+    const first=await editedCandidate(String(batch.id),person),foreign=await editedCandidate(String(other.id),person);
+    await expect(excludeAwardCandidatesWithDatabase(pool,founder,String(batch.id),[first,foreign])).rejects.toBeInstanceOf(AwardNotFoundError);
+    expect(await excludeAwardCandidatesWithDatabase(pool,founder,String(batch.id),[first])).toBe(1);
+    expect(await excludeAwardCandidatesWithDatabase(pool,founder,String(batch.id),null)).toBe(1);
+    expect(await excludeAwardCandidatesWithDatabase(pool,founder,String(batch.id),null)).toBe(0);
+    expect((await pool.query("SELECT * FROM award_candidates WHERE id=$1",[first])).rows[0]).toMatchObject({status:"excluded",reason:"Contribution",personal_address:"Private memory"});
+    expect((await pool.query("SELECT status FROM award_candidates WHERE id=$1",[foreign])).rows[0].status).toBe("included");
+    const before=(await pool.query("SELECT * FROM award_instances WHERE award_id=$1 ORDER BY id",[definition.id])).rows;
+    await finalizeAwardBatchWithDatabase(pool,founder,String(other.id));
+    const issued=(await pool.query("SELECT * FROM award_instances WHERE award_id=$1 ORDER BY id",[definition.id])).rows;
+    expect(issued).toHaveLength(before.length+1);
+    await expect(excludeAwardCandidatesWithDatabase(pool,founder,String(other.id),null)).rejects.toBeInstanceOf(AwardTransitionError);
+    await expect(addSelectedAwardCandidatesWithDatabase(pool,founder,String(other.id),[second],{})).rejects.toBeInstanceOf(AwardTransitionError);
+    expect((await pool.query("SELECT * FROM award_instances WHERE award_id=$1 ORDER BY id",[definition.id])).rows).toEqual(issued);
+    await expect(pool.query("DELETE FROM award_candidates WHERE id=$1",[first])).rejects.toThrow();
   });
   beforeAll(async () => {
     const url = new URL(databaseUrl!);

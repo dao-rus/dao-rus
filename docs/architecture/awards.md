@@ -14,6 +14,20 @@ human Participants, including profiles without a Core login and departed members
 Filters aid manual review; they do not establish entitlement. Applying filters adds
 snapshot candidates without changing existing exclusions, notes or sources.
 
+Draft selection uses read-only GET search followed by explicit checkbox selection
+and POST addition. Historical bounds are inclusive calendar dates in Europe/Moscow.
+Only `forum.joined` events with `telegram_export` or `chat_member` provenance supply
+the first known date; Core profile creation and roster import time are never used.
+Approximate export evidence is labelled as first known presence (already present
+by that date), not as a proven exact join. Unknown dates allow manual addition/remint.
+
+Clear and bulk exclusion lock the draft and set candidate status to `excluded`,
+preserving reasons, personal addresses and source. They never delete candidates,
+batches or award instances. Excluded records can be restored explicitly through
+the existing editor; selected additions never silently restore exclusions. The
+server re-resolves the selected audience and audits changed candidate IDs. Finalized
+batches remain immutable, including under concurrent requests.
+
 Batch mutations lock the parent draft. Finalization locks the batch and Award,
 checks every included candidate, creates all offers and seals the batch in one
 transaction. Retries return the same instances. Database guards freeze finalized

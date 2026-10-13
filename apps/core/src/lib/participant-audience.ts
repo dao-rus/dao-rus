@@ -13,11 +13,14 @@ export type AudienceParticipant = {
   hasTelegramUserId: boolean;
   residence: Residence | null;
   interests: Array<{ key: string; label: string }>;
+  joinedOn?: string | null;
+  joinedSource?: string | null;
+  joinedApproximate?: boolean;
 };
 
 export const audienceConditions = ["without_residence", "without_interests", "without_bio", "without_want", "without_need", "without_can", "without_have", "never_logged_in", "unverified"] as const;
 export type AudienceCondition = typeof audienceConditions[number];
-export type AudienceFilters = { city?: string; interests?: string[]; conditions?: AudienceCondition[]; membership?: string; verification?: string };
+export type AudienceFilters = { city?: string; interests?: string[]; conditions?: AudienceCondition[]; membership?: string; verification?: string; joinedFrom?: string; joinedTo?: string };
 
 export function cityKey(residence: Residence): string {
   return JSON.stringify([residence.name, residence.type, residence.country]
@@ -31,6 +34,7 @@ export async function selectParticipantAudienceWithDatabase(
   const result = await database.query(
     `${VERIFIED_SUBJECTS_CTE}
      SELECT p.id, p.display_name, p.membership_status,
+            ${scope === "awards" ? "join_history.joined_on, join_history.joined_source, join_history.joined_approximate," : ""}
             btrim(p.profile_bio) <> '' AS has_bio,
             EXISTS (SELECT 1 FROM verified WHERE subject_id = p.id) AS is_verified,
             ARRAY(SELECT DISTINCT kind FROM profile_signals WHERE participant_id = p.id AND status = 'active') AS active_signal_kinds,
@@ -64,6 +68,15 @@ export async function selectParticipantAudienceWithDatabase(
        FROM participants p
        LEFT JOIN external_identities telegram
          ON telegram.participant_id = p.id AND telegram.provider = 'telegram'
+       ${scope === "awards" ? `LEFT JOIN LATERAL (
+         SELECT (COALESCE((e.payload->>'observed_at')::timestamptz, e.created_at)
+                 AT TIME ZONE 'Europe/Moscow')::date::text AS joined_on,
+                e.payload->>'source' AS joined_source,
+                e.payload->>'approximate' = 'true' AS joined_approximate
+           FROM events e WHERE e.participant_id = p.id AND e.event_type = 'forum.joined'
+             AND e.payload->>'source' IN ('telegram_export', 'chat_member')
+          ORDER BY COALESCE((e.payload->>'observed_at')::timestamptz, e.created_at), e.id LIMIT 1
+       ) join_history ON true` : ""}
       ORDER BY lower(p.display_name), p.id`,
   );
 
@@ -90,6 +103,11 @@ export async function selectParticipantAudienceWithDatabase(
       loggedIn: row.logged_in === true,
       verified: row.is_verified === true,
       activeSignalKinds: (row.active_signal_kinds as string[] | null) ?? [],
+      ...(scope === "awards" ? {
+        joinedOn: row.joined_on ? String(row.joined_on) : null,
+        joinedSource: row.joined_source ? String(row.joined_source) : null,
+        joinedApproximate: row.joined_approximate === true,
+      } : {}),
     }));
 
   const cities = [...new Map(participants.flatMap((person) => person.residence
@@ -111,6 +129,8 @@ export async function selectParticipantAudienceWithDatabase(
     return !person.activeSignalKinds.includes(condition.slice("without_".length));
   };
   const audience = participants.filter((person) =>
+    (scope !== "awards" || ((!filters.joinedFrom || (person.joinedOn != null && person.joinedOn >= filters.joinedFrom))
+      && (!filters.joinedTo || (person.joinedOn != null && person.joinedOn <= filters.joinedTo)))) &&
     (!filters.membership || person.membership === filters.membership) && (!filters.verification || person.verified === (filters.verification === "verified")) && (!filters.city || (person.residence !== null && cityKey(person.residence) === filters.city))
     && (selectedInterests.size === 0 || person.interests.some((interest) => selectedInterests.has(interest.key)))
     && (filters.conditions ?? []).every(condition => matches(person, condition)));
