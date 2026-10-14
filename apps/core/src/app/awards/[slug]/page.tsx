@@ -25,11 +25,11 @@ export default async function PublicAwardPage({ params }: {
     // Only the viewer's own instance is ever selected; a visitor without one sees nothing extra,
     // which also hides who else was or was not offered the award.
     const own = actor ? (await getOwnAwardOffers(actor.id)).find(offer => offer.award.id === publicAward.award.id) : undefined;
-    return <main className="shell"><section className="card"><AwardContent award={publicAward.award} texts={texts} brief/>
+    return <main className="shell"><section className="card awardPublic"><AwardContent award={publicAward.award} texts={texts} brief/>
     {own ? <section aria-labelledby="award-own-offer"><h2 id="award-own-offer">{texts["award.ownOffer"]}</h2>
       <AwardInstancePanel instance={own.instance} awarderName={own.awarderName} texts={texts}/></section> : null}
     {!actor ? <p><a className="button secondary" href={`/api/auth/telegram/start?next=${encodeURIComponent(`/awards/${publicAward.award.slug}`)}`}>{texts["award.loginIfOffered"]}</a></p> : null}
-    {publicAward.recipients.length ? <ul>{publicAward.recipients.map(person => <li key={person.id}><Link href={`/profile/${person.id}`}>{person.name}</Link></li>)}</ul> : null}
+    {publicAward.recipients.length ? <section className="awardRoll"><ul>{publicAward.recipients.map(person => <li key={person.id}><Link href={`/profile/${person.id}`}>{person.name}</Link></li>)}</ul></section> : null}
     <AwardEstablished award={publicAward.award} texts={texts}/>
   </section></main>;
 }

@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { UserText } from "./user-text";
+import { AwardImage } from "./award-image";
 import { AwardVisibilityForm } from "./award-instance-panel";
 import { LocalDateTime } from "./local-date-time";
 import type { Award, AwardInstance } from "../lib/awards";
@@ -14,6 +15,14 @@ export function AwardContent({ award, texts, brief = false }: {
     texts: InterfaceTextValues;
     brief?: boolean;
 }) {
+    // Знак — первое и главное на странице; название под ним, обращение следом.
+    // Короткое обращение выключено по центру, длинное — влево: центрованный
+    // многострочный текст читать тяжело.
+    if (brief)
+        return <><div className="eyebrow"><Link href="/">ДАО Русь</Link></div>
+        <AwardImage src={award.imageUrl} alt={award.name}/>
+        <h1>{award.name}</h1>
+        <div className={award.publicAddress.length > 240 ? "awardAddress awardAddressLong" : "awardAddress"}><UserText text={award.publicAddress}/></div></>;
     return <><div className="eyebrow"><Link href="/">ДАО Русь</Link></div><h1>{award.name}</h1>
     <img className="awardImage" src={award.imageUrl} alt={award.name} width={240} height={240}/>
     {brief ? null : <><p>{texts["award.establishedOn"]}: {award.establishedOn} · {texts[`award.${award.kind}`]}</p>

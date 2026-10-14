@@ -25,6 +25,9 @@ describe("shared award page", () => {
     expect(html).toContain("Public greeting");
     expect(html).toContain('href="/profile/person"');
     expect(html).toContain("awardFooter");
+    expect(html).toContain("awardMedal");
+    expect(html).toContain("<dialog");
+    expect(html).toContain("awardRoll");
     expect(html).toMatch(/awardFooter[\s\S]*2026-10-07/);
     expect(html).not.toContain("Public description");
     expect(html).not.toContain("Public criterion");

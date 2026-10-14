@@ -845,6 +845,24 @@ div.userText > :last-child { margin-bottom: 0; }
 .awardImage { object-fit: contain; max-width: 100%; }
 .awardFooter { margin-top: 2.5rem; }
 .awardFooter p { font-size: 13px; margin: 0; }
+
+/* Публичная страница награды: знак по центру, имена — как на памятной доске.
+   Центрируются только эти блоки, диалог принятия награды остаётся как был. */
+.awardPublic .eyebrow, .awardPublic .awardHero, .awardPublic .awardFooter { text-align: center; }
+.awardPublic h1 { text-align: center; font-size: clamp(26px, 5vw, 40px); line-height: 1.15; margin: 28px 0 0; }
+.awardPublic .awardMedal { display: block; margin: 8px auto 0; padding: 16px; background: var(--card);
+  border: 1px solid var(--line); border-radius: 2px; outline: 1px solid var(--line); outline-offset: 6px; cursor: zoom-in; }
+.awardPublic .awardMedal .awardImage { display: block; width: min(400px, 68vw); height: auto; }
+.awardPublic .awardMedal:focus-visible { outline-color: var(--accent); }
+.awardAddress { margin: 24px auto 0; max-width: 46ch; text-align: center; text-wrap: pretty; line-height: 1.6; }
+.awardAddressLong { max-width: 56ch; text-align: left; }
+.awardRoll { margin-top: 40px; border-top: 1px solid var(--line); border-bottom: 1px solid var(--line); padding: 24px 0; }
+.awardRoll ul { list-style: none; margin: 0; padding: 0; display: grid; gap: 14px; text-align: center; }
+.awardRoll a { color: var(--ink); text-decoration: none; letter-spacing: 0.02em; }
+.awardRoll a:hover, .awardRoll a:focus-visible { color: var(--accent); text-decoration: underline; }
+.awardZoom { max-width: min(92vw, 900px); border: 0; padding: 0; background: transparent; }
+.awardZoom::backdrop { background: rgba(30, 33, 29, 0.82); }
+.awardZoom img { display: block; width: 100%; height: auto; cursor: zoom-out; }
 .awardBadge { display: inline-flex; vertical-align: middle; margin-left: .2em; }
 .awardBadge img { object-fit: contain; }
 .awardForm { display: grid; gap: .8rem; margin: 1rem 0; }
