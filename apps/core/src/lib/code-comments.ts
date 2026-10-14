@@ -1,5 +1,8 @@
 import { pool } from "./db";
 import { VERIFIED_SUBJECTS_CTE } from "./verification";
+import { createNotificationWithClient } from "./notifications";
+import { readInterfaceTextsWithDatabase } from "./interface-texts";
+import { notificationsTexts } from "./interface-text-sections/notifications";
 
 export const CODE_SECTIONS = ["dao-code-1", "dao-code-2", "dao-code-3", "dao-code-all"] as const;
 export type CodeSection = (typeof CODE_SECTIONS)[number];
@@ -140,6 +143,7 @@ export async function changeCodeCommentWithDatabase(
   try {
     await client.query("BEGIN");
     let affectedId: string;
+    let replyRecipientId: string | null = null;
     if (action === "create") {
       // The participant row serializes concurrent submissions and enforces the publication interval.
       const actor = await client.query("SELECT id FROM participants WHERE id = $1::uuid FOR UPDATE", [actorId]);
@@ -151,13 +155,14 @@ export async function changeCodeCommentWithDatabase(
       if (recent.rowCount) throw new CodeCommentRateLimitError("Please wait before posting again");
       if (parentId) {
         const parent = await client.query(
-          "SELECT section_key, parent_id, deleted_at, hidden_at FROM code_comments WHERE id = $1::uuid FOR SHARE",
+          "SELECT section_key, parent_id, author_id, deleted_at, hidden_at FROM code_comments WHERE id = $1::uuid FOR SHARE",
           [parentId],
         );
         const row = parent.rows[0];
         if (!row || row.section_key !== section || row.parent_id || row.deleted_at || row.hidden_at) {
           throw new CodeCommentValidationError("Invalid reply target");
         }
+        if (row.author_id !== actorId) replyRecipientId = String(row.author_id);
       }
       const inserted = await client.query(
         `INSERT INTO code_comments(section_key, author_id, parent_id, body)
@@ -218,6 +223,17 @@ export async function changeCodeCommentWithDatabase(
       "INSERT INTO events(event_type, participant_id, payload) VALUES ($1, $2::uuid, $3::jsonb)",
       [`code.comment_${action}`, actorId, JSON.stringify({ comment_id: affectedId, section_key: section })],
     );
+    if (replyRecipientId) {
+      const { values: texts } = await readInterfaceTextsWithDatabase(client);
+      // Empty shell-text overrides must not prevent a participant from publishing a reply.
+      const noticeText = (key: "notifications.code_reply" | "notifications.code_reply_action") =>
+        texts[key].trim() || notificationsTexts.find(field => field.key === key)!.defaultValue;
+      await createNotificationWithClient(client, {
+        participantId: replyRecipientId, notificationType: "code.comment_reply", sourceType: "system",
+        text: noticeText("notifications.code_reply"), actionLabel: noticeText("notifications.code_reply_action"),
+        actionUrl: `/code?section=${section}#comment-${affectedId}`, queueTelegram: true,
+      }, affectedId);
+    }
     await client.query("COMMIT");
   } catch (error) {
     try { await client.query("ROLLBACK"); } catch { /* Preserve the original error. */ }

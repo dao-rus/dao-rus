@@ -39,10 +39,7 @@ export class NotificationValidationError extends Error {
   }
 }
 
-export async function createNotificationWithDatabase(
-  database: Pick<NotificationDatabase, "connect">,
-  input: CreateNotification,
-): Promise<string> {
+function notificationValues(input: CreateNotification): unknown[] {
   const notificationType = input.notificationType.trim();
   const body = input.text.trim();
   if (input.visibleInInbox !== undefined && typeof input.visibleInInbox !== "boolean") throw new NotificationValidationError("Invalid inbox visibility");
@@ -61,22 +58,47 @@ export async function createNotificationWithDatabase(
     throw new NotificationValidationError("Notification action label cannot be empty");
   }
 
+  return [input.participantId, notificationType, body, actionUrl, actionLabel, input.sourceType,
+    input.createdByParticipantId ?? null, input.visibleInInbox ?? true];
+}
+
+async function insertNotification(
+  client: Pick<NotificationClient, "query">, input: CreateNotification, values: unknown[], notificationId?: string,
+): Promise<string> {
+  const result = await client.query(
+    `INSERT INTO notifications(participant_id, notification_type, text, action_url, action_label, source_type, created_by_participant_id, visible_in_inbox${notificationId ? ", id" : ""})
+     VALUES ($1::uuid, $2, $3, $4, $5, $6, $7::uuid, $8${notificationId ? ", $9::uuid" : ""})
+     ${notificationId ? "ON CONFLICT (id) DO NOTHING" : ""} RETURNING id`,
+    notificationId ? [...values, notificationId] : values,
+  );
+  // A stable source UUID makes replay a no-op, including for already attempted deliveries.
+  if (!result.rowCount && notificationId) return notificationId;
+  const id = String(result.rows[0].id);
+  if (input.queueTelegram) {
+    await client.query(
+      `INSERT INTO notification_deliveries(notification_id, channel, status)
+       VALUES ($1::uuid, 'telegram', 'pending')`, [id],
+    );
+  }
+  return id;
+}
+
+/** Joins the caller's transaction; notificationId, if supplied, is a trusted source UUID. */
+export async function createNotificationWithClient(
+  client: Pick<NotificationClient, "query">, input: CreateNotification, notificationId?: string,
+): Promise<string> {
+  return insertNotification(client, input, notificationValues(input), notificationId);
+}
+
+export async function createNotificationWithDatabase(
+  database: Pick<NotificationDatabase, "connect">,
+  input: CreateNotification,
+): Promise<string> {
+  const values = notificationValues(input);
   const client = await database.connect();
   try {
     await client.query("BEGIN");
-    const result = await client.query(
-      `INSERT INTO notifications(participant_id, notification_type, text, action_url, action_label, source_type, created_by_participant_id, visible_in_inbox)
-       VALUES ($1::uuid, $2, $3, $4, $5, $6, $7::uuid, $8) RETURNING id`,
-      [input.participantId, notificationType, body, actionUrl, actionLabel, input.sourceType, input.createdByParticipantId ?? null, input.visibleInInbox ?? true],
-    );
-    const id = String(result.rows[0].id);
-    if (input.queueTelegram) {
-      await client.query(
-        `INSERT INTO notification_deliveries(notification_id, channel, status)
-         VALUES ($1::uuid, 'telegram', 'pending')`,
-        [id],
-      );
-    }
+    const id = await insertNotification(client, input, values);
     await client.query("COMMIT");
     return id;
   } catch (error) {

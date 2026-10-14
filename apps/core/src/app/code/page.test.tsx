@@ -10,6 +10,11 @@ vi.mock("../../lib/code-comments", async (importOriginal) => {
 import CodePage from "./page";
 
 describe("/code", () => {
+  it("opens the section specified by a notification deep link", async () => {
+    const html = renderToStaticMarkup(await CodePage({ searchParams: Promise.resolve({ section: "dao-code-all" }) }));
+    expect(html.match(/<details\b[^>]*\bopen=""/g)).toHaveLength(1);
+    expect(html.slice(html.indexOf('id="dao-code-all"'))).toMatch(/<details\b[^>]*\bopen=""/);
+  });
   it("renders the unchanged three clauses and four discussions for a visitor", async () => {
     const html = renderToStaticMarkup(await CodePage({ searchParams: Promise.resolve({}) }));
     expect(html).toContain("Не нападай первым.");

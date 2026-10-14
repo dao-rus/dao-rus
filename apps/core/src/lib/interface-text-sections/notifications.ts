@@ -9,4 +9,6 @@ export const notificationsTexts = [
   { section: "Уведомления", key: "notifications.mark_read", label: "Отметка прочтения", defaultValue: "Отметить прочитанным", multiline: false },
   { section: "Уведомления", key: "notifications.empty", label: "Пустая лента", defaultValue: "Уведомлений пока нет.", multiline: false },
   { section: "Уведомления", key: "notifications.empty_unread", label: "Нет непрочитанных", defaultValue: "Непрочитанных уведомлений нет.", multiline: false },
+  { section: "Уведомления", key: "notifications.code_reply", label: "Ответ на комментарий Кодекса", defaultValue: "На ваш комментарий к Кодексу ответили.", multiline: false },
+  { section: "Уведомления", key: "notifications.code_reply_action", label: "Переход к ответу в Кодексе", defaultValue: "Открыть ответ", multiline: false },
 ] as const;
