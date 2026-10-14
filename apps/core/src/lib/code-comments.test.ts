@@ -40,6 +40,39 @@ function comment(id: string, createdAt: string, helpfulCount: number, pinned = f
 }
 
 describe("code comments", () => {
+  it.each([false, true])("notifies only the root author atomically with editable text, falling back for empty overrides (%s)", async (empty) => {
+    const { database, calls } = databaseWith((sql) => {
+      if (sql.includes("FROM participants")) return { rows: [{ id: actor }] };
+      if (sql.includes("FROM code_comments WHERE id")) return { rows: [{ section_key: "dao-code-1", parent_id: null, author_id: other }] };
+      if (sql.includes("INSERT INTO code_comments") || sql.includes("INSERT INTO notifications")) return { rows: [{ id: commentId }] };
+      if (sql.includes("FROM ui_text_overrides")) return { rows: [
+        { key: "notifications.code_reply", value: empty ? "  " : "Получен ответ на ваш комментарий." },
+        { key: "notifications.code_reply_action", value: empty ? "" : "Посмотреть ответ" },
+      ] };
+      return { rows: [] };
+    });
+    await changeCodeCommentWithDatabase(database, actor, false, {
+      action: "create", section: "dao-code-1", parentId, body: "Текст ответа не копируется в уведомление",
+    });
+    const notice = calls.find(c => c.sql.includes("INSERT INTO notifications"))!;
+    expect(notice.values).toEqual([other, "code.comment_reply", empty ? "На ваш комментарий к Кодексу ответили." : "Получен ответ на ваш комментарий.",
+      `/code?section=dao-code-1#comment-${commentId}`, empty ? "Открыть ответ" : "Посмотреть ответ", "system", null, true, commentId]);
+    expect(calls.find(c => c.sql.includes("INSERT INTO notification_deliveries"))?.values).toEqual([commentId]);
+    expect(calls.filter(c => /^(BEGIN|COMMIT|ROLLBACK)$/.test(c.sql)).map(c => c.sql)).toEqual(["BEGIN", "COMMIT"]);
+    expect(calls.findIndex(c => c.sql.includes("INSERT INTO events"))).toBeLessThan(calls.indexOf(notice));
+  });
+
+  it.each([null, parentId])("does not notify for a root or a self reply (%s)", async (parent) => {
+    const { database, calls } = databaseWith((sql) => {
+      if (sql.includes("FROM participants")) return { rows: [{ id: actor }] };
+      if (sql.includes("FROM code_comments WHERE id")) return { rows: [{ section_key: "dao-code-1", parent_id: null, author_id: actor }] };
+      if (sql.includes("INSERT INTO code_comments")) return { rows: [{ id: commentId }] };
+      return { rows: [] };
+    });
+    await changeCodeCommentWithDatabase(database, actor, false, { action: "create", section: "dao-code-1", parentId: parent, body: "Текст" });
+    expect(calls.some(c => c.sql.includes("INSERT INTO notifications") || c.sql.includes("INSERT INTO notification_deliveries"))).toBe(false);
+  });
+
   it("uses the stable canonical clause IDs plus the whole-code key", () => {
     expect(CODE_SECTIONS).toEqual([...DAO_CODE_CLAUSES.map((clause) => clause.id), "dao-code-all"]);
   });

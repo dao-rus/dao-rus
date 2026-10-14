@@ -13,8 +13,10 @@ import {
   processNextNotificationDelivery,
   sendTelegramDelivery,
   telegramActionUrl,
+  miniAppActionUrl,
   type DeliveryStatus,
 } from "./notification-delivery";
+import { startTarget } from "./mini-app-start";
 
 type Row = {
   id: string;
@@ -209,6 +211,25 @@ describe("notification delivery worker", () => {
     expect(body.reply_markup.inline_keyboard[0][0]).toEqual({
       text: "Добавить интересы", url: "https://core.daorus.org/profile#profile-interests",
     });
+  });
+
+  it("preserves the Code discussion query and reply anchor in a Dev bot notification", async () => {
+    const path = "/code?section=dao-code-1#comment-30000000-0000-4000-8000-000000000003";
+    const db = database({ actionUrl: path, actionLabel: "Открыть ответ" });
+    const request = requestWith(200, { ok: true, result: { message_id: 1 } });
+    await processNextNotificationDelivery(db, true, request);
+    const body = JSON.parse((request as ReturnType<typeof vi.fn>).mock.calls[0][1].body);
+    expect(body.reply_markup.inline_keyboard[0][0]).toEqual({ text: "Открыть ответ", url: `https://core.daorus.org${path}` });
+  });
+
+  it("preserves the reply deep link through the Mini App and respects its existing switch", async () => {
+    const path = "/code?section=dao-code-1#comment-30000000-0000-4000-8000-000000000003";
+    const reader = { query: vi.fn().mockResolvedValue({ rowCount: 0, rows: [] }) };
+    const url = await miniAppActionUrl(reader, path, "https://core.daorus.org");
+    expect(new URL(url!).pathname).toBe("/need");
+    expect(startTarget(new URL(url!).search)).toBe(path);
+    reader.query.mockResolvedValue({ rowCount: 1, rows: [{ key: "feature.notification_mini_app", value: "off" }] });
+    expect(await miniAppActionUrl(reader, path, "https://core.daorus.org")).toBeNull();
   });
 
   it("fails an unsafe stored action URL without calling Telegram", async () => {

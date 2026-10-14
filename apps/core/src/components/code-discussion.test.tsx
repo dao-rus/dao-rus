@@ -38,6 +38,8 @@ describe("code discussion markup", () => {
     );
     expect(html).toContain("Комментарий");
     expect(html).toContain("Ответ");
+    expect(html).toContain('id="comment-b"');
+    expect(html).toMatch(/<details\b[^>]*\bopen=""/);
     expect(html).toContain("Редактировать");
     expect(html).toContain("Закрепить");
     expect(html).toContain("Причина скрытия");

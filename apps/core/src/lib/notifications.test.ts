@@ -2,6 +2,7 @@ import { describe, expect, it, vi } from "vitest";
 import {
   countUnreadNotificationsWithDatabase,
   createNotificationWithDatabase,
+  createNotificationWithClient,
   listNotificationsWithDatabase,
   markNotificationReadWithDatabase,
   NotificationValidationError,
@@ -23,6 +24,18 @@ function database(failDelivery = false) {
 }
 
 describe("Core notifications", () => {
+  it("joins an existing transaction and never requeues a stable notification ID", async () => {
+    const db = database();
+    const id = "10000000-0000-4000-8000-000000000001";
+    await createNotificationWithClient(db.client, { ...base, queueTelegram: true }, id);
+    expect(db.queries.map(({ sql }) => sql.trim().split(/\s+/u)[0])).toEqual(["INSERT", "INSERT"]);
+    expect(db.queries[0].sql).toContain("ON CONFLICT (id) DO NOTHING");
+    expect(db.queries[0].values?.at(-1)).toBe(id);
+    expect(db.client.release).not.toHaveBeenCalled();
+    db.client.query.mockResolvedValueOnce({ rowCount: 0, rows: [] });
+    expect(await createNotificationWithClient(db.client, { ...base, queueTelegram: true }, id)).toBe(id);
+    expect(db.queries.filter(q => q.sql.includes("INSERT INTO notification_deliveries"))).toHaveLength(1);
+  });
   it("defaults existing notification callers to visible while supporting Telegram-only audit records", async () => {
     const db = database();
     await createNotificationWithDatabase(db, base);
