@@ -19,6 +19,17 @@ beforeEach(() => {
   mocks.current.mockResolvedValue(null);
 });
 describe("shared award page", () => {
+  it("keeps the shared page to the award itself: no founder working notes, names link to profiles, establishment date in the footer", async () => {
+    const html = renderToStaticMarkup(await Page(props));
+    expect(html).toContain("First wave");
+    expect(html).toContain("Public greeting");
+    expect(html).toContain('href="/profile/person"');
+    expect(html).toContain("awardFooter");
+    expect(html).toMatch(/awardFooter[\s\S]*2026-10-07/);
+    expect(html).not.toContain("Public description");
+    expect(html).not.toContain("Public criterion");
+    expect(html).not.toContain("Критерий");
+  });
   it("shows an anonymous visitor only public information, the opted-in names and a safe login that returns here", async () => {
     const html = renderToStaticMarkup(await Page(props));
     expect(html).toContain("ДАО Русь"); expect(html).toContain("Public greeting"); expect(html).toContain("Public recipient");

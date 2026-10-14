@@ -5,17 +5,29 @@ import { LocalDateTime } from "./local-date-time";
 import type { Award, AwardInstance } from "../lib/awards";
 import type { InterfaceTextValues } from "../lib/interface-texts";
 export { AwardVisibilityForm, AwardInstancePanel } from "./award-instance-panel";
-export function AwardContent({ award, texts }: {
+// `brief` — публичная страница награды: «ДАО Русь», изображение, название и обращение к
+// награждаемым. Дата учреждения тоже обязательна (Наградной устав, п. 6.2), но её место —
+// подпись внизу страницы (AwardEstablished). Описание, критерий награждения и историческая
+// граница Уставом для публичной страницы не требуются: это рабочие сведения учредителя.
+export function AwardContent({ award, texts, brief = false }: {
     award: Award;
     texts: InterfaceTextValues;
+    brief?: boolean;
 }) {
     return <><div className="eyebrow"><Link href="/">ДАО Русь</Link></div><h1>{award.name}</h1>
     <img className="awardImage" src={award.imageUrl} alt={award.name} width={240} height={240}/>
-    <p>{texts["award.establishedOn"]}: {award.establishedOn} · {texts[`award.${award.kind}`]}</p>
+    {brief ? null : <><p>{texts["award.establishedOn"]}: {award.establishedOn} · {texts[`award.${award.kind}`]}</p>
     {award.historicalCutoffAt ? <p>{texts["award.historicalCutoffAt"]}: <LocalDateTime value={award.historicalCutoffAt.toISOString()}/></p> : null}
     <h2>{texts["award.description"]}</h2><UserText text={award.description}/>
     <h2>{texts["award.criterion"]}</h2><UserText text={award.criterion}/>
-    <h2>{texts["award.publicAddress"]}</h2><UserText text={award.publicAddress}/></>;
+    <h2>{texts["award.publicAddress"]}</h2></>}<UserText text={award.publicAddress}/></>;
+}
+// Обязательная по Уставу (п. 6.2) дата учреждения — подписью в конце страницы.
+export function AwardEstablished({ award, texts }: {
+    award: Award;
+    texts: InterfaceTextValues;
+}) {
+    return <footer className="awardFooter"><p className="muted">{texts["award.establishedOn"]}: {award.establishedOn}</p></footer>;
 }
 export function AwardNotice({ notice, texts }: {
     notice?: string;

@@ -843,6 +843,8 @@ div.userText > :last-child { margin-bottom: 0; }
 .signalPreviewActions form { margin: 0; }
 
 .awardImage { object-fit: contain; max-width: 100%; }
+.awardFooter { margin-top: 2.5rem; }
+.awardFooter p { font-size: 13px; margin: 0; }
 .awardBadge { display: inline-flex; vertical-align: middle; margin-left: .2em; }
 .awardBadge img { object-fit: contain; }
 .awardForm { display: grid; gap: .8rem; margin: 1rem 0; }
