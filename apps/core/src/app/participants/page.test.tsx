@@ -325,6 +325,10 @@ describe("/participants", () => {
     mocks.listParticipantsDirectory.mockResolvedValue([{ participantId: "owner", displayName: "Анна",
       residence: { name: "Казань", type: "город", country: "Россия" }, verificationPoints: 0,
     }]);
+    mocks.listCommunitySignals.mockResolvedValue([
+      { participantId: "owner", kind: "want", body: "Ищу друзей" },
+      { participantId: "owner", kind: "have", body: "Могу помочь с ремонтом" },
+    ]);
 
     const page = await ParticipantsPage({ searchParams: Promise.resolve({
       q: "Анна", residence_name: "Казань", residence_type: "город", residence_country: "Россия",
@@ -340,6 +344,32 @@ describe("/participants", () => {
     expect(mocks.listCommunitySignals).toHaveBeenCalledWith(["owner"], "viewer");
     expect(textContent(page)).toContain("Я хочу");
     expect(textContent(page)).toContain("У меня есть");
+    expect(textContent(page)).not.toContain("Мне нужно");
+    expect(textContent(page)).not.toContain("Я могу");
+    expect(textContent(page)).not.toContain("Пока не указано.");
+  });
+
+  it("keeps the participant card but hides empty and unavailable exchange fields", async () => {
+    mocks.getCurrentParticipant.mockResolvedValue({ id: "viewer" });
+    mocks.listParticipantsDirectory.mockResolvedValue([{ participantId: "owner", displayName: "Анна",
+      residence: { name: "Казань", type: "город", country: "Россия" }, verificationPoints: 0,
+    }]);
+    mocks.listCommunitySignals.mockResolvedValue([
+      { participantId: "owner", kind: "want", body: "   " },
+    ]);
+
+    const page = await ParticipantsPage({ searchParams: Promise.resolve({
+      residence_name: "Казань", residence_type: "город", residence_country: "Россия",
+    }) });
+    const text = textContent(page);
+
+    expect(text).toContain("Анна");
+    expect(text).not.toContain("Я хочу");
+    expect(text).not.toContain("Мне нужно");
+    expect(text).not.toContain("Я могу");
+    expect(text).not.toContain("У меня есть");
+    expect(text).not.toContain("Пока не указано.");
+    expect(classNames(page)).not.toContain("communitySignals");
   });
 });
 

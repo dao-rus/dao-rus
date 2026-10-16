@@ -187,16 +187,18 @@ export default async function ParticipantsPage({ searchParams }: ParticipantsPag
                     </div>
                   </div>
                 </div>
-                {community?.type === "residence" ? (
-                  <div className="communitySignals">
-                    {(["want", "need", "can", "have"] as const).map((kind) => {
-                      const entries = signals.filter((signal) => signal.participantId === participant.participantId && signal.kind === kind);
-                      return <div key={kind}><strong>{signalLabels[kind]}</strong>
-                        {entries.length ? <ul>{entries.map((entry, index) => <li key={index}><UserText inline text={entry.body} /></li>)}</ul>
-                          : <span className="muted">Пока не указано.</span>}</div>;
-                    })}
-                  </div>
-                ) : null}
+                {community?.type === "residence" ? (() => {
+                  const signalSections = (["want", "need", "can", "have"] as const).map((kind) => ({
+                    kind,
+                    entries: signals.filter((signal) => signal.participantId === participant.participantId
+                      && signal.kind === kind && signal.body.trim()),
+                  })).filter(({ entries }) => entries.length);
+                  return signalSections.length ? <div className="communitySignals">
+                    {signalSections.map(({ kind, entries }) => <div key={kind}><strong>{signalLabels[kind]}</strong>
+                      <ul>{entries.map((entry, index) => <li key={index}><UserText inline text={entry.body} /></li>)}</ul>
+                    </div>)}
+                  </div> : null;
+                })() : null}
                 {!community && participant.joinedAt ? <div className="participantDirectoryActions">
                   <small className="muted">{texts["profile.forum_since"]} <LocalDateTime dateOnly value={participant.joinedAt.toISOString()} /></small>
                 </div> : null}
