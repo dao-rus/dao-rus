@@ -8,6 +8,15 @@ vi.mock("./interface-texts", async original => ({ ...await original<typeof impor
 afterEach(() => vi.unstubAllGlobals());
 
 describe("Reception Mini App launch button", () => {
+  it("registers the current /start greeting in the admin interface text registry", () => {
+    expect(interfaceTextFields.find((field) => field.key === "reception.greeting")).toMatchObject({
+      section: "Хранитель",
+      label: "Приёмная: приветствие по «Запустить»",
+      defaultValue: "Приветствуем! Если Вы ознакомились с кодексом Руси и готовы вступить в ДАО Русь, расскажите немного о себе: возраст, социальный портрет, где живете и чем занимаетесь.",
+      multiline: true,
+    });
+  });
+
   it("uses a direct Reception HTTPS web_app URL, independent of Dev bot start paths", () => {
     expect(receptionApplicationButton("https://core.example/need", true, "Заполнить анкету")).toEqual({ text: "Заполнить анкету", web_app: { url: "https://core.example/reception/apply" } });
     expect(receptionApplicationButton("https://core.example", false, "Apply")).toBeUndefined();
