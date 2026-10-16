@@ -15,6 +15,7 @@ vi.mock("../lib/notifications", () => ({ countUnreadNotifications: mocks.countUn
 vi.mock("@/lib/config", () => ({
   isTelegramConfigured: () => true,
   devAuthEnabled: () => false,
+  isParticipantsDirectoryEnabled: () => false,
 }));
 
 import Home from "./page";
@@ -101,10 +102,10 @@ describe("home interface texts", () => {
     mocks.getCurrentParticipant.mockResolvedValue({ id: "participant" });
     const page = await Home({ searchParams: Promise.resolve({}) });
     expect(textContent(page)).toContain("Профиль");
-    expect(textContent(page)).toContain("Моя сеть");
+    expect(textContent(page)).not.toContain("Моя сеть");
     expect(textContent(page)).toContain("Рядом");
     expect(links(page)).toContain("/nearby");
-    expect(actionLinks(page)).toEqual(["/veche", "/participants", "/exchange", "/nearby", "/notifications", "/profile"]);
+    expect(actionLinks(page)).toEqual(["/veche", "/exchange", "/nearby", "/notifications", "/profile"]);
     expect(actionLinkClass(page, "/profile")).toBe("button secondary");
     expect(mocks.countUnreadNotifications).toHaveBeenCalledWith("participant");
     expect(textContent(page)).toContain("Обмен");

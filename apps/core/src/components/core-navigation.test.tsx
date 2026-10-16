@@ -46,7 +46,6 @@ describe("CoreNavigation", () => {
     expect(links(navigation)).toEqual([
       { href: "/", label: "Главная", current: undefined },
       { href: "/veche", label: "Вече", current: undefined },
-      { href: "/participants", label: "Люди", current: undefined },
       { href: "/exchange", label: "Обмен", current: undefined },
       { href: "/nearby", label: "Рядом", current: undefined },
       { href: "/notifications", label: "✉Личка", current: undefined, hasUnread: false },

@@ -7,6 +7,7 @@ const mocks = vi.hoisted(() => ({
   readInterfaceTexts: vi.fn(),
   listCommunityPosts: vi.fn(),
   listCommunitySignals: vi.fn(),
+  isParticipantsDirectoryEnabled: vi.fn(),
   redirect: vi.fn(),
 }));
 
@@ -14,6 +15,7 @@ vi.mock("next/navigation", () => ({ redirect: mocks.redirect }));
 vi.mock("@/lib/session", () => ({
   getCurrentParticipant: mocks.getCurrentParticipant,
 }));
+vi.mock("@/lib/config", () => ({ isParticipantsDirectoryEnabled: mocks.isParticipantsDirectoryEnabled }));
 vi.mock("@/lib/participants-directory", () => ({
   listParticipantsDirectory: mocks.listParticipantsDirectory,
 }));
@@ -80,6 +82,7 @@ function hasMainNavigation(node: ReactNode): boolean {
 describe("/participants", () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    mocks.isParticipantsDirectoryEnabled.mockReturnValue(true);
     mocks.redirect.mockImplementation((destination: string) => {
       throw new Error(`redirect:${destination}`);
     });
@@ -106,6 +109,15 @@ describe("/participants", () => {
       .rejects.toThrow("redirect:/");
     expect(mocks.listParticipantsDirectory).not.toHaveBeenCalled();
     expect(mocks.readInterfaceTexts).not.toHaveBeenCalled();
+  });
+
+  it("redirects participants while the directory is disabled", async () => {
+    mocks.getCurrentParticipant.mockResolvedValue({ id: "viewer" });
+    mocks.isParticipantsDirectoryEnabled.mockReturnValue(false);
+
+    await expect(ParticipantsPage({ searchParams: Promise.resolve({ q: "Анна", sort: "core" }) }))
+      .rejects.toThrow("redirect:/");
+    expect(mocks.listParticipantsDirectory).not.toHaveBeenCalled();
   });
 
   it("shows only public Core profile fields and forwards search", async () => {

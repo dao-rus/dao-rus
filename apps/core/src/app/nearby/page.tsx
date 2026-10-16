@@ -1,10 +1,9 @@
-import Link from "next/link";
 import type { Metadata } from "next";
 import { redirect } from "next/navigation";
 import { CoreNavigation } from "../../components/core-navigation";
 import { listResidenceCommunities } from "@/lib/communities";
 import { readInterfaceTexts } from "@/lib/interface-texts";
-import { residenceDirectoryHref, residenceLabel } from "@/lib/profile-about";
+import { residenceLabel } from "@/lib/profile-about";
 import { getCurrentParticipant } from "@/lib/session";
 
 export const dynamic = "force-dynamic";
@@ -28,7 +27,7 @@ export default async function NearbyPage() {
           <ul className="nearbyCommunities">
             {communities.map(({ residence, participantCount }) => (
               <li key={JSON.stringify([residence.country, residence.type, residence.name])}>
-                <Link href={residenceDirectoryHref(residence)}>{residenceLabel(residence)}</Link>
+                <span>{residenceLabel(residence)}</span>
                 <span className="muted">{participantCount}</span>
               </li>
             ))}

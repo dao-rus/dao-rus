@@ -14,7 +14,7 @@ import {
   getMembershipHistory,
   membershipEventLabel,
 } from "@/lib/membership-history";
-import { getProfileAbout, residenceDirectoryHref, residenceLabel } from "@/lib/profile-about";
+import { getProfileAbout, residenceLabel } from "@/lib/profile-about";
 import { getReputationSummary } from "@/lib/reputation";
 import { getCurrentParticipant } from "@/lib/session";
 import { getForumJoinDate } from "@/lib/forum-join-history";
@@ -176,9 +176,7 @@ export default async function ProfilePage({ searchParams }: ProfilePageProps) {
           {about?.residence ? (
             <div className="aboutBlock">
               <h3>Место жительства</h3>
-              <Link className="residenceLink" href={residenceDirectoryHref(about.residence)}>
-                {residenceLabel(about.residence)}
-              </Link>
+              <span className="residenceLink">{residenceLabel(about.residence)}</span>
             </div>
           ) : null}
 

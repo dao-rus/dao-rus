@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { devAuthEnabled, isTelegramConfigured } from "@/lib/config";
+import { devAuthEnabled, isParticipantsDirectoryEnabled, isTelegramConfigured } from "@/lib/config";
 import { DAO_CODE_CLAUSES } from "../lib/dao-code";
 import { ActionPill } from "../components/action-pill";
 import { PrivateMessagesLink } from "../components/private-messages-link";
@@ -52,7 +52,7 @@ export default async function Home({
         {participant ? (
           <div className="actions">
             <Link className="button secondary" href="/veche">{texts["nav.veche"]}</Link>
-            <Link className="button secondary" href="/participants">{texts["participants.title"]}</Link>
+            {isParticipantsDirectoryEnabled() ? <Link className="button secondary" href="/participants">{texts["participants.title"]}</Link> : null}
             <Link className="button secondary" href="/exchange">{texts["exchange.title"]}</Link>
             <Link className="button secondary" href="/nearby">{texts["nearby.title"]}</Link>
             <PrivateMessagesLink label={texts["nav.private_messages"]} unreadCount={unreadCount} />

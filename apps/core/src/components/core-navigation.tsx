@@ -6,6 +6,7 @@ import { getCurrentParticipant } from "../lib/session";
 import { PrivateMessagesLink } from "./private-messages-link";
 import { DarusRewardCelebration } from "./darus-reward-celebration";
 import { readPendingReward } from "../lib/reward-announcements";
+import { isParticipantsDirectoryEnabled } from "../lib/config";
 
 type CoreSection = "home" | "veche" | "exchange" | "participants" | "nearby" | "profile" | "code" | "notifications";
 
@@ -22,7 +23,7 @@ export async function CoreNavigation({ current, texts: providedTexts }: {
   const links: { section: CoreSection; href: string; label: string }[] = [
     { section: "home", href: "/", label: texts["nav.home"] },
     { section: "veche", href: "/veche", label: texts["nav.veche"] },
-    { section: "participants", href: "/participants", label: texts["participants.title"] },
+    ...(isParticipantsDirectoryEnabled() ? [{ section: "participants" as const, href: "/participants", label: texts["participants.title"] }] : []),
     { section: "exchange", href: "/exchange", label: texts["exchange.title"] },
     { section: "nearby", href: "/nearby", label: texts["nearby.title"] },
   ];

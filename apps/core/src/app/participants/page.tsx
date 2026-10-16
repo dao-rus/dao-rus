@@ -9,6 +9,7 @@ import { readInterfaceTexts } from "@/lib/interface-texts";
 import { listParticipantsDirectory, type DirectorySort } from "@/lib/participants-directory";
 import { normalizeResidence, residenceLabel, type Residence } from "@/lib/profile-about";
 import { getCurrentParticipant } from "@/lib/session";
+import { isParticipantsDirectoryEnabled } from "@/lib/config";
 import { communityFromParams, communityHref, listCommunityPosts, listCommunitySignals } from "@/lib/communities";
 import { LocalDateTime } from "@/components/local-date-time";
 import { UserText } from "../../components/user-text";
@@ -36,6 +37,7 @@ function residenceFromQuery(params: Awaited<ParticipantsPageProps["searchParams"
 export default async function ParticipantsPage({ searchParams }: ParticipantsPageProps) {
   const viewer = await getCurrentParticipant();
   if (!viewer) redirect("/");
+  if (!isParticipantsDirectoryEnabled()) redirect("/");
 
   const params = await searchParams;
   const { q = "", interest = "" } = params;

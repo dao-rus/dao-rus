@@ -28,6 +28,11 @@ export function isTelegramConfigured(): boolean {
   return Boolean(clientId && clientSecret);
 }
 
+// Keep the directory implementation intact so it can be restored by changing this one switch.
+export function isParticipantsDirectoryEnabled(): boolean {
+  return false;
+}
+
 export function telegramIngestionConfig() {
   return {
     webhookSecret: env("TELEGRAM_WEBHOOK_SECRET"),

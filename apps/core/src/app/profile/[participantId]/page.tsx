@@ -8,7 +8,7 @@ import { PositiveExperienceFeedback } from "@/components/positive-experience-fee
 import { TelegramAvatar } from "@/components/telegram-avatar";
 import { CoreNavigation } from "../../../components/core-navigation";
 import { ParticipantName } from "../../../components/participant-name";
-import { getVisibleProfileAbout, residenceDirectoryHref, residenceLabel } from "@/lib/profile-about";
+import { getVisibleProfileAbout, residenceLabel } from "@/lib/profile-about";
 import { getReputationSummary } from "@/lib/reputation";
 import { getCurrentParticipant } from "@/lib/session";
 import { formatDarusAmount, getVerificationRewardForFeedback } from "@/lib/tokenization";
@@ -125,7 +125,7 @@ export default async function SubjectProfilePage({ params, searchParams }: Subje
                 {timeline.leftDaoAt ? <span>{texts["profile.left_dao"]} <LocalDateTime dateOnly value={timeline.leftDaoAt.toISOString()} /></span> : null}
                 {timeline.leftForumAt ? <span>{texts["profile.left_forum"]} <LocalDateTime dateOnly value={timeline.leftForumAt.toISOString()} /></span> : null}
               </div>
-              {about?.residence ? <Link className="residenceLink" href={residenceDirectoryHref(about.residence)}>{residenceLabel(about.residence)}</Link> : null}
+              {about?.residence ? <span className="residenceLink">{residenceLabel(about.residence)}</span> : null}
             </div>
           ) : null}
 
@@ -145,8 +145,7 @@ export default async function SubjectProfilePage({ params, searchParams }: Subje
               <div className="aboutBlock">
                 <h3>Интересы</h3>
                 <div className="interestChips">{about.interests.map((interest) => (
-                  <Link key={interest.id} href={`/participants?interest=${encodeURIComponent(interest.label)}`}
-                    aria-label={`Найти людей с интересом «${interest.label}»`}>{interest.label}</Link>
+                  <span key={interest.id}>{interest.label}</span>
                 ))}</div>
               </div>
             ) : null}

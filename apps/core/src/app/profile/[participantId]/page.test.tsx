@@ -22,7 +22,6 @@ vi.mock("@/lib/verification", () => ({ getVerificationProfile: mocks.getVerifica
 vi.mock("@/lib/profile-about", () => ({
   getVisibleProfileAbout: mocks.getVisibleProfileAbout,
   residenceLabel: ({ name, country }: { name: string; country: string }) => `${name}, ${country}`,
-  residenceDirectoryHref: () => "/participants?residence_name=Kazan",
 }));
 vi.mock("@/lib/reputation", () => ({ getReputationSummary: mocks.getReputationSummary }));
 vi.mock("@/lib/tokenization", () => ({
@@ -196,8 +195,8 @@ describe("public subject profile name", () => {
     expect(text).toContain("Моё био в ДАО");
     expect(text).toContain("История");
     expect(text).toContain("Казань, Россия");
-    expect(hrefs(page)).toContain("/participants?residence_name=Kazan");
-    expect(hrefs(page)).toContain(`/participants?interest=${encodeURIComponent("История")}`);
+    expect(hrefs(page)).not.toContain("/participants?residence_name=Kazan");
+    expect(hrefs(page)).not.toContain(`/participants?interest=${encodeURIComponent("История")}`);
     expect(text).toContain("Могу редактировать тексты");
     for (const kind of ["need", "can", "want", "have"]) {
       expect(ids(page).filter((id) => id === `signal-${kind}`)).toHaveLength(1);

@@ -25,7 +25,6 @@ vi.mock("@/lib/verification", () => ({ getVerificationProfile: mocks.getVerifica
 vi.mock("@/lib/profile-about", () => ({
   getProfileAbout: mocks.getProfileAbout,
   residenceLabel: ({ name, country }: { name: string; country: string }) => `${name}, ${country}`,
-  residenceDirectoryHref: () => "/participants?residence_name=Kazan",
 }));
 vi.mock("@/lib/interface-texts", () => ({ readInterfaceTexts: mocks.readInterfaceTexts }));
 vi.mock("@/lib/tokenization", () => ({ getDarusBalance: mocks.getDarusBalance }));
