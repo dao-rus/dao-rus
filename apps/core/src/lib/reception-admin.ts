@@ -33,7 +33,7 @@ export async function listReceptionApplications(actor: string, database: Pool = 
   // Consent to forum publication is also the conservative journal policy.
   // Strip the generated age line from historical attempts, including after consent withdrawal.
   return (await database.query(`SELECT a.id, a.telegram_user_id, a.telegram_name, a.telegram_username,
-    a.city, a.occupation, CASE WHEN a.publish_age THEN a.age ELSE NULL END AS age,
+    a.city, a.occupation, a.education, a.family_status, CASE WHEN a.publish_age THEN a.age ELSE NULL END AS age,
     a.created_at, a.updated_at, a.status AS application_status, a.revision,
     d.status, d.version, d.delivered_revision, d.attempted_revision, d.attempted_at,
     regexp_replace(d.attempted_text, chr(10)||'Возраст: [0-9]+$', '') AS review_text,
@@ -44,7 +44,7 @@ export async function listReceptionApplications(actor: string, database: Pool = 
     i.error_code AS invitation_error_code, i.retry_at AS invitation_retry_at,
     (SELECT o.forum_status FROM participant_forum_onboarding o JOIN external_identities e ON e.participant_id=o.participant_id
       WHERE e.provider='telegram' AND e.external_user_id=a.telegram_user_id ORDER BY o.observed_at DESC LIMIT 1) AS forum_status
-    FROM reception_applications a JOIN reception_application_deliveries d ON d.application_id=a.id
+    FROM reception_applications a LEFT JOIN reception_application_deliveries d ON d.application_id=a.id
     AND d.kind='publication' LEFT JOIN reception_application_deliveries i ON i.application_id=a.id
     AND i.kind='invitation' ORDER BY a.updated_at DESC, a.id LIMIT 50 OFFSET $1`, [(page - 1) * 50])).rows;
 }

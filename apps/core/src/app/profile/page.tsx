@@ -163,6 +163,12 @@ export default async function ProfilePage({ searchParams }: ProfilePageProps) {
                 defaultValue={about?.residence?.country ?? "Россия"} placeholder="Страна" aria-label="Страна" />
             </div>
             <p className="muted privacyHint">Место жительства необязательно. Оставьте название пустым, если не хотите его указывать. Указанное место видно только вошедшим участникам.</p>
+            {(about?.city || about?.occupation || about?.education || about?.familyStatus) ? <dl className="facts">
+              {about.city ? <div><dt>Город из анкеты Приёмной</dt><dd>{about.city}</dd></div> : null}
+              {about.occupation ? <div><dt>Род занятий</dt><dd>{about.occupation}</dd></div> : null}
+              {about.education ? <div><dt>Образование</dt><dd>{about.education}</dd></div> : null}
+              {about.familyStatus ? <div><dt>Семейное положение</dt><dd>{about.familyStatus}</dd></div> : null}
+            </dl> : null}
             {forumAnnouncement ? <label className="interfaceReset">
               <input type="hidden" form="profile-form" name="announce_in_forum_present" value="1" />
               <input type="checkbox" form="profile-form" name="announce_in_forum" defaultChecked={forumAnnouncement.announce} />

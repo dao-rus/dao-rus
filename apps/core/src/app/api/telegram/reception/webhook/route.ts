@@ -54,7 +54,9 @@ export async function POST(request: NextRequest) {
     if (!token || !topicId) return new NextResponse("Reception relay is not configured", { status: 503 });
     const status = await relayReceptionUpdate(update);
     if (status === "sent" && chat?.type === "private" && typeof chat.id === "number") {
-      await (await import("../../../../../lib/reception-voice")).onReceptionRelayed(String(chat.id));
+      void (await import("../../../../../lib/reception-voice")).onReceptionRelayed(String(chat.id),
+        typeof message.text === "string" ? message.text : null,
+        typeof (update as Record<string, unknown>).update_id === "number" ? (update as Record<string, unknown>).update_id as number : null);
     }
     return NextResponse.json({ ok: true, status });
   }

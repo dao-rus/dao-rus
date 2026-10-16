@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { validateReceptionForm } from "./reception-applications";
 
-const form = { city: " Москва ", occupation: " Мастер ", age: 35, publishAge: false };
+const form = { city: " Москва ", occupation: " Мастер ", age: 35, education: null, familyStatus: null, publishAge: false };
 describe("Reception form validation", () => {
   it("trims required fields and accepts omitted or removed age without publication consent", () => {
     expect(validateReceptionForm(form)).toEqual({ ...form, city: "Москва", occupation: "Мастер" });

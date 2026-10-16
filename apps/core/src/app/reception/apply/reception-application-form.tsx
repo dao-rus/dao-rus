@@ -3,7 +3,7 @@
 import { useEffect, useRef, useState, type FormEvent } from "react";
 import type { InterfaceTextValues } from "../../../lib/interface-texts";
 
-type Application = { city: string; occupation: string; age: number | null; publishAge: boolean; publicationStatus?: string; revision?: number; publishedRevision?: number | null };
+type Application = { city: string | null; occupation: string | null; age: number | null; education: string | null; familyStatus: string | null; publishAge: boolean; publicationStatus?: string; revision?: number; publishedRevision?: number | null };
 type TelegramApp = { initData?: string; ready?: () => void; expand?: () => void };
 type Mode = "loading" | "ready" | "browser" | "expired" | "load_error";
 
@@ -11,6 +11,8 @@ export function ReceptionApplicationForm({ texts, botUrl }: { texts: InterfaceTe
   const [mode, setMode] = useState<Mode>("loading");
   const [city, setCity] = useState("");
   const [occupation, setOccupation] = useState("");
+  const [education, setEducation] = useState("");
+  const [familyStatus, setFamilyStatus] = useState("");
   const [age, setAge] = useState("");
   const [publishAge, setPublishAge] = useState(false);
   const [existing, setExisting] = useState(false);
@@ -46,7 +48,8 @@ export function ReceptionApplicationForm({ texts, botUrl }: { texts: InterfaceTe
         if (!active) return;
         if (body.application) {
           setPublication(body.application);
-          setCity(body.application.city); setOccupation(body.application.occupation);
+          setCity(body.application.city ?? ""); setOccupation(body.application.occupation ?? "");
+          setEducation(body.application.education ?? ""); setFamilyStatus(body.application.familyStatus ?? "");
           setAge(body.application.age === null ? "" : String(body.application.age));
           setPublishAge(body.application.publishAge); setExisting(true); setSaved(true);
         }
@@ -73,7 +76,8 @@ export function ReceptionApplicationForm({ texts, botUrl }: { texts: InterfaceTe
       const response = await fetch("/api/reception/application", {
         method: existing ? "PUT" : "POST", credentials: "omit", cache: "no-store",
         headers: { "Content-Type": "application/json", Authorization: `tma ${initData.current}` },
-        body: JSON.stringify({ city: city.trim(), occupation: occupation.trim(), age: age === "" ? null : Number(age), publishAge: age !== "" && publishAge }),
+        body: JSON.stringify({ city: city.trim(), occupation: occupation.trim(), education: education.trim() || null,
+          familyStatus: familyStatus.trim() || null, age: age === "" ? null : Number(age), publishAge: age !== "" && publishAge }),
       });
       if (response.status === 401) { setMode("expired"); return; }
       if (!response.ok) {
@@ -102,6 +106,12 @@ export function ReceptionApplicationForm({ texts, botUrl }: { texts: InterfaceTe
       <label htmlFor="reception-occupation">{t("reception.apply.occupation")}</label>
       <input id="reception-occupation" name="occupation" required maxLength={1000} value={occupation}
         onChange={event => { setOccupation(event.target.value); changed(); }} />
+      <label htmlFor="reception-education">Образование (необязательно)</label>
+      <input id="reception-education" name="education" maxLength={500} value={education}
+        onChange={event => { setEducation(event.target.value); changed(); }} />
+      <label htmlFor="reception-family-status">Семейное положение (необязательно)</label>
+      <input id="reception-family-status" name="familyStatus" maxLength={120} value={familyStatus}
+        onChange={event => { setFamilyStatus(event.target.value); changed(); }} />
       <label htmlFor="reception-age">{t("reception.apply.age")}</label>
       <input id="reception-age" name="age" type="number" min={1} max={120} step={1} inputMode="numeric" value={age}
         onChange={event => { setAge(event.target.value); if (!event.target.value) setPublishAge(false); changed(); }} />
@@ -113,6 +123,8 @@ export function ReceptionApplicationForm({ texts, botUrl }: { texts: InterfaceTe
       <h2 id="reception-preview-title">{t("reception.apply.preview")}</h2>
       <dl><dt>{t("reception.apply.city")}</dt><dd>{city.trim() || "—"}</dd>
         <dt>{t("reception.apply.occupation")}</dt><dd>{occupation.trim() || "—"}</dd>
+        <dt>Образование</dt><dd>{education.trim() || "—"}</dd>
+        <dt>Семейное положение</dt><dd>{familyStatus.trim() || "—"}</dd>
         {publishAge && age && <><dt>{t("reception.apply.preview_age")}</dt><dd>{age}</dd></>}
       </dl>
     </section>

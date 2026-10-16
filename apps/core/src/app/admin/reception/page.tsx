@@ -28,7 +28,9 @@ export default async function ReceptionJournal({ searchParams }: { searchParams?
       const fields = <><input type="hidden" name="id" value={a.id} /><input type="hidden" name="version" value={a.version} /></>;
       return <article className="card" key={a.id}>
         <h2>{a.telegram_name || "Telegram-имя ещё не получено"} {a.telegram_username ? `@${a.telegram_username}` : ""}</h2>
-        <p>{texts["reception.apply.city"]}: {a.city}<br />{texts["reception.apply.occupation"]}: {a.occupation}{a.age !== null ? <><br />{texts["reception.apply.preview_age"]}: {a.age}</> : null}</p>
+        <p>{texts["reception.apply.city"]}: {a.city ?? "—"}<br />{texts["reception.apply.occupation"]}: {a.occupation ?? "—"}
+          {a.education ? <><br />Образование: {a.education}</> : null}{a.family_status ? <><br />Семейное положение: {a.family_status}</> : null}
+          {a.age !== null ? <><br />{texts["reception.apply.preview_age"]}: {a.age}</> : null}</p>
         <p>Подана: {date(a.created_at)} · Изменена: {date(a.updated_at)}<br />
           Заявка: {statuses[a.application_status]} · Доставка: {statuses[a.status]}<br />
           Ревизия: {a.revision} · Опубликована: {a.delivered_revision ?? "—"}</p>

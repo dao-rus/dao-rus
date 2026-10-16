@@ -46,7 +46,7 @@ describe("Reception candidate form", () => {
   it("submits explicit consent, confirms only saving and permits corrections", async () => {
     await mount(); await change("city", " Тверь "); await change("occupation", "Мастер"); await change("age", "35");
     fetchMock.mockResolvedValue(json({ application: {} }, 201)); await submit();
-    expect(JSON.parse(fetchMock.mock.calls[1][1].body)).toEqual({ city: "Тверь", occupation: "Мастер", age: 35, publishAge: false });
+    expect(JSON.parse(fetchMock.mock.calls[1][1].body)).toEqual({ city: "Тверь", occupation: "Мастер", education: null, familyStatus: null, age: 35, publishAge: false });
     expect(fetchMock.mock.calls[1][1].method).toBe("POST");
     expect(rendered()).toContain(texts["reception.apply.saved"]);
     await change("age", ""); expect(rendered()).not.toContain(texts["reception.apply.saved"]);

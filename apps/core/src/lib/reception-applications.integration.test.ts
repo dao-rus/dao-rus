@@ -15,7 +15,7 @@ const databaseUrl = process.env.RECEPTION_TEST_DATABASE_URL;
 const schema = `reception_application_test_${randomUUID().replaceAll("-", "")}`;
 const db = new Pool({ connectionString: databaseUrl, options: `-c search_path=${schema},public`, max: 16 });
 let created = false;
-const form = { city: "Москва", occupation: "Мастер", age: 35, publishAge: false };
+const form = { city: "Москва", occupation: "Мастер", age: 35, education: null, familyStatus: null, publishAge: false };
 function signed(id = 42, signingToken = token, authDate = Math.floor(Date.now() / 1000)) {
   const params = new URLSearchParams({ auth_date: String(authDate), user: JSON.stringify({ id, first_name: "Synthetic" }) });
   const check = [...params].sort(([a], [b]) => a < b ? -1 : a > b ? 1 : 0).map(([k, v]) => `${k}=${v}`).join("\n");
@@ -43,6 +43,7 @@ describe.skipIf(!databaseUrl)("Reception applications on isolated PostgreSQL", (
     await db.query("BEGIN;" + readFileSync(new URL("052_reception_applications.sql", directory), "utf8") + ";COMMIT;");
     await db.query("BEGIN;" + readFileSync(new URL("053_reception_publication.sql", directory), "utf8") + ";COMMIT;");
     await db.query("BEGIN;" + readFileSync(new URL("054_reception_invitations.sql", directory), "utf8") + ";COMMIT;");
+    await db.query("BEGIN;" + readFileSync(new URL("055_reception_profile_draft.sql", directory), "utf8") + ";COMMIT;");
     expect((await db.query("SELECT * FROM participants WHERE id=$1", [participant.id])).rows[0]).toEqual(participant);
   }, 30000);
   beforeEach(async () => { await db.query("TRUNCATE reception_applications CASCADE"); });
@@ -107,6 +108,18 @@ describe.skipIf(!databaseUrl)("Reception applications on isolated PostgreSQL", (
     expect((await db.query("SELECT * FROM participants WHERE id=$1", [p.id])).rows[0]).toEqual(p);
     expect((await db.query("SELECT * FROM external_identities WHERE id=$1", [identity.id])).rows[0]).toEqual(identity);
     await db.query("DELETE FROM external_identities WHERE id=$1", [identity.id]);
+  });
+  it("writes confirmed application fields to the linked profile and upgrades one draft", async () => {
+    const p = (await db.query("INSERT INTO participants(display_name) VALUES ('Draft owner') RETURNING id")).rows[0].id;
+    await db.query("INSERT INTO external_identities(participant_id,provider,provider_subject,external_user_id) VALUES($1,'telegram','miniapp:42','42')", [p]);
+    await db.query(`INSERT INTO reception_applications(telegram_user_id,status,write_window_count,city,occupation)
+      VALUES('42','draft',1,NULL,NULL)`);
+    const response = await PUT(request("PUT", { ...form, education: "Высшее", familyStatus: "женат" }));
+    expect(response.status).toBe(200);
+    expect((await db.query("SELECT profile_city, profile_occupation, profile_education, profile_family_status FROM participants WHERE id=$1", [p])).rows[0])
+      .toEqual({ profile_city: "Москва", profile_occupation: "Мастер", profile_education: "Высшее", profile_family_status: "женат" });
+    expect((await db.query("SELECT count(*)::int AS count FROM reception_applications WHERE telegram_user_id='42'")).rows[0].count).toBe(1);
+    expect((await db.query("SELECT count(*)::int AS count FROM reception_application_deliveries WHERE application_id=(SELECT id FROM reception_applications WHERE telegram_user_id='42')")).rows[0].count).toBe(1);
   });
   it("links an identity established after submission and refuses conflicting mappings", async () => {
     await POST(request("POST"));

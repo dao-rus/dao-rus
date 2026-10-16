@@ -98,10 +98,18 @@ export async function onReceptionStart(telegramUserId: string): Promise<void> {
     if (!greeted && applyButton) await context.send(telegramUserId, context.texts["reception.apply.start"], applyButton);
   } catch { console.error("Reception greeting failed"); }
 }
-export async function onReceptionRelayed(privateChatId: string): Promise<void> {
+export async function onReceptionRelayed(privateChatId: string, text: string | null = null, updateId: number | null = null): Promise<void> {
   try {
     const context = await production();
-    if (context) await acknowledgeIntroduction(context, privateChatId);
+    if (context) {
+      await acknowledgeIntroduction(context, privateChatId);
+      if (text && updateId !== null) {
+        const [{ createReceptionProfileDraft }, { pool }] = await Promise.all([
+          import("./reception-profile-draft"), import("./db"),
+        ]);
+        await createReceptionProfileDraft(privateChatId, text, updateId, pool);
+      }
+    }
   } catch (error) { console.error("Reception acknowledgement failed", error); }
 }
 export async function onForumMemberUpdate(update: unknown): Promise<void> {

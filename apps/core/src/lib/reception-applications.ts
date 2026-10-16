@@ -14,6 +14,8 @@ export type ReceptionForm = {
   city: string;
   occupation: string;
   age: number | null;
+  education: string | null;
+  familyStatus: string | null;
   publishAge: boolean;
 };
 
@@ -21,7 +23,7 @@ export function validateReceptionForm(value: unknown): ReceptionForm {
   const invalid = () => { throw new ReceptionApplicationError("invalid_form"); };
   if (!value || typeof value !== "object" || Array.isArray(value)) return invalid();
   const fields = value as Record<string, unknown>;
-  if (Object.keys(fields).some(key => !["city", "occupation", "age", "publishAge"].includes(key))) return invalid();
+  if (Object.keys(fields).some(key => !["city", "occupation", "age", "education", "familyStatus", "publishAge"].includes(key))) return invalid();
   const text = (value: unknown, max: number) => {
     if (typeof value !== "string") return invalid();
     const trimmed = value.trim();
@@ -31,16 +33,18 @@ export function validateReceptionForm(value: unknown): ReceptionForm {
   const age = fields.age ?? null;
   if (age !== null && (typeof age !== "number" || !Number.isInteger(age) || age < 1 || age > 120)) return invalid();
   if (typeof fields.publishAge !== "boolean" || (fields.publishAge && age === null)) return invalid();
-  return { city: text(fields.city, 200), occupation: text(fields.occupation, 1000), age, publishAge: fields.publishAge };
+  const optionalText = (value: unknown, max: number) => value === null || value === undefined || value === "" ? null : text(value, max);
+  return { city: text(fields.city, 200), occupation: text(fields.occupation, 1000), age,
+    education: optionalText(fields.education, 500), familyStatus: optionalText(fields.familyStatus, 120), publishAge: fields.publishAge };
 }
 
 // Explicit projection: internal identity links, quota and delivery diagnostics are never exposed.
-const selectApplication = `SELECT a.id, a.city, a.occupation, a.age, a.publish_age AS "publishAge",
+const selectApplication = `SELECT a.id, a.city, a.occupation, a.age, a.education, a.family_status AS "familyStatus", a.publish_age AS "publishAge",
   a.status, a.revision, a.created_at AS "createdAt", a.updated_at AS "updatedAt",
   p.status AS "publicationStatus", p.delivered_revision AS "publishedRevision",
   COALESCE(i.status, 'not_requested') AS "invitationStatus"
   FROM reception_applications a
-  JOIN reception_application_deliveries p ON p.application_id = a.id AND p.kind = 'publication'
+  LEFT JOIN reception_application_deliveries p ON p.application_id = a.id AND p.kind = 'publication'
   LEFT JOIN reception_application_deliveries i ON i.application_id = a.id AND i.kind = 'invitation'
   WHERE a.telegram_user_id = $1`;
 
@@ -85,28 +89,40 @@ export async function saveReceptionApplication(
       }
       participantId = miniAppIdentity.participant_id;
     }
+    if (participantId) {
+      await client.query(`UPDATE participants SET
+        profile_city = COALESCE($2, profile_city),
+        profile_occupation = COALESCE($3, profile_occupation),
+        profile_education = COALESCE($4, profile_education),
+        profile_family_status = COALESCE($5, profile_family_status),
+        updated_at = now()
+        WHERE id=$1::uuid`, [participantId, form.city, form.occupation, form.education, form.familyStatus]);
+    }
     let created = false;
     const name = telegramProfile ? receptionTelegramName(telegramProfile.firstName, telegramProfile.lastName) : existing?.telegram_name ?? null;
     const username = telegramProfile ? receptionTelegramUsername(telegramProfile.username) : existing?.telegram_username ?? null;
     if (!existing) {
       const result = await client.query(`INSERT INTO reception_applications
-        (telegram_user_id, participant_id, city, occupation, age, publish_age, write_window_started_at, telegram_name, telegram_username)
-        VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9) RETURNING id`,
-      [telegramUserId, participantId, form.city, form.occupation, form.age, form.publishAge, now, name, username]);
+        (telegram_user_id, participant_id, city, occupation, age, education, family_status, publish_age, status, write_window_started_at, telegram_name, telegram_username)
+        VALUES ($1,$2,$3,$4,$5,$6,$7,$8,'submitted',$9,$10,$11) RETURNING id`,
+      [telegramUserId, participantId, form.city, form.occupation, form.age, form.education, form.familyStatus, form.publishAge, now, name, username]);
       await client.query(`INSERT INTO reception_application_deliveries(application_id, kind)
         VALUES ($1, 'publication')`, [result.rows[0].id]);
       created = true;
     } else {
       const changed = existing.city !== form.city || existing.occupation !== form.occupation
-        || existing.age !== form.age || existing.publish_age !== form.publishAge
+        || existing.age !== form.age || existing.education !== form.education || existing.family_status !== form.familyStatus || existing.publish_age !== form.publishAge
         || existing.telegram_name !== name || existing.telegram_username !== username;
       await client.query(`UPDATE reception_applications SET participant_id=$2, city=$3, occupation=$4,
-        age=$5, publish_age=$6, revision=revision+$7,
-        updated_at=CASE WHEN $7=1 THEN $8 ELSE updated_at END,
-        write_window_started_at=$9, write_window_count=$10, telegram_name=$11, telegram_username=$12 WHERE telegram_user_id=$1`,
-      [telegramUserId, participantId, form.city, form.occupation, form.age, form.publishAge,
+        age=$5, education=$6, family_status=$7, publish_age=$8, status='submitted', revision=revision+$9,
+        updated_at=CASE WHEN $9=1 THEN $10 ELSE updated_at END,
+        write_window_started_at=$10, write_window_count=$11, telegram_name=$12, telegram_username=$13 WHERE telegram_user_id=$1`,
+      [telegramUserId, participantId, form.city, form.occupation, form.age, form.education, form.familyStatus, form.publishAge,
         changed ? 1 : 0, now, sameWindow ? existing.write_window_started_at : now,
         sameWindow ? existing.write_window_count + 1 : 1, name, username]);
+      await client.query(`INSERT INTO reception_application_deliveries(application_id, kind)
+        SELECT id, 'publication' FROM reception_applications WHERE telegram_user_id=$1
+        AND NOT EXISTS (SELECT 1 FROM reception_application_deliveries WHERE application_id=reception_applications.id AND kind='publication')`, [telegramUserId]);
       // Preserve confirmed/ambiguous delivery state. The worker reconciles revisions without a new send.
     }
     const application = (await client.query(selectApplication, [telegramUserId])).rows[0];
