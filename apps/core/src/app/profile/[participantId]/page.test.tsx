@@ -22,6 +22,7 @@ vi.mock("@/lib/verification", () => ({ getVerificationProfile: mocks.getVerifica
 vi.mock("@/lib/profile-about", () => ({
   getVisibleProfileAbout: mocks.getVisibleProfileAbout,
   residenceLabel: ({ name, country }: { name: string; country: string }) => `${name}, ${country}`,
+  residenceDirectoryHref: () => "/participants?residence_name=Kazan",
 }));
 vi.mock("@/lib/reputation", () => ({ getReputationSummary: mocks.getReputationSummary }));
 vi.mock("@/lib/tokenization", () => ({
@@ -34,7 +35,7 @@ vi.mock("@/components/darus-reward-celebration", () => ({
 vi.mock("@/components/positive-experience-feedback", () => ({
   PositiveExperienceFeedback: "positive-experience-feedback",
 }));
-vi.mock("@/lib/config", () => ({ hasPrototypeAdminAccess: mocks.hasPrototypeAdminAccess }));
+vi.mock("@/lib/config", () => ({ hasPrototypeAdminAccess: mocks.hasPrototypeAdminAccess, isParticipantsDirectoryEnabled: () => false }));
 vi.mock("@/components/telegram-avatar", () => ({ TelegramAvatar: () => null }));
 vi.mock("../../../components/local-date-time", () => ({ LocalDateTime: ({ value }: { value: string }) => value.slice(0, 10) }));
 vi.mock("../../../lib/profile-timeline", () => ({ getProfileTimeline: mocks.getProfileTimeline }));

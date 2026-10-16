@@ -25,12 +25,13 @@ vi.mock("@/lib/verification", () => ({ getVerificationProfile: mocks.getVerifica
 vi.mock("@/lib/profile-about", () => ({
   getProfileAbout: mocks.getProfileAbout,
   residenceLabel: ({ name, country }: { name: string; country: string }) => `${name}, ${country}`,
+  residenceDirectoryHref: () => "/participants?residence_name=Kazan",
 }));
 vi.mock("@/lib/interface-texts", () => ({ readInterfaceTexts: mocks.readInterfaceTexts }));
 vi.mock("@/lib/tokenization", () => ({ getDarusBalance: mocks.getDarusBalance }));
 vi.mock("@/lib/forum-join-history", () => ({ getForumJoinDate: async () => null }));
 vi.mock("@/lib/reputation", () => ({ getReputationSummary: mocks.getReputationSummary }));
-vi.mock("@/lib/config", () => ({ hasPrototypeAdminAccess: () => false, telegramReceptionConfig: () => ({
+vi.mock("@/lib/config", () => ({ hasPrototypeAdminAccess: () => false, isParticipantsDirectoryEnabled: () => false, telegramReceptionConfig: () => ({
   token: "token", webhookSecret: "secret", forumChatId: "-100", forumInviteUrl: "https://t.me/c/1", botUsername: "Daorus_bot",
 }) }));
 vi.mock("@/components/local-date-time", () => ({ LocalDateTime: () => null }));

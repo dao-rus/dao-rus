@@ -6,10 +6,13 @@ const mocks = vi.hoisted(() => ({
 }));
 vi.mock("next/navigation", () => ({ redirect: mocks.redirect }));
 vi.mock("@/lib/session", () => ({ getCurrentParticipant: mocks.getCurrentParticipant }));
+vi.mock("@/lib/config", () => ({ isParticipantsDirectoryEnabled: () => false }));
 vi.mock("@/lib/communities", () => ({ listResidenceCommunities: mocks.listResidenceCommunities }));
 vi.mock("@/lib/interface-texts", () => ({ readInterfaceTexts: mocks.readInterfaceTexts }));
 vi.mock("@/lib/profile-about", () => ({
   residenceLabel: ({ name, country }: { name: string; country: string }) => `${name}, ${country}`,
+  residenceDirectoryHref: ({ name, type, country }: { name: string; type: string; country: string }) =>
+    `/participants?${new URLSearchParams({ residence_name: name, residence_type: type, residence_country: country })}`,
 }));
 
 import NearbyPage from "./page";
