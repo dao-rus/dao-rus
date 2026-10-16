@@ -167,6 +167,14 @@ export default async function ParticipantsPage({ searchParams }: ParticipantsPag
                     </span>
                     {participant.telegramBio ? <small className="muted">{participant.telegramBio}</small> : null}
                     {participant.residence ? <small className="muted">{residenceLabel(participant.residence)}</small> : null}</> : null}
+                    {!community && (participant.profileAge || participant.profileCity || participant.profileOccupation
+                      || participant.profileEducation || participant.profileFamilyStatus) ? <dl className="participantProfileFacts">
+                      {participant.profileAge ? <div><dt>Возраст</dt><dd>{participant.profileAge}</dd></div> : null}
+                      {participant.profileCity ? <div><dt>Город</dt><dd>{participant.profileCity}</dd></div> : null}
+                      {participant.profileOccupation ? <div><dt>Род занятий</dt><dd>{participant.profileOccupation}</dd></div> : null}
+                      {participant.profileEducation ? <div><dt>Образование</dt><dd>{participant.profileEducation}</dd></div> : null}
+                      {participant.profileFamilyStatus ? <div><dt>Семейное положение</dt><dd>{participant.profileFamilyStatus}</dd></div> : null}
+                    </dl> : null}
                     <div className="participantSignalIndicators">
                       {(["need", "can", "want", "have"] as const).map((kind) => {
                         const count = participant.signalCounts?.[kind] ?? 0;

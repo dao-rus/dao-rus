@@ -125,6 +125,7 @@ describe("/participants", () => {
         displayName: "Борис",
         telegramUsername: null,
         verificationPoints: 0, positiveCount: 0,
+        profileAge: null, profileCity: null, profileOccupation: null, profileEducation: null, profileFamilyStatus: null,
       },
     ]);
 
@@ -138,6 +139,7 @@ describe("/participants", () => {
     expect(text).toContain("Алиса");
     expect(text).toContain("@alice");
     expect(text).toContain("Биография Алисы");
+    expect(text).not.toContain("Род занятий");
     expect(text).not.toContain("+79990000000");
     expect(text).not.toContain('Подтвердили:');
     expect(hasMainNavigation(page)).toBe(true);
@@ -148,6 +150,27 @@ describe("/participants", () => {
     // The name itself links to the profile (ParticipantName); the separate button is gone.
     expect(textContent(page)).not.toContain("Открыть профиль");
     expect(hrefs(page)).not.toContain("/admin/participants");
+  });
+
+  it("shows only filled profile facts and keeps a card without facts", async () => {
+    mocks.getCurrentParticipant.mockResolvedValue({ id: "viewer" });
+    mocks.listParticipantsDirectory.mockResolvedValue([
+      { participantId: "viewer", displayName: "Анна", telegramUsername: null, verificationPoints: 0, positiveCount: 0,
+        profileAge: 46, profileCity: "Самара", profileOccupation: "Программист", profileEducation: null, profileFamilyStatus: null },
+      { participantId: "empty", displayName: "Борис", telegramUsername: null, verificationPoints: 0, positiveCount: 0,
+        profileAge: null, profileCity: null, profileOccupation: null, profileEducation: null, profileFamilyStatus: null },
+    ]);
+
+    const page = await ParticipantsPage({ searchParams: Promise.resolve({}) });
+    const text = textContent(page);
+
+    expect(text).toContain("Анна");
+    expect(text).toContain("Самара");
+    expect(text).toContain("Программист");
+    expect(text).toContain("Возраст");
+    expect(text).toContain("Борис");
+    expect(text).not.toContain("Образование");
+    expect(text).not.toContain("Семейное положение");
   });
 
   it("shows only nonzero signal indicators and links them to profile anchors", async () => {

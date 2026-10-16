@@ -14,12 +14,16 @@ describe("participants directory", () => {
               display_name: "Алиса",
               telegram_username: "alice",
               verification_points: 2, positive_count: 3,
+              profile_age: 41, profile_city: "Казань", profile_occupation: "Инженер",
+              profile_education: null, profile_family_status: null,
             },
             {
               participant_id: "20000000-0000-4000-8000-000000000002",
               display_name: "Борис",
               telegram_username: null,
               verification_points: 0, positive_count: 0,
+              profile_age: 51, profile_city: "Пенза", profile_occupation: "Автослесарь",
+              profile_education: "Среднее", profile_family_status: "женат",
             },
           ],
         };
@@ -49,6 +53,7 @@ describe("participants directory", () => {
         signalCounts: { need: 0, can: 0, want: 0, have: 0 },
         joinedAt: null,
         residence: null,
+        profileAge: 41, profileCity: "Казань", profileOccupation: "Инженер", profileEducation: null, profileFamilyStatus: null,
       },
       {
         participantId: "20000000-0000-4000-8000-000000000002",
@@ -61,6 +66,7 @@ describe("participants directory", () => {
         signalCounts: { need: 0, can: 0, want: 0, have: 0 },
         joinedAt: null,
         residence: null,
+        profileAge: 51, profileCity: "Пенза", profileOccupation: "Автослесарь", profileEducation: "Среднее", profileFamilyStatus: "женат",
       },
     ]);
   });
@@ -142,6 +148,7 @@ describe("participants directory", () => {
         return { rows: [{
           participant_id: "10000000-0000-4000-8000-000000000001",
           display_name: "Анна", verification_points: 0, positive_count: 0,
+          profile_age: null, profile_city: null, profile_occupation: null, profile_education: null, profile_family_status: null,
           residence_name: "Казань", residence_type: "город", residence_country: "Россия",
         }] };
       },

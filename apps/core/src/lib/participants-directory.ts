@@ -12,6 +12,11 @@ export type ParticipantDirectoryEntry = {
   positiveCount: number;
   signalCounts: Record<LegacyProfileSignalKind, number>;
   residence: Residence | null;
+  profileAge: number | null;
+  profileCity: string | null;
+  profileOccupation: string | null;
+  profileEducation: string | null;
+  profileFamilyStatus: string | null;
   // The first known moment the person entered the DAO forum.
   joinedAt?: Date | null;
 };
@@ -55,6 +60,11 @@ export async function listParticipantsDirectoryWithDatabase(
             participant.residence_name,
             participant.residence_type,
             participant.residence_country,
+            CASE WHEN participant.id = $3::uuid THEN participant.profile_age ELSE NULL END AS profile_age,
+            CASE WHEN participant.id = $3::uuid THEN participant.profile_city ELSE NULL END AS profile_city,
+            CASE WHEN participant.id = $3::uuid THEN participant.profile_occupation ELSE NULL END AS profile_occupation,
+            CASE WHEN participant.id = $3::uuid THEN participant.profile_education ELSE NULL END AS profile_education,
+            CASE WHEN participant.id = $3::uuid THEN participant.profile_family_status ELSE NULL END AS profile_family_status,
             (
               SELECT count(*)::integer
                 FROM verification_attestations incoming
@@ -155,6 +165,11 @@ export async function listParticipantsDirectoryWithDatabase(
           country: String(row.residence_country),
         }
       : null,
+    profileAge: row.profile_age === null || row.profile_age === undefined ? null : Number(row.profile_age),
+    profileCity: row.profile_city ? String(row.profile_city) : null,
+    profileOccupation: row.profile_occupation ? String(row.profile_occupation) : null,
+    profileEducation: row.profile_education ? String(row.profile_education) : null,
+    profileFamilyStatus: row.profile_family_status ? String(row.profile_family_status) : null,
   }));
 }
 
