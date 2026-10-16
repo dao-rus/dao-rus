@@ -41,10 +41,8 @@ export function validateReceptionForm(value: unknown): ReceptionForm {
 // Explicit projection: internal identity links, quota and delivery diagnostics are never exposed.
 const selectApplication = `SELECT a.id, a.city, a.occupation, a.age, a.education, a.family_status AS "familyStatus", a.publish_age AS "publishAge",
   a.status, a.revision, a.created_at AS "createdAt", a.updated_at AS "updatedAt",
-  p.status AS "publicationStatus", p.delivered_revision AS "publishedRevision",
   COALESCE(i.status, 'not_requested') AS "invitationStatus"
   FROM reception_applications a
-  LEFT JOIN reception_application_deliveries p ON p.application_id = a.id AND p.kind = 'publication'
   LEFT JOIN reception_application_deliveries i ON i.application_id = a.id AND i.kind = 'invitation'
   WHERE a.telegram_user_id = $1`;
 
@@ -102,12 +100,10 @@ export async function saveReceptionApplication(
     const name = telegramProfile ? receptionTelegramName(telegramProfile.firstName, telegramProfile.lastName) : existing?.telegram_name ?? null;
     const username = telegramProfile ? receptionTelegramUsername(telegramProfile.username) : existing?.telegram_username ?? null;
     if (!existing) {
-      const result = await client.query(`INSERT INTO reception_applications
+      await client.query(`INSERT INTO reception_applications
         (telegram_user_id, participant_id, city, occupation, age, education, family_status, publish_age, status, write_window_started_at, telegram_name, telegram_username)
-        VALUES ($1,$2,$3,$4,$5,$6,$7,$8,'submitted',$9,$10,$11) RETURNING id`,
+        VALUES ($1,$2,$3,$4,$5,$6,$7,$8,'submitted',$9,$10,$11)`,
       [telegramUserId, participantId, form.city, form.occupation, form.age, form.education, form.familyStatus, form.publishAge, now, name, username]);
-      await client.query(`INSERT INTO reception_application_deliveries(application_id, kind)
-        VALUES ($1, 'publication')`, [result.rows[0].id]);
       created = true;
     } else {
       const changed = existing.city !== form.city || existing.occupation !== form.occupation
@@ -116,14 +112,10 @@ export async function saveReceptionApplication(
       await client.query(`UPDATE reception_applications SET participant_id=$2, city=$3, occupation=$4,
         age=$5, education=$6, family_status=$7, publish_age=$8, status='submitted', revision=revision+$9,
         updated_at=CASE WHEN $9=1 THEN $10 ELSE updated_at END,
-        write_window_started_at=$10, write_window_count=$11, telegram_name=$12, telegram_username=$13 WHERE telegram_user_id=$1`,
+        write_window_started_at=$11, write_window_count=$12, telegram_name=$13, telegram_username=$14 WHERE telegram_user_id=$1`,
       [telegramUserId, participantId, form.city, form.occupation, form.age, form.education, form.familyStatus, form.publishAge,
         changed ? 1 : 0, now, sameWindow ? existing.write_window_started_at : now,
         sameWindow ? existing.write_window_count + 1 : 1, name, username]);
-      await client.query(`INSERT INTO reception_application_deliveries(application_id, kind)
-        SELECT id, 'publication' FROM reception_applications WHERE telegram_user_id=$1
-        AND NOT EXISTS (SELECT 1 FROM reception_application_deliveries WHERE application_id=reception_applications.id AND kind='publication')`, [telegramUserId]);
-      // Preserve confirmed/ambiguous delivery state. The worker reconciles revisions without a new send.
     }
     const application = (await client.query(selectApplication, [telegramUserId])).rows[0];
     await client.query("COMMIT");

@@ -3,7 +3,7 @@
 import { useEffect, useRef, useState, type FormEvent } from "react";
 import type { InterfaceTextValues } from "../../../lib/interface-texts";
 
-type Application = { city: string | null; occupation: string | null; age: number | null; education: string | null; familyStatus: string | null; publishAge: boolean; publicationStatus?: string; revision?: number; publishedRevision?: number | null };
+type Application = { city: string | null; occupation: string | null; age: number | null; education: string | null; familyStatus: string | null; publishAge: boolean };
 type TelegramApp = { initData?: string; ready?: () => void; expand?: () => void };
 type Mode = "loading" | "ready" | "browser" | "expired" | "load_error";
 
@@ -14,11 +14,9 @@ export function ReceptionApplicationForm({ texts, botUrl }: { texts: InterfaceTe
   const [education, setEducation] = useState("");
   const [familyStatus, setFamilyStatus] = useState("");
   const [age, setAge] = useState("");
-  const [publishAge, setPublishAge] = useState(false);
   const [existing, setExisting] = useState(false);
   const [saving, setSaving] = useState(false);
   const [saved, setSaved] = useState(false);
-  const [publication, setPublication] = useState<Application | null>(null);
   const [error, setError] = useState("");
   const [retry, setRetry] = useState(0);
   const initData = useRef("");
@@ -47,11 +45,10 @@ export function ReceptionApplicationForm({ texts, botUrl }: { texts: InterfaceTe
         const body = await response.json() as { application: Application | null };
         if (!active) return;
         if (body.application) {
-          setPublication(body.application);
           setCity(body.application.city ?? ""); setOccupation(body.application.occupation ?? "");
           setEducation(body.application.education ?? ""); setFamilyStatus(body.application.familyStatus ?? "");
           setAge(body.application.age === null ? "" : String(body.application.age));
-          setPublishAge(body.application.publishAge); setExisting(true); setSaved(true);
+          setExisting(true); setSaved(true);
         }
         setMode("ready");
       } catch { if (active) setMode("load_error"); }
@@ -77,7 +74,7 @@ export function ReceptionApplicationForm({ texts, botUrl }: { texts: InterfaceTe
         method: existing ? "PUT" : "POST", credentials: "omit", cache: "no-store",
         headers: { "Content-Type": "application/json", Authorization: `tma ${initData.current}` },
         body: JSON.stringify({ city: city.trim(), occupation: occupation.trim(), education: education.trim() || null,
-          familyStatus: familyStatus.trim() || null, age: age === "" ? null : Number(age), publishAge: age !== "" && publishAge }),
+          familyStatus: familyStatus.trim() || null, age: age === "" ? null : Number(age), publishAge: false }),
       });
       if (response.status === 401) { setMode("expired"); return; }
       if (!response.ok) {
@@ -86,8 +83,8 @@ export function ReceptionApplicationForm({ texts, botUrl }: { texts: InterfaceTe
           : "Не удалось подтвердить сохранение. Попробуйте ещё раз: повтор не создаст дубль.");
         return;
       }
-      const body = await response.json() as { application: Application };
-      setPublication(body.application); setExisting(true); setSaved(true);
+      await response.json();
+      setExisting(true); setSaved(true);
     } catch { setError("Не удалось подтвердить сохранение. Проверьте соединение и попробуйте ещё раз: повтор не создаст дубль."); }
     finally { savingLock.current = false; setSaving(false); }
   }
@@ -114,9 +111,7 @@ export function ReceptionApplicationForm({ texts, botUrl }: { texts: InterfaceTe
         onChange={event => { setFamilyStatus(event.target.value); changed(); }} />
       <label htmlFor="reception-age">{t("reception.apply.age")}</label>
       <input id="reception-age" name="age" type="number" min={1} max={120} step={1} inputMode="numeric" value={age}
-        onChange={event => { setAge(event.target.value); if (!event.target.value) setPublishAge(false); changed(); }} />
-      <label className="receptionConsent"><input name="publishAge" type="checkbox" checked={publishAge} disabled={!age}
-        onChange={event => { setPublishAge(event.target.checked); changed(); }} />{t("reception.apply.consent")}</label>
+        onChange={event => { setAge(event.target.value); changed(); }} />
     </fieldset>
     <p className="muted">{t("reception.apply.privacy")}</p>
     <section className="receptionPreview" aria-labelledby="reception-preview-title">
@@ -125,13 +120,11 @@ export function ReceptionApplicationForm({ texts, botUrl }: { texts: InterfaceTe
         <dt>{t("reception.apply.occupation")}</dt><dd>{occupation.trim() || "—"}</dd>
         <dt>Образование</dt><dd>{education.trim() || "—"}</dd>
         <dt>Семейное положение</dt><dd>{familyStatus.trim() || "—"}</dd>
-        {publishAge && age && <><dt>{t("reception.apply.preview_age")}</dt><dd>{age}</dd></>}
+        {age && <><dt>{t("reception.apply.preview_age")}</dt><dd>{age}</dd></>}
       </dl>
     </section>
     {error && <p className="formError" role="alert">{error}</p>}
-    {saved && <p className="formNotice" role="status">{t(publication?.publicationStatus === "needs_review" ? "reception.apply.review"
-      : publication?.publicationStatus === "delivered" && publication.revision === publication.publishedRevision ? "reception.apply.delivered"
-      : publication?.publishedRevision ? "reception.apply.edit_pending" : "reception.apply.saved")}</p>}
+    {saved && <p className="formNotice" role="status">{t("reception.apply.saved")}</p>}
     <button className="button primary" disabled={saving} type="submit">{saving ? "Сохраняем…" : t(existing ? "reception.apply.update" : "reception.apply.submit")}</button>
   </form>;
 }

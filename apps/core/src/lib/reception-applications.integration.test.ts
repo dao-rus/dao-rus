@@ -49,34 +49,28 @@ describe.skipIf(!databaseUrl)("Reception applications on isolated PostgreSQL", (
   beforeEach(async () => { await db.query("TRUNCATE reception_applications CASCADE"); });
   afterAll(async () => { if (created) await db.query(`DROP SCHEMA ${schema} CASCADE`); await db.end(); });
 
-  it("atomically saves application and pending publication without a Participant or invitation", async () => {
+  it("atomically saves application without a Participant, invitation or duplicate publication", async () => {
     const before = (await db.query("SELECT count(*) FROM participants")).rows[0];
     const response = await POST(request("POST")); expect(response.status).toBe(201);
     expect(response.headers.get("cache-control")).toBe("no-store"); expect(response.headers.get("set-cookie")).toBeNull();
-    expect(await application(response)).toMatchObject({ ...form, revision: 1, status: "submitted", publicationStatus: "pending", invitationStatus: "not_requested" });
+    expect(await application(response)).toMatchObject({ ...form, revision: 1, status: "submitted", invitationStatus: "not_requested" });
     expect((await db.query("SELECT count(*) FROM participants")).rows[0]).toEqual(before);
     expect((await db.query("SELECT participant_id FROM reception_applications")).rows[0].participant_id).toBeNull();
-    expect((await db.query("SELECT kind, status, attempts, telegram_message_id FROM reception_application_deliveries")).rows).toEqual([
-      { kind: "publication", status: "pending", attempts: 0, telegram_message_id: null },
-    ]);
+    expect((await db.query("SELECT kind FROM reception_application_deliveries")).rows).toEqual([]);
   });
-  it("serializes concurrent resubmissions to one application and one stable publication operation", async () => {
+  it("serializes concurrent resubmissions to one application without publication operations", async () => {
     const results = await Promise.all(Array.from({ length: 8 }, () => POST(request("POST"))));
     expect(results.filter(r => r.status === 201)).toHaveLength(1);
     const values = await Promise.all(results.map(application)); expect(new Set(values.map(a => a.id)).size).toBe(1);
     expect(values.every(a => a.revision === 1)).toBe(true);
-    expect((await db.query("SELECT count(*)::int AS count FROM reception_application_deliveries")).rows[0].count).toBe(1);
+    expect((await db.query("SELECT count(*)::int AS count FROM reception_application_deliveries")).rows[0].count).toBe(0);
   });
-  it("updates own data and consent, clears age and preserves uncertain/confirmed delivery", async () => {
+  it("updates own data and accepts a repeated save without duplicate publication", async () => {
     const original = await application(await POST(request("POST")));
-    const delivery = (await db.query("SELECT * FROM reception_application_deliveries")).rows[0];
     const updated = await application(await PUT(request("PUT", { ...form, city: "  Тверь  ", publishAge: true })));
     expect(updated).toMatchObject({ id: original.id, city: "Тверь", publishAge: true, revision: 2, createdAt: original.createdAt });
-    await db.query("UPDATE reception_application_deliveries SET status='needs_review' WHERE id=$1", [delivery.id]);
-    expect(await application(await POST(request("POST", { ...form, age: null })))).toMatchObject({ age: null, publishAge: false, publicationStatus: "needs_review", revision: 3 });
-    await db.query("UPDATE reception_application_deliveries SET status='delivered', telegram_chat_id=-1001, telegram_message_id=12, delivered_revision=3 WHERE id=$1", [delivery.id]);
-    expect(await application(await PUT(request("PUT")))).toMatchObject({ publicationStatus: "delivered", publishedRevision: 3, revision: 4 });
-    expect((await db.query("SELECT id FROM reception_application_deliveries")).rows[0].id).toBe(delivery.id);
+    expect(await application(await PUT(request("PUT", { ...form, city: "Тверь", publishAge: false })))).toMatchObject({ id: original.id, city: "Тверь", publishAge: false, revision: 3 });
+    expect((await db.query("SELECT count(*)::int AS count FROM reception_application_deliveries")).rows[0].count).toBe(0);
   });
   it("isolates candidates and rejects identity/status selectors and Core-cookie-only authentication", async () => {
     await POST(request("POST"));
@@ -119,7 +113,7 @@ describe.skipIf(!databaseUrl)("Reception applications on isolated PostgreSQL", (
     expect((await db.query("SELECT profile_city, profile_occupation, profile_education, profile_family_status FROM participants WHERE id=$1", [p])).rows[0])
       .toEqual({ profile_city: "Москва", profile_occupation: "Мастер", profile_education: "Высшее", profile_family_status: "женат" });
     expect((await db.query("SELECT count(*)::int AS count FROM reception_applications WHERE telegram_user_id='42'")).rows[0].count).toBe(1);
-    expect((await db.query("SELECT count(*)::int AS count FROM reception_application_deliveries WHERE application_id=(SELECT id FROM reception_applications WHERE telegram_user_id='42')")).rows[0].count).toBe(1);
+    expect((await db.query("SELECT count(*)::int AS count FROM reception_application_deliveries WHERE application_id=(SELECT id FROM reception_applications WHERE telegram_user_id='42')")).rows[0].count).toBe(0);
   });
   it("links an identity established after submission and refuses conflicting mappings", async () => {
     await POST(request("POST"));
@@ -154,12 +148,9 @@ describe.skipIf(!databaseUrl)("Reception applications on isolated PostgreSQL", (
     expect((await PUT(request("PUT"))).status).toBe(200);
     expect((await db.query("SELECT write_window_count FROM reception_applications")).rows[0].write_window_count).toBe(1);
   });
-  it("rolls back the application if creating publication fails", async () => {
-    await db.query("ALTER TABLE reception_application_deliveries ADD CONSTRAINT synthetic_failure CHECK (false) NOT VALID");
-    try {
-      expect((await POST(request("POST"))).status).toBe(503);
-      expect((await db.query("SELECT count(*)::int AS count FROM reception_applications")).rows[0].count).toBe(0);
-    } finally { await db.query("ALTER TABLE reception_application_deliveries DROP CONSTRAINT synthetic_failure"); }
+  it("does not create a publication delivery when saving a submitted application", async () => {
+    expect((await POST(request("POST"))).status).toBe(201);
+    expect((await db.query("SELECT count(*)::int AS count FROM reception_application_deliveries")).rows[0].count).toBe(0);
   });
   it("guards database form constraints and delivered state", async () => {
     await POST(request("POST"));

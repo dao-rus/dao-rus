@@ -16,13 +16,12 @@ async function submit() { await act(async () => renderer.root.findByType("form")
 const rendered = () => JSON.stringify(renderer.toJSON());
 
 describe("Reception candidate form", () => {
-  it.each([
-    ["delivered", 2, 2, "reception.apply.delivered"],
-    ["delivered", 3, 2, "reception.apply.edit_pending"],
-    ["needs_review", 2, null, "reception.apply.review"],
-  ] as const)("shows confirmed or uncertain delivery honestly: %s revision %s", async (publicationStatus, revision, publishedRevision, key) => {
-    fetchMock.mockResolvedValue(json({ application: { city: "Тверь", occupation: "Мастер", age: null, publishAge: false, publicationStatus, revision, publishedRevision } }));
-    await mount(); expect(rendered()).toContain(texts[key]);
+  it("shows a profile preview and no future-publication wording", async () => {
+    fetchMock.mockResolvedValue(json({ application: { city: "Тверь", occupation: "Мастер", age: 35, publishAge: false } }));
+    await mount();
+    expect(rendered()).toContain("Предпросмотр профиля");
+    expect(rendered()).not.toContain("будущей публикации");
+    expect(rendered()).not.toContain("Согласен на публикацию");
   });
   beforeEach(() => {
     (globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
@@ -34,16 +33,14 @@ describe("Reception candidate form", () => {
   it("loads using Reception API with Authorization and no Core/Dev session", async () => {
     await mount(); expect(ready).toHaveBeenCalledOnce();
     expect(fetchMock).toHaveBeenCalledWith("/api/reception/application", expect.objectContaining({ headers: { Authorization: "tma synthetic-init-data" }, credentials: "omit" }));
-    expect(renderer.root.findByProps({ name: "publishAge" }).props.checked).toBe(false);
+    expect(renderer.root.findAllByProps({ name: "publishAge" })).toHaveLength(0);
   });
-  it("omits age from preview without consent and clears consent when age is removed", async () => {
+  it("shows age in the profile preview without a publication consent control", async () => {
     await mount(); await change("city", "Тверь"); await change("occupation", "Мастер"); await change("age", "35");
-    expect(renderer.root.findByProps({ className: "receptionPreview" }).findAllByType("dd").map(node => node.children.join(""))).not.toContain("35");
-    await change("publishAge", true);
     expect(renderer.root.findByProps({ className: "receptionPreview" }).findAllByType("dd").map(node => node.children.join(""))).toContain("35");
-    await change("age", ""); expect(renderer.root.findByProps({ name: "publishAge" }).props.checked).toBe(false);
+    expect(renderer.root.findAllByProps({ name: "publishAge" })).toHaveLength(0);
   });
-  it("submits explicit consent, confirms only saving and permits corrections", async () => {
+  it("saves the profile and permits corrections", async () => {
     await mount(); await change("city", " Тверь "); await change("occupation", "Мастер"); await change("age", "35");
     fetchMock.mockResolvedValue(json({ application: {} }, 201)); await submit();
     expect(JSON.parse(fetchMock.mock.calls[1][1].body)).toEqual({ city: "Тверь", occupation: "Мастер", education: null, familyStatus: null, age: 35, publishAge: false });
@@ -56,7 +53,7 @@ describe("Reception candidate form", () => {
   it("restores a saved application and edits it with PUT", async () => {
     fetchMock.mockResolvedValue(json({ application: { city: "Тверь", occupation: "Мастер", age: 35, publishAge: true } }));
     await mount(); expect(renderer.root.findByProps({ name: "city" }).props.value).toBe("Тверь");
-    expect(renderer.root.findByProps({ name: "publishAge" }).props.checked).toBe(true);
+    expect(renderer.root.findAllByProps({ name: "publishAge" })).toHaveLength(0);
     await change("occupation", "Ремесленник"); await submit(); expect(fetchMock.mock.calls[1][1].method).toBe("PUT");
   });
   it.each(["load", "save"])("asks to reopen Mini App when %s returns 401", async operation => {
