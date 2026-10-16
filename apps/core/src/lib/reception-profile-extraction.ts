@@ -22,8 +22,22 @@ function age(text: string): number | null {
   return [...new Set(values)].length === 1 ? values[0] : null;
 }
 
+function positional(text: string): ReceptionProfileDraft | null {
+  const parts = text.split(",").map((part) => part.trim());
+  if (parts.length !== 3 || parts.some((part) => !part || /[\n\r]/u.test(part))) return null;
+  const ageMatch = parts[0].match(/^(\d{1,3})\s*(?:лет|года|год)?$/iu);
+  const city = parts[1].replace(/\s+/gu, " ");
+  const occupation = parts[2].replace(/\s+/gu, " ");
+  if (!ageMatch || !city || !occupation || !/\p{L}/u.test(city) || !/\p{L}/u.test(occupation)) return null;
+  const parsedAge = Number(ageMatch[1]);
+  if (parsedAge < 1 || parsedAge > 120) return null;
+  return { age: parsedAge, city, occupation, education: null, familyStatus: null };
+}
+
 export function extractReceptionProfile(text: string): ReceptionProfileDraft | null {
   if (typeof text !== "string" || !text.trim()) return null;
+  const positionalResult = positional(text.trim());
+  if (positionalResult) return positionalResult;
   const result: ReceptionProfileDraft = {
     age: age(text),
     city: one(text, [/(?:живу|проживаю)\s+в\s+([^,.;!?\n]+)/giu, /(?:родом)\s+из\s+([^,.;!?\n]+)/giu, /город\s*[:—-]\s*([^,.;!?\n]+)/giu]),

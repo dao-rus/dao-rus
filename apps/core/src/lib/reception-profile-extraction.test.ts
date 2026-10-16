@@ -21,4 +21,23 @@ describe("reception profile extraction", () => {
     expect(extractReceptionProfile("Меня зовут Иван, возраст 51, живу в Пензе, автослесарь"))
       .toMatchObject({ age: 51, city: "Пензе" });
   });
+
+  it.each(["46 лет, Самара, программист", "46, Самара, программист"]) (
+    "extracts the explicit three-part positional format: %s", (text) => {
+      expect(extractReceptionProfile(text)).toEqual({
+        age: 46, city: "Самара", occupation: "программист", education: null, familyStatus: null,
+      });
+    });
+
+  it.each([
+    "46 лет, Самара",
+    "46 лет, Самара, программист, инженер",
+    "46 или 47 лет, Самара, программист",
+    "46 лет, , программист",
+    "146 лет, Самара, программист",
+  ])("does not apply the positional format to an ambiguous or invalid message: %s", (text) => {
+    const result = extractReceptionProfile(text);
+    expect(result?.city).not.toBe("Самара");
+    expect(result?.occupation).not.toBe("программист");
+  });
 });
