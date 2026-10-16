@@ -9,7 +9,6 @@ import { LocalDateTime } from "@/components/local-date-time";
 import { CoreNavigation } from "../../components/core-navigation";
 import { TelegramAvatar } from "@/components/telegram-avatar";
 import { getActivitySummary } from "@/lib/activity";
-import { telegramReceptionConfig } from "@/lib/config";
 import { readInterfaceTexts } from "@/lib/interface-texts";
 import {
   getMembershipHistory,
@@ -87,10 +86,6 @@ export default async function ProfilePage({ searchParams }: ProfilePageProps) {
     .then((module) => module.readForumAnnouncementChoice(participant.id)).catch(() => null);
   const [awardOffers, awardBadges] = await Promise.all([getOwnAwardOffers(participant.id), getAwardBadges([participant.id])]);
   const hasAdminAccess = hasAnyAdminSection(participant.id);
-  const receptionConfig = telegramReceptionConfig();
-  const receptionUsername = receptionConfig.token && receptionConfig.webhookSecret &&
-    receptionConfig.forumChatId && receptionConfig.forumInviteUrl
-    ? receptionConfig.botUsername : undefined;
   const updateMessage = params.profile_update ? updateMessages[params.profile_update] : null;
   const aboutMessage = params.about_update ? aboutMessages[params.about_update] : null;
 
@@ -116,9 +111,6 @@ export default async function ProfilePage({ searchParams }: ProfilePageProps) {
             </div>
           </div>
           <div className="profileActions">
-            {receptionUsername ? <a className="button secondary" href={`https://t.me/${receptionUsername}?start=core`}>
-              {texts["profile.reception_link"]}
-            </a> : null}
             {hasAdminAccess ? <Link className="button secondary" href="/admin">Управление</Link> : null}
             <form action="/api/auth/logout" method="post">
               <button className="button secondary" type="submit">Выйти</button>

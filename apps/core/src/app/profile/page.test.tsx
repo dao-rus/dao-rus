@@ -31,7 +31,9 @@ vi.mock("@/lib/interface-texts", () => ({ readInterfaceTexts: mocks.readInterfac
 vi.mock("@/lib/tokenization", () => ({ getDarusBalance: mocks.getDarusBalance }));
 vi.mock("@/lib/forum-join-history", () => ({ getForumJoinDate: async () => null }));
 vi.mock("@/lib/reputation", () => ({ getReputationSummary: mocks.getReputationSummary }));
-vi.mock("@/lib/config", () => ({ hasPrototypeAdminAccess: () => false, telegramReceptionConfig: () => ({}) }));
+vi.mock("@/lib/config", () => ({ hasPrototypeAdminAccess: () => false, telegramReceptionConfig: () => ({
+  token: "token", webhookSecret: "secret", forumChatId: "-100", forumInviteUrl: "https://t.me/c/1", botUsername: "Daorus_bot",
+}) }));
 vi.mock("@/components/local-date-time", () => ({ LocalDateTime: () => null }));
 vi.mock("@/components/telegram-avatar", () => ({ TelegramAvatar: () => null }));
 
@@ -88,6 +90,7 @@ describe("/profile copy", () => {
     });
     mocks.readInterfaceTexts.mockResolvedValue({ values: {
       "signal.create": "Добавить сигнал", "profile.eyebrow": "О себе", "participants.title": "Моя сеть", "exchange.title": "Обмен",
+      "profile.reception_link": "Открыть Приёмную ДАО Русь",
     } });
     mocks.getDarusBalance.mockResolvedValue("0.100000");
     mocks.getReputationSummary.mockResolvedValue({ positiveCount: 2, viewerSignal: null });
@@ -114,6 +117,8 @@ describe("/profile copy", () => {
     expect(text).toContain("История начислений");
     expect(text).toMatch(/Положительных сигналов:\s+2/);
     expect(text).toContain("Сохранить профиль");
+    expect(text).not.toContain("Открыть Приёмную ДАО Русь");
+    expect(findProps(page, (props) => props.href === "https://t.me/Daorus_bot?start=core")).toBeNull();
     expect(text).toContain("Казань, Россия");
     expect(text).toContain("Возраст 51");
     expect(text).toContain("Пенза");
