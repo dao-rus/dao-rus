@@ -16,4 +16,9 @@ describe("reception profile extraction", () => {
     expect(extractReceptionProfile("Привет, рад познакомиться. Люблю историю и музыку."))
       .toBeNull();
   });
+
+  it("accepts an explicitly labelled age without requiring a unit", () => {
+    expect(extractReceptionProfile("Меня зовут Иван, возраст 51, живу в Пензе, автослесарь"))
+      .toMatchObject({ age: 51, city: "Пензе" });
+  });
 });

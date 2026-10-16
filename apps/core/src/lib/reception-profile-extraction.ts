@@ -14,7 +14,10 @@ function one(text: string, patterns: RegExp[]): string | null {
 
 function age(text: string): number | null {
   if (/(?:мне\s+|возраст\s*[:—-]?\s*)\d{1,3}\s+или\s+\d{1,3}/iu.test(text)) return null;
-  const values = [...text.matchAll(/(?:мне\s+|возраст\s*[:—-]?\s*|^|\s)(\d{1,3})\s*(?:лет|года|год)/giu)]
+  const values = [
+    ...text.matchAll(/(?:возраст\s*[:—-]?\s*)(\d{1,3})(?=\s*(?:лет|года|год)?(?:\D|$))/giu),
+    ...text.matchAll(/(?:мне\s+|^|\s)(\d{1,3})\s*(?:лет|года|год)/giu),
+  ]
     .map((match) => Number(match[1])).filter((value) => value >= 1 && value <= 120);
   return [...new Set(values)].length === 1 ? values[0] : null;
 }
