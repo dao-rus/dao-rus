@@ -1,14 +1,15 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { createReceptionProfileDraft } from "./reception-profile-draft";
+import { createReceptionProfileDraft, formatReceptionProfilePrompt } from "./reception-profile-draft";
 
-const texts = { "reception.apply.button": "Заполнить анкету", "reception.apply.prefill": "Откройте анкету" };
+const texts = { "reception.apply.button": "Заполнить анкету", "reception.apply.prefill": "Я подготовил предварительную анкету:\n{fields}\nПроверьте сведения и при необходимости исправьте." };
 vi.mock("./config", () => ({ telegramReceptionConfig: () => ({ token: "synthetic", miniAppEnabled: true }), appBaseUrl: () => "https://core.example" }));
 vi.mock("./interface-texts", () => ({ readInterfaceTexts: async () => ({ values: texts }) }));
 vi.mock("./reception-voice", () => ({ receptionApplicationButton: () => ({ text: texts["reception.apply.button"], web_app: { url: "https://core.example/reception/apply" } }) }));
 
-function database(existing: { source_message_update_id: number; sent?: boolean; error?: string | null } | null) {
+function database(existing: { source_message_update_id: number; sent?: boolean; error?: string | null; fields?: Partial<{ age: number; city: string; occupation: string; education: string; family_status: string }> } | null) {
   const row = existing && { id: "draft-1", status: "draft", source_message_update_id: existing.source_message_update_id,
-    draft_prompt_sent_at: existing.sent ? new Date() : null };
+    draft_prompt_sent_at: existing.sent ? new Date() : null, age: existing.fields?.age ?? null, city: existing.fields?.city ?? null,
+    occupation: existing.fields?.occupation ?? null, education: existing.fields?.education ?? null, family_status: existing.fields?.family_status ?? null };
   const client = { query: vi.fn(async (sql: string) => {
     if (sql.startsWith("INSERT")) return { rowCount: existing ? 0 : 1, rows: [] };
     if (sql.startsWith("SELECT id")) return { rowCount: row ? 1 : 0, rows: row ? [row] : [] };
@@ -20,6 +21,22 @@ function database(existing: { source_message_update_id: number; sent?: boolean; 
 afterEach(() => vi.unstubAllGlobals());
 
 describe("reception profile draft prompt", () => {
+  it("formats only the populated draft fields in the prompt", () => {
+    expect(formatReceptionProfilePrompt(texts["reception.apply.prefill"], {
+      age: 46, city: "Самара", occupation: "программист", education: "высшее", familyStatus: null,
+    })).toBe("Я подготовил предварительную анкету:\nВозраст: 46 лет\nГород: Самара\nЗанятие: программист\nОбразование: высшее\nПроверьте сведения и при необходимости исправьте.");
+  });
+
+  it("sends the values stored in the draft rather than the generic phrase", async () => {
+    const db = database({ source_message_update_id: 10, fields: { age: 46, city: "Самара", occupation: "программист", family_status: "женат" } });
+    const fetchMock = vi.fn(async () => new Response(JSON.stringify({ ok: true }), { status: 200 }));
+    vi.stubGlobal("fetch", fetchMock);
+    await createReceptionProfileDraft("42", "Мне 46 лет, живу в Самаре, работаю программистом", 11, db.pool);
+    const calls = fetchMock.mock.calls as unknown as [string, RequestInit][];
+    const body = JSON.parse(calls[0][1].body as string);
+    expect(body.text).toBe("Я подготовил предварительную анкету:\nВозраст: 46 лет\nГород: Самара\nЗанятие: программист\nСемейное положение: женат\nПроверьте сведения и при необходимости исправьте.");
+  });
+
   it("retries an undelivered existing draft on a new message and marks success only for Telegram ok", async () => {
     const db = database({ source_message_update_id: 10, error: "telegram_unknown" });
     const fetchMock = vi.fn(async () => new Response(JSON.stringify({ ok: true }), { status: 200 }));

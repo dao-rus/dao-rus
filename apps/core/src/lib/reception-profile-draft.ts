@@ -5,6 +5,26 @@ import { readInterfaceTexts } from "./interface-texts";
 import { receptionApplicationButton } from "./reception-voice";
 import { extractReceptionProfile } from "./reception-profile-extraction";
 
+type ReceptionDraftFields = {
+  age: number | null;
+  city: string | null;
+  occupation: string | null;
+  education: string | null;
+  familyStatus: string | null;
+};
+
+export function formatReceptionProfilePrompt(template: string, fields: ReceptionDraftFields): string {
+  const lines = [
+    fields.age == null ? null : `Возраст: ${fields.age} лет`,
+    fields.city == null ? null : `Город: ${fields.city}`,
+    fields.occupation == null ? null : `Занятие: ${fields.occupation}`,
+    fields.education == null ? null : `Образование: ${fields.education}`,
+    fields.familyStatus == null ? null : `Семейное положение: ${fields.familyStatus}`,
+  ].filter((line): line is string => line !== null);
+  const fallback = "Я подготовил предварительную анкету:\n{fields}\nПроверьте сведения и при необходимости исправьте.";
+  return (template.includes("{fields}") ? template : fallback).replace("{fields}", lines.join("\n"));
+}
+
 export async function createReceptionProfileDraft(
   telegramUserId: string, text: string, updateId: number, database: Pool = pool,
 ): Promise<boolean> {
@@ -22,8 +42,8 @@ export async function createReceptionProfileDraft(
       VALUES ($1,$2,$3,$4,false,$5,$6,'draft',$7)
       ON CONFLICT (telegram_user_id) DO NOTHING RETURNING id`,
       [telegramUserId, extracted.city, extracted.occupation, extracted.age, extracted.education, extracted.familyStatus, updateId]);
-    const current = await c.query<{ id: string; status: string; source_message_update_id: number | null; draft_prompt_sent_at: Date | null }>(
-      "SELECT id, status, source_message_update_id, draft_prompt_sent_at FROM reception_applications WHERE telegram_user_id=$1 FOR UPDATE",
+    const current = await c.query<{ id: string; status: string; source_message_update_id: number | null; draft_prompt_sent_at: Date | null; age: number | null; city: string | null; occupation: string | null; education: string | null; family_status: string | null }>(
+      "SELECT id, status, source_message_update_id, draft_prompt_sent_at, age, city, occupation, education, family_status FROM reception_applications WHERE telegram_user_id=$1 FOR UPDATE",
       [telegramUserId]);
     const draft = current.rows[0];
     if (!draft || draft.status !== "draft" || draft.draft_prompt_sent_at || (!inserted.rowCount && draft.source_message_update_id === updateId)) {
@@ -37,7 +57,9 @@ export async function createReceptionProfileDraft(
     try {
       const response = await fetch(`https://api.telegram.org/bot${config.token}/sendMessage`, {
         method: "POST", headers: { "Content-Type": "application/json" }, signal: AbortSignal.timeout(8000),
-        body: JSON.stringify({ chat_id: Number(telegramUserId), text: texts["reception.apply.prefill"],
+        body: JSON.stringify({ chat_id: Number(telegramUserId), text: formatReceptionProfilePrompt(texts["reception.apply.prefill"], {
+          age: draft.age, city: draft.city, occupation: draft.occupation, education: draft.education, familyStatus: draft.family_status,
+        }),
           reply_markup: { inline_keyboard: [[button]] } }),
       });
       const body = await response.json().catch(() => null) as { ok?: boolean } | null;

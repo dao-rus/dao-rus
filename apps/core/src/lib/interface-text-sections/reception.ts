@@ -39,5 +39,5 @@ export const receptionTexts = [
   { section: "Приёмная", key: "reception.apply.open_bot", label: "Открыть бота Приёмной", defaultValue: "Открыть бота Приёмной", multiline: false },
   { section: "Приёмная", key: "reception.apply.button", label: "Кнопка Mini App в боте", defaultValue: "Заполнить анкету", multiline: false },
   { section: "Приёмная", key: "reception.apply.start", label: "Предложение анкеты в боте", defaultValue: "Можно заполнить анкету или продолжить переписку здесь.", multiline: false },
-  { section: "Приёмная", key: "reception.apply.prefill", label: "Предложение предварительной анкеты", defaultValue: "Я выделил однозначные сведения из вашего сообщения. Проверьте их в предварительной анкете: ничего не будет записано в профиль без вашего подтверждения.", multiline: true },
+  { section: "Приёмная", key: "reception.apply.prefill", label: "Предложение предварительной анкеты", defaultValue: "Я подготовил предварительную анкету:\n{fields}\nПроверьте сведения и при необходимости исправьте.", multiline: true },
 ] as const;
