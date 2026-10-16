@@ -26,8 +26,8 @@
 /* Old Standard TT — книжная антиква русских изданий конца XIX — начала XX века
    (Алексей Крюков, SIL OFL 1.1, текст лицензии — public/fonts/OFL-old-standard-tt.txt).
    Файлы лежат в репозитории и отдаются с нашего домена: ни одного внешнего запроса из
-   браузера читателя. Начертание используется только на публичной странице награды,
-   поэтому на остальных страницах эти файлы не скачиваются. */
+   браузера читателя. Начертание используется для смысловых заголовков пользовательских
+   страниц и загружается только там, где такой заголовок есть. */
 @font-face {
   font-family: "Old Standard TT"; font-style: normal; font-weight: 400; font-display: swap;
   src: url("/fonts/old-standard-tt-cyrillic-400.woff2") format("woff2");
@@ -95,6 +95,15 @@ button, input, textarea { font: inherit; }
 .adminGroup a span { font-size: 13px; color: var(--muted); }
 
 h1 { margin: 0 0 12px; font-size: clamp(34px, 7vw, 64px); line-height: 1; }
+/* Содержательные заголовки отделены от рабочих инструментов: карточки управления
+   всегда содержат хлебные крошки или список разделов. Навигация, формы, таблицы,
+   подписи и имена участников продолжают наследовать Arial от body. */
+.shell > .card:not(:has(.adminCrumbs, .adminGroup)) :is(h1, h2, h3) {
+  font-family: "Old Standard TT", Georgia, "Times New Roman", serif;
+  overflow-wrap: anywhere;
+  hyphens: auto;
+}
+.participantName { font-family: Arial, Helvetica, sans-serif; }
 .lead { font-size: 19px; line-height: 1.55; max-width: 620px; color: #3f453e; }
 .muted, .hint { color: var(--muted); }
 .hint { font-size: 13px; line-height: 1.5; margin-top: 28px; }
