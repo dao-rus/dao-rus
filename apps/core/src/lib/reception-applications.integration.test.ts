@@ -44,18 +44,30 @@ describe.skipIf(!databaseUrl)("Reception applications on isolated PostgreSQL", (
     await db.query("BEGIN;" + readFileSync(new URL("053_reception_publication.sql", directory), "utf8") + ";COMMIT;");
     await db.query("BEGIN;" + readFileSync(new URL("054_reception_invitations.sql", directory), "utf8") + ";COMMIT;");
     await db.query("BEGIN;" + readFileSync(new URL("055_reception_profile_draft.sql", directory), "utf8") + ";COMMIT;");
+    await db.query("BEGIN;" + readFileSync(new URL("056_reception_profile_age.sql", directory), "utf8") + ";COMMIT;");
     expect((await db.query("SELECT * FROM participants WHERE id=$1", [participant.id])).rows[0]).toEqual(participant);
   }, 30000);
-  beforeEach(async () => { await db.query("TRUNCATE reception_applications CASCADE"); });
+  beforeEach(async () => {
+    await db.query("TRUNCATE reception_applications CASCADE");
+    await db.query("DELETE FROM external_identities WHERE external_user_id = '42' OR provider_subject IN ('miniapp:42', 'roster:42')");
+    await db.query("DELETE FROM telegram_roster_entries WHERE telegram_user_id = 42");
+  });
   afterAll(async () => { if (created) await db.query(`DROP SCHEMA ${schema} CASCADE`); await db.end(); });
 
-  it("atomically saves application without a Participant, invitation or duplicate publication", async () => {
+  it("creates one verified Participant, saves the profile and avoids duplicate identities", async () => {
     const before = (await db.query("SELECT count(*) FROM participants")).rows[0];
     const response = await POST(request("POST")); expect(response.status).toBe(201);
     expect(response.headers.get("cache-control")).toBe("no-store"); expect(response.headers.get("set-cookie")).toBeNull();
     expect(await application(response)).toMatchObject({ ...form, revision: 1, status: "submitted", invitationStatus: "not_requested" });
-    expect((await db.query("SELECT count(*) FROM participants")).rows[0]).toEqual(before);
-    expect((await db.query("SELECT participant_id FROM reception_applications")).rows[0].participant_id).toBeNull();
+    expect(Number((await db.query("SELECT count(*) FROM participants")).rows[0].count)).toBe(Number(before.count) + 1);
+    expect((await db.query("SELECT participant_id FROM reception_applications")).rows[0].participant_id).not.toBeNull();
+    expect((await db.query(`SELECT p.profile_age, p.profile_city, p.profile_occupation
+      FROM participants p JOIN reception_applications a ON a.participant_id=p.id
+      WHERE a.telegram_user_id='42'`)).rows[0])
+      .toEqual({ profile_age: 35, profile_city: "Москва", profile_occupation: "Мастер" });
+    await PUT(request("PUT"));
+    expect((await db.query("SELECT count(*)::int AS count FROM participants WHERE profile_city='Москва'")).rows[0].count).toBe(1);
+    expect((await db.query("SELECT count(*)::int AS count FROM external_identities WHERE external_user_id='42'")).rows[0].count).toBe(1);
     expect((await db.query("SELECT kind FROM reception_application_deliveries")).rows).toEqual([]);
   });
   it("serializes concurrent resubmissions to one application without publication operations", async () => {
@@ -94,12 +106,13 @@ describe.skipIf(!databaseUrl)("Reception applications on isolated PostgreSQL", (
     expect((await POST(request("POST", form, data))).status).toBe(401);
     expect((await db.query("SELECT count(*)::int AS count FROM reception_applications")).rows[0].count).toBe(0);
   });
-  it("uses existing OIDC Telegram identity without modifying identity or profile", async () => {
+  it("uses existing OIDC Telegram identity and updates only reception profile fields", async () => {
     const p = (await db.query("INSERT INTO participants(display_name, profile_bio, display_name_chosen_in_core) VALUES ('Core name', 'Core bio', true) RETURNING *")).rows[0];
     const identity = (await db.query("INSERT INTO external_identities(participant_id,provider,provider_subject,external_user_id) VALUES($1,'telegram','oidc:existing','42') RETURNING *", [p.id])).rows[0];
     await POST(request("POST")); await PUT(request("PUT", { ...form, occupation: "Новые сведения" }));
     expect((await db.query("SELECT participant_id FROM reception_applications")).rows[0].participant_id).toBe(p.id);
-    expect((await db.query("SELECT * FROM participants WHERE id=$1", [p.id])).rows[0]).toEqual(p);
+    expect((await db.query("SELECT profile_city, profile_occupation FROM participants WHERE id=$1", [p.id])).rows[0])
+      .toEqual({ profile_city: "Москва", profile_occupation: "Новые сведения" });
     expect((await db.query("SELECT * FROM external_identities WHERE id=$1", [identity.id])).rows[0]).toEqual(identity);
     await db.query("DELETE FROM external_identities WHERE id=$1", [identity.id]);
   });
@@ -110,16 +123,17 @@ describe.skipIf(!databaseUrl)("Reception applications on isolated PostgreSQL", (
       VALUES('42','draft',1,NULL,NULL)`);
     const response = await PUT(request("PUT", { ...form, education: "Высшее", familyStatus: "женат" }));
     expect(response.status).toBe(200);
-    expect((await db.query("SELECT profile_city, profile_occupation, profile_education, profile_family_status FROM participants WHERE id=$1", [p])).rows[0])
-      .toEqual({ profile_city: "Москва", profile_occupation: "Мастер", profile_education: "Высшее", profile_family_status: "женат" });
+    expect((await db.query("SELECT profile_age, profile_city, profile_occupation, profile_education, profile_family_status FROM participants WHERE id=$1", [p])).rows[0])
+      .toEqual({ profile_age: 35, profile_city: "Москва", profile_occupation: "Мастер", profile_education: "Высшее", profile_family_status: "женат" });
     expect((await db.query("SELECT count(*)::int AS count FROM reception_applications WHERE telegram_user_id='42'")).rows[0].count).toBe(1);
     expect((await db.query("SELECT count(*)::int AS count FROM reception_application_deliveries WHERE application_id=(SELECT id FROM reception_applications WHERE telegram_user_id='42')")).rows[0].count).toBe(0);
   });
   it("links an identity established after submission and refuses conflicting mappings", async () => {
-    await POST(request("POST"));
+    await db.query(`INSERT INTO reception_applications(telegram_user_id,status,write_window_count,city,occupation)
+      VALUES('42','draft',1,NULL,NULL)`);
     const p = (await db.query("INSERT INTO participants(display_name) VALUES ('Later login') RETURNING id")).rows[0];
     const e = (await db.query("INSERT INTO external_identities(participant_id,provider,provider_subject,external_user_id) VALUES($1,'telegram','miniapp:42','42') RETURNING id", [p.id])).rows[0];
-    await POST(request("POST"));
+    await PUT(request("PUT"));
     expect((await db.query("SELECT participant_id FROM reception_applications")).rows[0].participant_id).toBe(p.id);
     await db.query("UPDATE external_identities SET external_user_id='99' WHERE id=$1", [e.id]);
     const other = (await db.query("INSERT INTO participants(display_name) VALUES ('Other') RETURNING id")).rows[0];
@@ -128,15 +142,16 @@ describe.skipIf(!databaseUrl)("Reception applications on isolated PostgreSQL", (
     expect(await application(await GET(request("GET")))).toMatchObject({ city: form.city, revision: 1 });
     await db.query("DELETE FROM external_identities WHERE id=ANY($1::uuid[])", [[e.id, otherE.id]]);
   });
-  it("reuses the imported roster Participant without creating an external identity", async () => {
+  it("reuses the imported roster Participant and records the verified identity", async () => {
     const p = (await db.query("INSERT INTO participants(display_name) VALUES ('Roster participant') RETURNING *")).rows[0];
     const roster = (await db.query("INSERT INTO telegram_roster_entries(telegram_user_id,display_name,is_bot,participant_id,observed_at,telegram_presence_observed_at) VALUES(42,'Roster',false,$1,now(),now()) RETURNING *", [p.id])).rows[0];
     try {
       expect((await POST(request("POST"))).status).toBe(201);
       expect((await db.query("SELECT participant_id FROM reception_applications")).rows[0].participant_id).toBe(p.id);
-      expect((await db.query("SELECT * FROM participants WHERE id=$1", [p.id])).rows[0]).toEqual(p);
+      expect((await db.query("SELECT profile_age, profile_city, profile_occupation FROM participants WHERE id=$1", [p.id])).rows[0])
+        .toEqual({ profile_age: 35, profile_city: "Москва", profile_occupation: "Мастер" });
       expect((await db.query("SELECT * FROM telegram_roster_entries WHERE telegram_user_id=42")).rows[0]).toEqual(roster);
-      expect((await db.query("SELECT count(*)::int AS count FROM external_identities WHERE participant_id=$1", [p.id])).rows[0].count).toBe(0);
+      expect((await db.query("SELECT count(*)::int AS count FROM external_identities WHERE participant_id=$1", [p.id])).rows[0].count).toBe(1);
     } finally { await db.query("DELETE FROM telegram_roster_entries WHERE telegram_user_id=42"); }
   });
   it("enforces a real concurrent per-candidate write quota and resets after a minute", async () => {

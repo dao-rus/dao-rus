@@ -79,6 +79,9 @@ describe("/profile copy", () => {
     mocks.getProfileAbout.mockResolvedValue({
       bio: "",
       bioVisibility: "members",
+      age: 51,
+      city: "Пенза",
+      occupation: "Автослесарь",
       residence: { name: "Казань", type: "город", country: "Россия" },
       interests: [],
       signals: [],
@@ -112,6 +115,9 @@ describe("/profile copy", () => {
     expect(text).toMatch(/Положительных сигналов:\s+2/);
     expect(text).toContain("Сохранить профиль");
     expect(text).toContain("Казань, Россия");
+    expect(text).toContain("Возраст 51");
+    expect(text).toContain("Пенза");
+    expect(text).toContain("Автослесарь");
     expect(findProps(page, (props) => props.name === "residence_name")?.form).toBe("profile-form");
     expect(findProps(page, (props) => props.name === "residence_type")?.form).toBe("profile-form");
     expect(findProps(page, (props) => props.name === "residence_country")?.form).toBe("profile-form");

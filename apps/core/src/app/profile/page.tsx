@@ -163,7 +163,8 @@ export default async function ProfilePage({ searchParams }: ProfilePageProps) {
                 defaultValue={about?.residence?.country ?? "Россия"} placeholder="Страна" aria-label="Страна" />
             </div>
             <p className="muted privacyHint">Место жительства необязательно. Оставьте название пустым, если не хотите его указывать. Указанное место видно только вошедшим участникам.</p>
-            {(about?.city || about?.occupation || about?.education || about?.familyStatus) ? <dl className="facts">
+            {(about?.age || about?.city || about?.occupation || about?.education || about?.familyStatus) ? <dl className="facts">
+              {about.age ? <div><dt>Возраст</dt><dd>{about.age}</dd></div> : null}
               {about.city ? <div><dt>Город из анкеты Приёмной</dt><dd>{about.city}</dd></div> : null}
               {about.occupation ? <div><dt>Род занятий</dt><dd>{about.occupation}</dd></div> : null}
               {about.education ? <div><dt>Образование</dt><dd>{about.education}</dd></div> : null}

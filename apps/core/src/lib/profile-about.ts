@@ -39,6 +39,7 @@ export type Residence = {
 export type ProfileAbout = {
   bio: string;
   bioVisibility: ProfileVisibility;
+  age?: number | null;
   city?: string | null;
   occupation?: string | null;
   education?: string | null;
@@ -112,6 +113,7 @@ function aboutFromRows(
   return {
     bio: String(participantRow.profile_bio ?? ""),
     bioVisibility: String(participantRow.profile_bio_visibility) as ProfileVisibility,
+    age: participantRow.profile_age === null || participantRow.profile_age === undefined ? null : Number(participantRow.profile_age),
     city: participantRow.profile_city ? String(participantRow.profile_city) : null,
     occupation: participantRow.profile_occupation ? String(participantRow.profile_occupation) : null,
     education: participantRow.profile_education ? String(participantRow.profile_education) : null,
@@ -143,7 +145,7 @@ export async function getProfileAboutWithDatabase(
   const [participant, interests, signals] = await Promise.all([
     database.query(
       `SELECT profile_bio, profile_bio_visibility,
-              residence_name, residence_type, residence_country,
+              profile_age, residence_name, residence_type, residence_country,
               profile_city, profile_occupation, profile_education, profile_family_status
          FROM participants
         WHERE id = $1::uuid`,
@@ -180,7 +182,7 @@ export async function getVisibleProfileAboutWithDatabase(
                 ELSE ''
               END AS profile_bio,
               profile_bio_visibility,
-              residence_name, residence_type, residence_country,
+              NULL AS profile_age, residence_name, residence_type, residence_country,
               NULL AS profile_city, NULL AS profile_occupation, NULL AS profile_education, NULL AS profile_family_status
          FROM participants
         WHERE id = $1::uuid`,

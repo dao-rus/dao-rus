@@ -1,6 +1,6 @@
 import type { Pool } from "pg";
 import { pool } from "./db";
-import { inspectTelegramParticipantById, TelegramParticipantIdentityConflictError } from "./telegram-participant";
+import { findOrCreateParticipantByTelegramId, TelegramParticipantIdentityConflictError } from "./telegram-participant";
 import type { TelegramIdentityProfile } from "./identity";
 import { receptionTelegramName, receptionTelegramUsername } from "./reception-telegram-profile";
 
@@ -70,32 +70,21 @@ export async function saveReceptionApplication(
     const sameWindow = existing && now.getTime() - existing.write_window_started_at.getTime() < 60_000;
     if (sameWindow && existing.write_window_count >= 10) throw new ReceptionApplicationError("rate_limit");
 
-    // Read-only identity resolution. Never call resolveTelegramParticipant or profile synchronization.
     let participantId: string | null;
     try {
-      participantId = await inspectTelegramParticipantById(client, telegramUserId);
+      participantId = await findOrCreateParticipantByTelegramId(client, telegramUserId, "telegram_reception");
     } catch (error) {
       if (error instanceof TelegramParticipantIdentityConflictError) throw new ReceptionApplicationError("identity_conflict");
       throw error;
     }
-    const miniAppIdentity = (await client.query(`SELECT participant_id, external_user_id FROM external_identities
-      WHERE provider = 'telegram' AND provider_subject = $1`, [`miniapp:${telegramUserId}`])).rows[0];
-    if (miniAppIdentity) {
-      if ((participantId && participantId !== miniAppIdentity.participant_id)
-        || (miniAppIdentity.external_user_id && miniAppIdentity.external_user_id !== telegramUserId)) {
-        throw new ReceptionApplicationError("identity_conflict");
-      }
-      participantId = miniAppIdentity.participant_id;
-    }
-    if (participantId) {
-      await client.query(`UPDATE participants SET
-        profile_city = COALESCE($2, profile_city),
-        profile_occupation = COALESCE($3, profile_occupation),
-        profile_education = COALESCE($4, profile_education),
-        profile_family_status = COALESCE($5, profile_family_status),
-        updated_at = now()
-        WHERE id=$1::uuid`, [participantId, form.city, form.occupation, form.education, form.familyStatus]);
-    }
+    await client.query(`UPDATE participants SET
+      profile_age = COALESCE($2, profile_age),
+      profile_city = COALESCE($3, profile_city),
+      profile_occupation = COALESCE($4, profile_occupation),
+      profile_education = COALESCE($5, profile_education),
+      profile_family_status = COALESCE($6, profile_family_status),
+      updated_at = now()
+      WHERE id=$1::uuid`, [participantId, form.age, form.city, form.occupation, form.education, form.familyStatus]);
     let created = false;
     const name = telegramProfile ? receptionTelegramName(telegramProfile.firstName, telegramProfile.lastName) : existing?.telegram_name ?? null;
     const username = telegramProfile ? receptionTelegramUsername(telegramProfile.username) : existing?.telegram_username ?? null;

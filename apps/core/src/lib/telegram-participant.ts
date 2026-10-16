@@ -71,7 +71,7 @@ export async function inspectTelegramParticipantById(
 export async function findOrCreateParticipantByTelegramIdWithResult(
   client: TelegramParticipantClient,
   telegramUserId: string,
-  source: "telegram_forum_join" | "mtproto_roster" = "telegram_forum_join",
+  source: "telegram_forum_join" | "mtproto_roster" | "telegram_reception" = "telegram_forum_join",
 ): Promise<{ participantId: string; created: boolean }> {
   // Serialize competing join updates before checking for an existing identity.
   await client.query("SELECT pg_advisory_xact_lock(42006, hashtext($1::text))", [telegramUserId]);
@@ -122,7 +122,8 @@ export async function findOrCreateParticipantByTelegramIdWithResult(
 export async function findOrCreateParticipantByTelegramId(
   client: TelegramParticipantClient,
   telegramUserId: string,
+  source: "telegram_forum_join" | "mtproto_roster" | "telegram_reception" = "telegram_forum_join",
 ): Promise<string> {
-  return (await findOrCreateParticipantByTelegramIdWithResult(client, telegramUserId))
+  return (await findOrCreateParticipantByTelegramIdWithResult(client, telegramUserId, source))
     .participantId;
 }
