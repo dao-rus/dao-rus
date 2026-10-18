@@ -38,7 +38,7 @@ describe("Slovotvor word list", () => {
     await listSlovotvorWords(undefined, "new", database);
     await listSlovotvorWords(undefined, "old", database);
 
-    expect(queries[0]).toContain("ORDER BY w.created_at DESC, w.id DESC");
+    expect(queries[0]).toContain("ORDER BY CASE WHEN w.word IS NULL THEN 1 ELSE 0 END, better_votes DESC, w.created_at DESC, w.id DESC");
     expect(queries[1]).toContain("translate(lower(btrim(COALESCE(w.word, w.source_word, w.explanation)))");
     expect(queries[1]).toContain("w.created_at DESC, w.id DESC");
     expect(queries[2]).toContain("ORDER BY w.created_at DESC, w.id DESC");

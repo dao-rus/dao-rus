@@ -60,6 +60,8 @@ function wordFromRow(row: Record<string, unknown>): SlovotvorWord {
     authorName: String(row.author_name),
     slug: String(row.slug),
     createdAt: new Date(String(row.created_at)),
+    betterVotes: Number(row.better_votes ?? 0),
+    worseVotes: Number(row.worse_votes ?? 0),
   };
 }
 

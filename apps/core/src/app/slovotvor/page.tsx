@@ -71,6 +71,10 @@ export default async function SlovotvorPage({ searchParams }: {
                   {!entry.word && !entry.sourceWord && entry.explanation ? <p className="slovotvorDescriptionPreview">{entry.explanation}</p> : null}
                 </div>
                 <div className="slovotvorCardFooter">
+                  {entry.word ? <div className="slovotvorVotes" aria-label="Оценки">
+                    <span className="slovotvorBetter">Лучше {entry.betterVotes}</span>
+                    <span className="slovotvorWorse">Хуже {entry.worseVotes}</span>
+                  </div> : null}
                   <span className="slovotvorAuthor">{entry.authorName}</span>
                 </div>
               </Link>
