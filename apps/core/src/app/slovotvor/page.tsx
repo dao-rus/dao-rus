@@ -47,15 +47,16 @@ export default async function SlovotvorPage({ searchParams }: {
         <div className="slovotvorCards">
           {words.map((entry) => (
             <article className="slovotvorCard" key={entry.word}>
-              <div className="slovotvorWordLine">
-                <strong>{entry.word}</strong>
-                <span aria-hidden="true">←</span>
-                <span>{entry.sourceWord}</span>
-              </div>
-              <p className="slovotvorAuthor">Автор: {entry.authorName}</p>
-              <div className="slovotvorCardFooter">
-                <Link className="slovotvorCardLink" href={`/slovotvor/${entry.slug}`}>Открыть карточку</Link>
-              </div>
+              <Link className="slovotvorCardLink" href={`/slovotvor/${entry.slug}`}>
+                <div className="slovotvorWordLine">
+                  <strong>{entry.word}</strong>
+                  <span aria-hidden="true">←</span>
+                  <span>{entry.sourceWord}</span>
+                </div>
+                <div className="slovotvorCardFooter">
+                  <span className="slovotvorAuthor">{entry.authorName}</span>
+                </div>
+              </Link>
             </article>
           ))}
         </div>
