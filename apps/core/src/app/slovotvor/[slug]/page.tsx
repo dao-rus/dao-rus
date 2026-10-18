@@ -3,6 +3,8 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { getSlovotvorVoteSummary, getSlovotvorWordBySlug, listSlovotvorVariants } from "@/lib/slovotvor";
 import { getCurrentParticipant } from "@/lib/session";
+import { appBaseUrl } from "@/lib/config";
+import { SlovotvorShareAction } from "./share-action";
 
 export const dynamic = "force-dynamic";
 
@@ -27,6 +29,7 @@ export default async function SlovotvorWordPage({ params }: { params: Promise<{ 
   ]);
   const hasWords = Boolean(word.word || word.sourceWord);
   const loginHref = `/api/auth/telegram/start?next=${encodeURIComponent(`/slovotvor/${word.slug}`)}`;
+  const shareUrl = new URL(`/slovotvor/${word.slug}`, appBaseUrl()).toString();
 
   return (
     <main className="shell">
@@ -34,21 +37,12 @@ export default async function SlovotvorWordPage({ params }: { params: Promise<{ 
         <Link className="slovotvorBackLink" href="/slovotvor">← На главную</Link>
         <div className="slovotvorWordHeading">
           {word.word ? <h1>{word.word}</h1> : null}
-          {word.sourceWord ? <p>← {word.sourceWord}</p> : null}
+          {word.sourceWord ? <p className="slovotvorSourceWord">← {word.sourceWord}</p> : null}
           {!hasWords && word.explanation ? <p className="slovotvorDescriptionMain">{word.explanation}</p> : null}
         </div>
         {hasWords && word.explanation ? <p className="slovotvorWordExplanation">{word.explanation}</p> : null}
         {word.word ? <section className="slovotvorVoting" aria-label="Оценка слова">
-          <div className="slovotvorScoreboard">
-            <div className="slovotvorScore slovotvorBetter">
-              <strong>{votes.better}</strong>
-              <span>Лучше</span>
-            </div>
-            <div className="slovotvorScore slovotvorWorse">
-              <strong>{votes.worse}</strong>
-              <span>Хуже</span>
-            </div>
-          </div>
+          <p className="slovotvorVotingQuestion">Удачное слово?</p>
           <div className="slovotvorVoteActions">
             {participant ? <>
               <form action="/api/slovotvor/vote" method="post">
@@ -71,7 +65,12 @@ export default async function SlovotvorWordPage({ params }: { params: Promise<{ 
             <strong>{variant.word}</strong>
           </div> : null)}
         </section> : null}
-        <p className="slovotvorWordAuthor">{word.authorName}</p>
+        <div className="slovotvorWordFooter">
+          <SlovotvorShareAction url={shareUrl} />
+          <Link className="slovotvorWordAuthor" href={`/slovotvor?author=${encodeURIComponent(word.authorId)}`}>
+            {word.authorName}
+          </Link>
+        </div>
       </article>
     </main>
   );

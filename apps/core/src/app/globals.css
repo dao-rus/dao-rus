@@ -918,27 +918,36 @@ div.userText > :last-child { margin-bottom: 0; }
 .slovotvorWordPage { width: min(760px, 100%); }
 .slovotvorBackLink { color: var(--muted); font-size: 14px; text-decoration: none; }
 .slovotvorBackLink:hover { color: var(--ink); }
-.slovotvorWordHeading { margin: 34px 0 14px; }
-.slovotvorWordHeading h1 { margin: 0; font-size: clamp(42px, 10vw, 78px); line-height: 1; overflow-wrap: anywhere; }
-.slovotvorWordHeading p { margin: 14px 0 0; color: var(--muted); font-size: 20px; }
-.slovotvorWordHeading .slovotvorDescriptionMain { color: var(--ink); font-size: 20px; line-height: 1.5; white-space: pre-wrap; overflow-wrap: anywhere; }
-.slovotvorWordAuthor { margin: 24px 0 0; color: var(--muted); font-size: 12px; text-align: right; }
-.slovotvorWordExplanation { color: var(--muted); font-size: 15px; }
-.slovotvorScoreboard { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 14px; margin: 42px 0 18px; }
-.slovotvorScore { display: grid; justify-items: center; gap: 4px; border: 1px solid var(--line); border-radius: 12px; padding: 22px 16px; }
-.slovotvorScore strong { font-size: clamp(42px, 9vw, 68px); line-height: 1; }
-.slovotvorScore span { font-size: 16px; font-weight: 700; }
+.slovotvorWordHeading { margin: 30px 0 0; }
+.slovotvorWordHeading h1 { margin: 0; text-align: center; font-size: clamp(42px, 10vw, 78px); line-height: 1; overflow-wrap: anywhere; }
+.slovotvorWordHeading .slovotvorSourceWord { margin: 12px 0 0; padding-left: clamp(24px, 12vw, 96px); color: var(--muted); font-size: 20px; overflow-wrap: anywhere; }
+.slovotvorWordHeading .slovotvorDescriptionMain { margin: 18px 0 0; color: var(--ink); font-size: 17px; line-height: 1.6; text-align: left; white-space: pre-wrap; overflow-wrap: anywhere; }
+.slovotvorWordAuthor { color: var(--muted); font-size: 12px; text-align: right; text-decoration: none; }
+.slovotvorWordAuthor:hover { color: var(--ink); text-decoration: underline; }
+.slovotvorWordExplanation { margin: 18px 0 0; color: var(--ink); font-size: 17px; line-height: 1.6; white-space: pre-wrap; overflow-wrap: anywhere; }
+.slovotvorVoting { margin-top: 26px; text-align: center; }
+.slovotvorVotingQuestion { margin: 0 0 10px; color: var(--muted); font-size: 14px; }
 .slovotvorVoteActions { display: flex; flex-wrap: wrap; justify-content: center; gap: 10px; }
 .slovotvorVoteActions form { margin: 0; }
 .slovotvorVoteButton { display: inline-flex; align-items: center; gap: 7px; min-width: 54px; justify-content: center; }
 .slovotvorVoteButton[aria-pressed="true"] { border-color: var(--accent); background: var(--accent); color: var(--accent-ink); }
 .slovotvorVoteIcon { flex: 0 0 auto; }
-.slovotvorOtherVariants { margin-top: 44px; border-top: 1px solid var(--line); padding-top: 24px; }
+.slovotvorOtherVariants { margin-top: 30px; border-top: 1px solid var(--line); padding-top: 20px; }
 .slovotvorOtherVariants h2 { margin: 0 0 16px; font-size: 22px; }
 .slovotvorOtherVariant { display: flex; align-items: baseline; gap: 14px; font-size: 16px; }
 .slovotvorOtherVariant strong { margin-right: auto; font-size: 22px; }
+.slovotvorWordFooter { display: flex; align-items: center; justify-content: space-between; gap: 16px; margin-top: 28px; }
+.slovotvorShareAction { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; }
+.slovotvorShareButton { display: inline-flex; align-items: center; gap: 7px; min-height: 38px; padding: 0 14px; border: 1px solid #a95725; border-radius: 10px; background: #c66b32; color: #fff; cursor: pointer; font: inherit; }
+.slovotvorShareButton:hover { background: #b85f2b; border-color: #984b20; }
+.slovotvorShareButton:focus-visible { outline: 2px solid #984b20; outline-offset: 2px; }
+.slovotvorShareButton:active { background: #a95725; }
+.slovotvorShareIcon { flex: 0 0 auto; }
+.slovotvorShareNotice { color: var(--muted); font-size: 12px; }
 @media (max-width: 560px) {
   .slovotvorWordFields { grid-template-columns: 1fr; }
+  .slovotvorWordFooter { align-items: flex-start; flex-direction: column; }
+  .slovotvorWordAuthor { align-self: flex-end; }
 }
 
 .awardImage { object-fit: contain; max-width: 100%; }
