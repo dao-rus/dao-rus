@@ -4,6 +4,7 @@ const awardPagePath = /^\/awards\/[a-z0-9]+(?:-[a-z0-9]+)*$/;
 
 // Only fixed internal destinations may survive the Telegram login round trip.
 export function safeAuthReturnPath(value: string | null | undefined): string | null {
+  if (value === "/slovotvor") return value;
   if (value === "/need") return value;
   if (value && value.length <= 100 + "/awards/".length && awardPagePath.test(value)) return value;
   return value && signalCardPath.test(value) ? value : null;

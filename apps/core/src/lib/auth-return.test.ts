@@ -4,7 +4,8 @@ import { safeAuthReturnPath } from "./auth-return";
 const id = "10000000-0000-4000-8000-000000000001";
 
 describe("safeAuthReturnPath", () => {
-  it("allows /need and canonical Signal card paths only", () => {
+  it("allows fixed public return paths and canonical card paths", () => {
+    expect(safeAuthReturnPath("/slovotvor")).toBe("/slovotvor");
     expect(safeAuthReturnPath("/need")).toBe("/need");
     expect(safeAuthReturnPath(`/exchange/${id}`)).toBe(`/exchange/${id}`);
     expect(safeAuthReturnPath(`/award-offers/${id}`)).toBe(`/award-offers/${id}`);

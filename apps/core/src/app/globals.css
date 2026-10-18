@@ -885,6 +885,7 @@ div.userText > :last-child { margin-bottom: 0; }
 .slovotvorForm label { display: grid; gap: 6px; font-size: 14px; }
 .slovotvorForm input, .slovotvorForm textarea { width: 100%; border: 1px solid var(--line); border-radius: 8px; padding: 10px 12px; background: var(--bg); color: var(--ink); }
 .slovotvorForm textarea { resize: vertical; }
+.slovotvorFormHint { margin: -4px 0 0; color: var(--muted); font-size: 12px; }
 .slovotvorForm .button { justify-self: start; }
 .slovotvorForm .button:disabled { opacity: .55; cursor: not-allowed; }
 .slovotvorCatalogHeader { display: flex; flex-wrap: wrap; align-items: baseline; justify-content: space-between; gap: 12px; }
@@ -895,14 +896,14 @@ div.userText > :last-child { margin-bottom: 0; }
 .slovotvorCards { display: grid; gap: 12px; margin-top: 18px; }
 .slovotvorCard { border: 1px solid var(--line); border-radius: 12px; background: var(--card); transition: background-color .15s, border-color .15s, box-shadow .15s; }
 .slovotvorCard:hover, .slovotvorCard:focus-within { border-color: var(--accent); background: var(--bg); box-shadow: 0 6px 20px rgba(35, 35, 28, .08); }
-.slovotvorCardLink { display: grid; gap: 12px; padding: 16px; color: var(--ink); text-decoration: none; cursor: pointer; border-radius: 12px; }
+.slovotvorCardLink { display: grid; min-width: 0; gap: 12px; padding: 16px; color: var(--ink); text-decoration: none; cursor: pointer; border-radius: 12px; }
 .slovotvorCardLink:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
 .slovotvorWordLine { display: flex; flex-wrap: wrap; align-items: baseline; gap: 8px; }
 .slovotvorWordLine strong { font-size: clamp(24px, 5vw, 32px); line-height: 1.1; overflow-wrap: anywhere; }
-.slovotvorWordLine span:last-child { color: var(--muted); font-size: 15px; }
+.slovotvorWordLine span:last-child { color: var(--muted); font-size: 15px; overflow-wrap: anywhere; }
 .slovotvorDescriptionPreview { flex-basis: 100%; display: -webkit-box; margin: 0; overflow: hidden; color: var(--ink); font-size: 15px; line-height: 1.5; overflow-wrap: anywhere; -webkit-box-orient: vertical; -webkit-line-clamp: 3; line-clamp: 3; }
 .slovotvorAuthor { color: var(--muted); font-size: 12px; }
-.slovotvorCardFooter { display: flex; flex-wrap: wrap; align-items: center; justify-content: flex-end; gap: 12px; border-top: 1px solid var(--line); padding-top: 12px; }
+.slovotvorCardFooter { display: flex; flex-wrap: wrap; align-items: center; justify-content: flex-end; gap: 12px; }
 .slovotvorVotes { display: flex; flex-wrap: wrap; gap: 12px; font-size: 13px; font-weight: 700; }
 .slovotvorBetter { color: #28734a; }
 .slovotvorWorse { color: #8a571d; }
