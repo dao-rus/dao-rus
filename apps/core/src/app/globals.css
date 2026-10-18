@@ -878,6 +878,8 @@ div.userText > :last-child { margin-bottom: 0; }
 .signalPreviewActions form { margin: 0; }
 
 .slovotvorPage { min-width: 0; }
+.slovotvorIntro { text-align: center; }
+.slovotvorIntro .lead { margin-left: auto; margin-right: auto; }
 .slovotvorPage h1 { margin-bottom: 6px; font-size: clamp(34px, 7vw, 54px); }
 .slovotvorEyebrow { color: var(--accent); font-size: 12px; font-weight: 700; letter-spacing: .08em; text-transform: uppercase; }
 .slovotvorForm { display: grid; gap: 14px; max-width: 620px; margin: 28px 0 42px; }
@@ -903,9 +905,9 @@ div.userText > :last-child { margin-bottom: 0; }
 .slovotvorWordLine span:last-child { color: var(--muted); font-size: 15px; overflow-wrap: anywhere; }
 .slovotvorDescriptionPreview { flex-basis: 100%; display: -webkit-box; margin: 0; overflow: hidden; color: var(--ink); font-size: 15px; line-height: 1.5; overflow-wrap: anywhere; -webkit-box-orient: vertical; -webkit-line-clamp: 3; line-clamp: 3; }
 .slovotvorAuthor { color: var(--muted); font-size: 12px; }
-.slovotvorCardFooter { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 12px; }
-.slovotvorAuthor { margin-left: auto; }
-.slovotvorVotes { display: flex; flex-wrap: wrap; gap: 12px; font-size: 13px; font-weight: 700; }
+.slovotvorCardVotes { display: flex; justify-content: center; gap: 18px; font-size: 13px; font-weight: 700; }
+.slovotvorCardVotes span { display: inline-flex; align-items: center; gap: 5px; }
+.slovotvorCardFooter { display: flex; flex-wrap: wrap; align-items: center; justify-content: flex-end; gap: 12px; }
 .slovotvorBetter { color: #28734a; }
 .slovotvorWorse { color: #8a571d; }
 .slovotvorAllWordsLink { display: block; margin-top: 12px; color: var(--muted); font-size: 12px; text-align: right; }
@@ -928,7 +930,9 @@ div.userText > :last-child { margin-bottom: 0; }
 .slovotvorScore span { font-size: 16px; font-weight: 700; }
 .slovotvorVoteActions { display: flex; flex-wrap: wrap; justify-content: center; gap: 10px; }
 .slovotvorVoteActions form { margin: 0; }
+.slovotvorVoteButton { display: inline-flex; align-items: center; gap: 7px; min-width: 54px; justify-content: center; }
 .slovotvorVoteButton[aria-pressed="true"] { border-color: var(--accent); background: var(--accent); color: var(--accent-ink); }
+.slovotvorVoteIcon { flex: 0 0 auto; }
 .slovotvorOtherVariants { margin-top: 44px; border-top: 1px solid var(--line); padding-top: 24px; }
 .slovotvorOtherVariants h2 { margin: 0 0 16px; font-size: 22px; }
 .slovotvorOtherVariant { display: flex; align-items: baseline; gap: 14px; font-size: 16px; }
