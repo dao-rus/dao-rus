@@ -886,6 +886,7 @@ div.userText > :last-child { margin-bottom: 0; }
 .slovotvorForm input, .slovotvorForm textarea { width: 100%; border: 1px solid var(--line); border-radius: 8px; padding: 10px 12px; background: var(--bg); color: var(--ink); }
 .slovotvorForm textarea { resize: vertical; }
 .slovotvorForm .button { justify-self: start; }
+.slovotvorForm .button:disabled { opacity: .55; cursor: not-allowed; }
 .slovotvorCatalogHeader { display: flex; flex-wrap: wrap; align-items: baseline; justify-content: space-between; gap: 12px; }
 .slovotvorCatalogHeader h2 { margin: 0; font-size: 22px; }
 .slovotvorSort { display: flex; flex-wrap: wrap; gap: 6px; font-size: 13px; }
@@ -896,13 +897,10 @@ div.userText > :last-child { margin-bottom: 0; }
 .slovotvorCard:hover, .slovotvorCard:focus-within { border-color: var(--accent); background: var(--bg); box-shadow: 0 6px 20px rgba(35, 35, 28, .08); }
 .slovotvorCardLink { display: grid; gap: 12px; padding: 16px; color: var(--ink); text-decoration: none; cursor: pointer; border-radius: 12px; }
 .slovotvorCardLink:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
-.slovotvorReplacementSection, .slovotvorReplacementList { margin-top: 42px; border-top: 1px solid var(--line); padding-top: 24px; }
-.slovotvorReplacementSection h2, .slovotvorReplacementList h2 { margin: 0 0 16px; font-size: 22px; }
-.slovotvorReplacementForm { display: flex; flex-wrap: wrap; gap: 10px; max-width: 620px; }
-.slovotvorReplacementForm input { min-width: 0; flex: 1; border: 1px solid var(--line); border-radius: 8px; padding: 10px 12px; background: var(--bg); color: var(--ink); }
 .slovotvorWordLine { display: flex; flex-wrap: wrap; align-items: baseline; gap: 8px; }
 .slovotvorWordLine strong { font-size: clamp(24px, 5vw, 32px); line-height: 1.1; overflow-wrap: anywhere; }
 .slovotvorWordLine span:last-child { color: var(--muted); font-size: 15px; }
+.slovotvorDescriptionPreview { flex-basis: 100%; display: -webkit-box; margin: 0; overflow: hidden; color: var(--ink); font-size: 15px; line-height: 1.5; overflow-wrap: anywhere; -webkit-box-orient: vertical; -webkit-line-clamp: 3; line-clamp: 3; }
 .slovotvorAuthor { color: var(--muted); font-size: 12px; }
 .slovotvorCardFooter { display: flex; flex-wrap: wrap; align-items: center; justify-content: flex-end; gap: 12px; border-top: 1px solid var(--line); padding-top: 12px; }
 .slovotvorVotes { display: flex; flex-wrap: wrap; gap: 12px; font-size: 13px; font-weight: 700; }
@@ -919,22 +917,19 @@ div.userText > :last-child { margin-bottom: 0; }
 .slovotvorWordHeading { margin: 34px 0 14px; }
 .slovotvorWordHeading h1 { margin: 0; font-size: clamp(42px, 10vw, 78px); line-height: 1; overflow-wrap: anywhere; }
 .slovotvorWordHeading p { margin: 14px 0 0; color: var(--muted); font-size: 20px; }
+.slovotvorWordHeading .slovotvorDescriptionMain { color: var(--ink); font-size: 20px; line-height: 1.5; white-space: pre-wrap; overflow-wrap: anywhere; }
 .slovotvorWordAuthor, .slovotvorWordExplanation { color: var(--muted); font-size: 15px; }
 .slovotvorScoreboard { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 14px; margin: 42px 0 18px; }
 .slovotvorScore { display: grid; justify-items: center; gap: 4px; border: 1px solid var(--line); border-radius: 12px; padding: 22px 16px; }
 .slovotvorScore strong { font-size: clamp(42px, 9vw, 68px); line-height: 1; }
 .slovotvorScore span { font-size: 16px; font-weight: 700; }
 .slovotvorVoteActions { display: flex; flex-wrap: wrap; justify-content: center; gap: 10px; }
-.slovotvorOtherVariants, .slovotvorSuggest { margin-top: 44px; border-top: 1px solid var(--line); padding-top: 24px; }
-.slovotvorOtherVariants h2, .slovotvorSuggest h2 { margin: 0 0 16px; font-size: 22px; }
+.slovotvorOtherVariants { margin-top: 44px; border-top: 1px solid var(--line); padding-top: 24px; }
+.slovotvorOtherVariants h2 { margin: 0 0 16px; font-size: 22px; }
 .slovotvorOtherVariant { display: flex; align-items: baseline; gap: 14px; font-size: 16px; }
 .slovotvorOtherVariant strong { margin-right: auto; font-size: 22px; }
-.slovotvorSuggestForm { display: flex; gap: 10px; }
-.slovotvorSuggestForm input { min-width: 0; flex: 1; border: 1px solid var(--line); border-radius: 8px; padding: 10px 12px; background: var(--bg); color: var(--ink); }
 @media (max-width: 560px) {
   .slovotvorWordFields { grid-template-columns: 1fr; }
-  .slovotvorReplacementForm { align-items: stretch; flex-direction: column; }
-  .slovotvorSuggestForm { align-items: stretch; flex-direction: column; }
 }
 
 .awardImage { object-fit: contain; max-width: 100%; }

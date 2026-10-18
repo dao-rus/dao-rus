@@ -7,29 +7,31 @@ export const dynamic = "force-dynamic";
 
 export async function generateMetadata({ params }: { params: Promise<{ slug: string }> }): Promise<Metadata> {
   const word = await getSlovotvorWordBySlug((await params).slug);
-  return { title: word ? `${word.word} — Словотвор` : "Словотвор" };
+  return { title: word?.word ?? word?.sourceWord ?? "Словотвор" };
 }
 
 export default async function SlovotvorWordPage({ params }: { params: Promise<{ slug: string }> }) {
   const word = await getSlovotvorWordBySlug((await params).slug);
   if (!word) notFound();
-  const variants = await listSlovotvorVariants(word);
+  const variants = word.sourceWord ? await listSlovotvorVariants(word) : [];
+  const hasWords = Boolean(word.word || word.sourceWord);
 
   return (
     <main className="shell">
       <article className="card slovotvorWordPage">
         <Link className="slovotvorBackLink" href="/slovotvor">← К списку слов</Link>
         <div className="slovotvorWordHeading">
-          <h1>{word.word}</h1>
-          <p>← {word.sourceWord}</p>
+          {word.word ? <h1>{word.word}</h1> : null}
+          {word.sourceWord ? <p>← {word.sourceWord}</p> : null}
+          {!hasWords && word.explanation ? <p className="slovotvorDescriptionMain">{word.explanation}</p> : null}
         </div>
         <p className="slovotvorWordAuthor">Автор: {word.authorName}</p>
-        {word.explanation ? <p className="slovotvorWordExplanation">{word.explanation}</p> : null}
+        {hasWords && word.explanation ? <p className="slovotvorWordExplanation">{word.explanation}</p> : null}
         {variants.length ? <section className="slovotvorOtherVariants">
           <h2>Другие варианты</h2>
-          {variants.map((variant) => <div className="slovotvorOtherVariant" key={variant.id}>
+          {variants.map((variant) => variant.word ? <div className="slovotvorOtherVariant" key={variant.id}>
             <strong>{variant.word}</strong>
-          </div>)}
+          </div> : null)}
         </section> : null}
       </article>
     </main>

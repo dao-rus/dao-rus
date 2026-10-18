@@ -1,3 +1,4 @@
+import { randomUUID } from "node:crypto";
 import type { PoolClient } from "pg";
 import { pool } from "./db";
 import type { SlovotvorWord } from "./slovotvor";
@@ -32,34 +33,52 @@ export function transliterateSlovotvorSlug(word: string): string {
   return slug || "slovo";
 }
 
-function normalizePublicationInput(wordValue: unknown, sourceValue: unknown, explanationValue: unknown) {
+export type NormalizedSlovotvorPublication = {
+  word: string | null;
+  sourceWord: string | null;
+  explanation: string | null;
+};
+
+export function normalizePublicationInput(wordValue: unknown, sourceValue: unknown, explanationValue: unknown): NormalizedSlovotvorPublication {
   const word = typeof wordValue === "string" ? wordValue.trim() : "";
   const sourceWord = typeof sourceValue === "string" ? sourceValue.trim() : "";
   const explanation = typeof explanationValue === "string" ? explanationValue.trim() : "";
-  if (!word || !sourceWord) throw new SlovotvorPublicationError("required");
+  if (!word && !sourceWord && !explanation) throw new SlovotvorPublicationError("required");
   if (word.length > MAX_WORD_LENGTH || sourceWord.length > MAX_WORD_LENGTH || explanation.length > MAX_EXPLANATION_LENGTH) {
     throw new SlovotvorPublicationError("too_long");
   }
-  return { word, sourceWord, explanation: explanation || null };
+  return { word: word || null, sourceWord: sourceWord || null, explanation: explanation || null };
 }
 
 function wordFromRow(row: Record<string, unknown>): SlovotvorWord {
   return {
-    id: String(row.id), word: String(row.word), sourceWord: String(row.source_word),
+    id: String(row.id),
+    word: row.word === null ? null : String(row.word),
+    sourceWord: row.source_word === null ? null : String(row.source_word),
     explanation: row.explanation === null ? null : String(row.explanation),
-    authorId: String(row.author_id), authorName: String(row.author_name), slug: String(row.slug),
+    authorId: String(row.author_id),
+    authorName: String(row.author_name),
+    slug: String(row.slug),
     createdAt: new Date(String(row.created_at)),
   };
 }
 
-async function findByPair(client: PoolClient, word: string, sourceWord: string): Promise<SlovotvorWord | null> {
+async function findDuplicate(client: PoolClient, input: NormalizedSlovotvorPublication): Promise<SlovotvorWord | null> {
   const result = await client.query(
     `SELECT w.id,w.word,w.source_word,w.explanation,w.author_participant_id AS author_id,
             p.display_name AS author_name,w.slug,w.created_at
        FROM slovotvor_words w JOIN participants p ON p.id=w.author_participant_id
-      WHERE lower(btrim(w.word))=lower(btrim($1)) AND lower(btrim(w.source_word))=lower(btrim($2))
+      WHERE ($1::text IS NOT NULL AND $2::text IS NOT NULL
+             AND lower(btrim(w.word))=lower(btrim($1))
+             AND lower(btrim(w.source_word))=lower(btrim($2)))
+         OR ($1::text IS NOT NULL AND $2::text IS NULL AND w.source_word IS NULL
+             AND lower(btrim(w.word))=lower(btrim($1)))
+         OR ($1::text IS NULL AND $2::text IS NOT NULL AND w.word IS NULL
+             AND lower(btrim(w.source_word))=lower(btrim($2)))
+         OR ($1::text IS NULL AND $2::text IS NULL AND w.word IS NULL AND w.source_word IS NULL
+             AND lower(btrim(w.explanation))=lower(btrim($3)))
       LIMIT 1`,
-    [word, sourceWord],
+    [input.word, input.sourceWord, input.explanation],
   );
   return result.rowCount ? wordFromRow(result.rows[0]) : null;
 }
@@ -71,32 +90,37 @@ export async function publishSlovotvorWord(
   explanationValue: unknown,
 ): Promise<{ word: SlovotvorWord; duplicate: boolean }> {
   const input = normalizePublicationInput(wordValue, sourceValue, explanationValue);
+  const id = randomUUID();
+  const baseSlug = input.word
+    ? transliterateSlovotvorSlug(input.word)
+    : input.sourceWord
+      ? transliterateSlovotvorSlug(input.sourceWord)
+      : `slovo-${id.replaceAll("-", "")}`;
   const client = await pool.connect();
   try {
     await client.query("BEGIN");
     await client.query("INSERT INTO slovotvor_users(participant_id) VALUES ($1) ON CONFLICT DO NOTHING", [participantId]);
-    const baseSlug = transliterateSlovotvorSlug(input.word);
     for (let suffix = 0; suffix < 10000; suffix += 1) {
       const suffixText = suffix ? `-${suffix}` : "";
       const slug = `${baseSlug.slice(0, 120 - suffixText.length)}${suffixText}`.replace(/-+$/g, "");
       const result = await client.query(
-          `INSERT INTO slovotvor_words(word,source_word,explanation,author_participant_id,slug)
-           VALUES ($1,$2,$3,$4,$5)
-           ON CONFLICT DO NOTHING
-           RETURNING id,word,source_word,explanation,author_participant_id AS author_id,$4::text AS author_name,slug,created_at`,
-          [input.word, input.sourceWord, input.explanation, participantId, slug],
+        `INSERT INTO slovotvor_words(id,word,source_word,explanation,author_participant_id,slug)
+         VALUES ($1,$2,$3,$4,$5,$6)
+         ON CONFLICT DO NOTHING
+         RETURNING id`,
+        [id, input.word, input.sourceWord, input.explanation, participantId, slug],
       );
       if (result.rowCount) {
-          const created = await client.query(
-            `SELECT w.id,w.word,w.source_word,w.explanation,w.author_participant_id AS author_id,
-                    p.display_name AS author_name,w.slug,w.created_at
-               FROM slovotvor_words w JOIN participants p ON p.id=w.author_participant_id WHERE w.id=$1`,
-            [result.rows[0].id],
-          );
-          await client.query("COMMIT");
-          return { word: wordFromRow(created.rows[0]), duplicate: false };
-        }
-      const existing = await findByPair(client, input.word, input.sourceWord);
+        const created = await client.query(
+          `SELECT w.id,w.word,w.source_word,w.explanation,w.author_participant_id AS author_id,
+                  p.display_name AS author_name,w.slug,w.created_at
+             FROM slovotvor_words w JOIN participants p ON p.id=w.author_participant_id WHERE w.id=$1`,
+          [id],
+        );
+        await client.query("COMMIT");
+        return { word: wordFromRow(created.rows[0]), duplicate: false };
+      }
+      const existing = await findDuplicate(client, input);
       if (existing) {
         await client.query("COMMIT");
         return { word: existing, duplicate: true };
