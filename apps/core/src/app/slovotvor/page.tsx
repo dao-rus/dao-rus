@@ -14,27 +14,22 @@ export default function SlovotvorPage() {
       <section className="card slovotvorPage">
         <div className="slovotvorEyebrow">Демонстрационный режим</div>
         <h1>Словотвор</h1>
-        <p className="lead">Не переводи. Придумывай.</p>
+        <p className="lead">Придумай лучше</p>
 
-        <form className="slovotvorForm" aria-describedby="slovotvor-form-note">
-          <label>
-            Новое слово
-            <input name="word" type="text" placeholder="Например, быстросвязь" disabled />
-          </label>
-          <label>
-            Вместо чего?
-            <input name="source" type="text" placeholder="Привычное обозначение" disabled />
-          </label>
+        <form className="slovotvorForm">
+          <div className="slovotvorWordFields">
+            <input name="word" type="text" placeholder="Новое слово" aria-label="Новое слово" disabled />
+            <input name="source" type="text" placeholder="Вместо какого?" aria-label="Вместо какого?" disabled />
+          </div>
           <label>
             Пояснение <span className="muted">(необязательно)</span>
             <textarea name="explanation" placeholder="Почему это слово подходит?" rows={3} disabled />
           </label>
           <button className="button primary" type="button" disabled>Выпустить слово</button>
-          <p className="slovotvorFormNote muted" id="slovotvor-form-note">Форма появится в рабочей версии Словотвора.</p>
         </form>
 
         <div className="slovotvorCatalogHeader">
-          <h2>Каталог слов</h2>
+          <h2>Список новых слов</h2>
           <nav className="slovotvorSort" aria-label="Порядок слов">
             <span aria-current="true">Топ</span>
             <span>А–Я</span>
@@ -57,7 +52,6 @@ export default function SlovotvorPage() {
                   <span className="slovotvorBetter">Лучше +{entry.better}</span>
                   <span className="slovotvorWorse">Хуже −{entry.worse}</span>
                 </div>
-                <span className="slovotvorDetails">Подробная карточка — следующий этап</span>
               </div>
             </article>
           ))}
