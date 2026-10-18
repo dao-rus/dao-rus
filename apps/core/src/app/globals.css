@@ -920,7 +920,7 @@ div.userText > :last-child { margin-bottom: 0; }
 .slovotvorBackLink:hover { color: var(--ink); }
 .slovotvorWordHeading { margin: 30px 0 0; }
 .slovotvorWordHeading h1 { margin: 0; text-align: center; font-size: clamp(42px, 10vw, 78px); line-height: 1; overflow-wrap: anywhere; }
-.slovotvorWordHeading .slovotvorSourceWord { margin: 12px 0 0; padding-left: clamp(24px, 12vw, 96px); color: var(--muted); font-size: 20px; overflow-wrap: anywhere; }
+.slovotvorWordHeading .slovotvorSourceWord { margin: 12px 0 0; padding-left: clamp(64px, 20vw, 160px); color: var(--muted); font-size: 20px; overflow-wrap: anywhere; }
 .slovotvorWordHeading .slovotvorDescriptionMain { margin: 18px 0 0; color: var(--ink); font-size: 17px; line-height: 1.6; text-align: left; white-space: pre-wrap; overflow-wrap: anywhere; }
 .slovotvorTaskPrompt { margin: 12px 0 0; color: var(--muted); font-size: 17px; text-align: center; }
 .slovotvorWordAuthor { color: var(--muted); font-size: 12px; text-align: right; text-decoration: none; }
