@@ -891,8 +891,8 @@ div.userText > :last-child { margin-bottom: 0; }
 .slovotvorCatalogHeader { display: flex; flex-wrap: wrap; align-items: baseline; justify-content: space-between; gap: 12px; }
 .slovotvorCatalogHeader h2 { margin: 0; font-size: 22px; }
 .slovotvorSort { display: flex; flex-wrap: wrap; gap: 6px; font-size: 13px; }
-.slovotvorSort span { border: 1px solid var(--line); border-radius: 7px; padding: 6px 10px; color: var(--muted); }
-.slovotvorSort span[aria-current="true"] { border-color: var(--accent); background: var(--accent); color: var(--accent-ink); }
+.slovotvorSort a { border: 1px solid var(--line); border-radius: 7px; padding: 6px 10px; color: var(--muted); text-decoration: none; }
+.slovotvorSort a[aria-current="true"] { border-color: var(--accent); background: var(--accent); color: var(--accent-ink); }
 .slovotvorCards { display: grid; gap: 12px; margin-top: 18px; }
 .slovotvorCard { border: 1px solid var(--line); border-radius: 12px; background: var(--card); transition: background-color .15s, border-color .15s, box-shadow .15s; }
 .slovotvorCard:hover, .slovotvorCard:focus-within { border-color: var(--accent); background: var(--bg); box-shadow: 0 6px 20px rgba(35, 35, 28, .08); }

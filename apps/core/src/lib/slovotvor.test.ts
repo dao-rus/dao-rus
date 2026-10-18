@@ -18,13 +18,30 @@ describe("Slovotvor word list", () => {
       },
     } as any;
 
-    const words = await listSlovotvorWords("author-id", database);
+    const words = await listSlovotvorWords("author-id", "old", database);
     const count = await countSlovotvorWordsByAuthor("author-id", database);
 
     expect(words).toHaveLength(1);
     expect(calls[0].sql).toContain("w.author_participant_id::text = $1");
+    expect(calls[0].sql).toContain("w.created_at ASC, w.id ASC");
     expect(calls[0].values).toEqual(["author-id"]);
     expect(count).toBe(3);
     expect(calls[1].values).toEqual(["author-id"]);
+  });
+
+  it("builds server-side ordering for the four sort modes", async () => {
+    const queries: string[] = [];
+    const database = { query: async (sql: string) => { queries.push(sql); return { rows: [], rowCount: 0 }; } } as any;
+
+    await listSlovotvorWords(undefined, "top", database);
+    await listSlovotvorWords(undefined, "alpha", database);
+    await listSlovotvorWords(undefined, "new", database);
+    await listSlovotvorWords(undefined, "old", database);
+
+    expect(queries[0]).toContain("ORDER BY w.created_at DESC, w.id DESC");
+    expect(queries[1]).toContain("translate(lower(btrim(COALESCE(w.word, w.source_word, w.explanation)))");
+    expect(queries[1]).toContain("w.created_at DESC, w.id DESC");
+    expect(queries[2]).toContain("ORDER BY w.created_at DESC, w.id DESC");
+    expect(queries[3]).toContain("ORDER BY w.created_at ASC, w.id ASC");
   });
 });

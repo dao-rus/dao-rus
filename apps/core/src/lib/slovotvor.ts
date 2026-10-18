@@ -13,6 +13,11 @@ export type SlovotvorWord = {
 
 type Database = Pick<typeof pool, "query">;
 
+export type SlovotvorSort = "top" | "alpha" | "new" | "old";
+
+const russianAlphabet = "абвгдеёжзийклмнопрстуфхцчшщъыьэюя";
+const russianAlphabetOrder = "0123456789abcdefghijklmnopqrstuvw";
+
 function wordFromRow(row: Record<string, unknown>): SlovotvorWord {
   return {
     id: String(row.id),
@@ -36,11 +41,24 @@ const wordColumns = `
 
 export function listSlovotvorWords(database?: Database): Promise<SlovotvorWord[]>;
 export function listSlovotvorWords(authorId: string | undefined, database?: Database): Promise<SlovotvorWord[]>;
-export async function listSlovotvorWords(authorOrDatabase?: string | Database, database: Database = pool): Promise<SlovotvorWord[]> {
+export function listSlovotvorWords(authorId: string | undefined, sort: SlovotvorSort, database?: Database): Promise<SlovotvorWord[]>;
+export async function listSlovotvorWords(
+  authorOrDatabase?: string | Database,
+  sortOrDatabase: SlovotvorSort | Database = "top",
+  database: Database = pool,
+): Promise<SlovotvorWord[]> {
   const authorId = typeof authorOrDatabase === "string" ? authorOrDatabase : undefined;
-  const queryDatabase = typeof authorOrDatabase === "string" || authorOrDatabase === undefined ? database : authorOrDatabase;
+  const sort = typeof sortOrDatabase === "string" ? sortOrDatabase : "top";
+  const queryDatabase = typeof sortOrDatabase === "string"
+    ? (typeof authorOrDatabase === "string" || authorOrDatabase === undefined ? database : authorOrDatabase)
+    : sortOrDatabase;
   const filter = authorId ? " WHERE w.author_participant_id::text = $1" : "";
-  const result = await queryDatabase.query(`${wordColumns}${filter} ORDER BY w.created_at DESC, w.id DESC`, authorId ? [authorId] : []);
+  const orderBy = sort === "old"
+    ? "w.created_at ASC, w.id ASC"
+    : sort === "alpha"
+      ? `translate(lower(btrim(COALESCE(w.word, w.source_word, w.explanation))), '${russianAlphabet}', '${russianAlphabetOrder}'), w.created_at DESC, w.id DESC`
+      : "w.created_at DESC, w.id DESC";
+  const result = await queryDatabase.query(`${wordColumns}${filter} ORDER BY ${orderBy}`, authorId ? [authorId] : []);
   return result.rows.map(wordFromRow);
 }
 
