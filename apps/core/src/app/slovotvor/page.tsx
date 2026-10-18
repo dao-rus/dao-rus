@@ -1,18 +1,18 @@
 import type { Metadata } from "next";
+import Link from "next/link";
 
 export const metadata: Metadata = { title: "Словотвор" };
 
 const words = [
-  { word: "крайнесрок", source: "дедлайн", author: "Демонстрационный автор", better: 200, worse: 100 },
-  { word: "считало", source: "компьютер", author: "Демонстрационный автор", better: 80, worse: 12 },
-  { word: "срокочерт", source: "дедлайн", author: "Демонстрационный автор", better: 31, worse: 8 },
+  { word: "крайнесрок", source: "дедлайн", author: "Илья", better: 200, worse: 100 },
+  { word: "считало", source: "компьютер", author: "Илья", better: 80, worse: 12 },
+  { word: "срокочерт", source: "дедлайн", author: "Илья", better: 31, worse: 8 },
 ];
 
 export default function SlovotvorPage() {
   return (
     <main className="shell">
       <section className="card slovotvorPage">
-        <div className="slovotvorEyebrow">Демонстрационный режим</div>
         <h1>Словотвор</h1>
         <p className="lead">Придумай лучше</p>
 
@@ -52,6 +52,7 @@ export default function SlovotvorPage() {
                   <span className="slovotvorBetter">Лучше +{entry.better}</span>
                   <span className="slovotvorWorse">Хуже −{entry.worse}</span>
                 </div>
+                {entry.word === "крайнесрок" ? <Link className="slovotvorCardLink" href="/slovotvor/kraynesrok">Открыть карточку</Link> : null}
               </div>
             </article>
           ))}
