@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 
-export function SlovotvorPublicationForm({ defaultSource = "" }: { defaultSource?: string }) {
+export function SlovotvorPublicationForm({ defaultSource = "", defaultParentId = "" }: { defaultSource?: string; defaultParentId?: string }) {
   const [values, setValues] = useState({ word: "", source: defaultSource, explanation: "" });
   const hasContent = Object.values(values).some((value) => value.trim().length > 0);
 
@@ -12,6 +12,7 @@ export function SlovotvorPublicationForm({ defaultSource = "" }: { defaultSource
 
   return (
     <form className="slovotvorForm" action="/api/slovotvor" method="post">
+      {defaultParentId ? <input type="hidden" name="parentId" value={defaultParentId} /> : null}
       <div className="slovotvorWordFields">
         <input name="word" type="text" placeholder="Новое слово" aria-label="Новое слово" value={values.word} onChange={(event) => update("word", event.target.value)} />
         <input name="source" type="text" placeholder="Какое слово заменить?" aria-label="Какое слово заменить?" value={values.source} onChange={(event) => update("source", event.target.value)} />

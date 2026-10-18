@@ -7,6 +7,7 @@ export type SlovotvorWord = {
   explanation: string | null;
   authorId: string;
   authorName: string;
+  parentId: string | null;
   slug: string;
   createdAt: Date;
   betterVotes: number;
@@ -36,6 +37,7 @@ function wordFromRow(row: Record<string, unknown>): SlovotvorWord {
     explanation: row.explanation === null ? null : String(row.explanation),
     authorId: String(row.author_id),
     authorName: String(row.author_name),
+    parentId: row.parent_id == null ? null : String(row.parent_id),
     slug: String(row.slug),
     createdAt: new Date(String(row.created_at)),
     betterVotes: Number(row.better_votes ?? 0),
@@ -44,7 +46,7 @@ function wordFromRow(row: Record<string, unknown>): SlovotvorWord {
 }
 
 const wordColumns = `
-  SELECT w.id, w.word, w.source_word, w.explanation,
+  SELECT w.id, w.word, w.source_word, w.explanation, w.parent_id,
          w.author_participant_id AS author_id,
          p.display_name AS author_name,
          w.slug, w.created_at,
@@ -185,10 +187,9 @@ export async function castSlovotvorVote(wordId: string, participantId: string, c
 export async function listSlovotvorVariants(word: SlovotvorWord, database: Database = pool): Promise<SlovotvorWord[]> {
   const result = await database.query(
     `${wordColumns}
-      WHERE lower(btrim(w.source_word)) = lower(btrim($1))
-        AND w.id <> $2
-      ORDER BY w.created_at DESC, w.id DESC`,
-    [word.sourceWord, word.id],
+      WHERE w.parent_id = $1
+      ORDER BY better_votes DESC, w.created_at DESC, w.id DESC`,
+    [word.id],
   );
   return result.rows.map(wordFromRow);
 }

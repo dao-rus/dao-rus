@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { countSlovotvorWordsByAuthor, listSlovotvorWords } from "./slovotvor";
+import { countSlovotvorWordsByAuthor, listSlovotvorVariants, listSlovotvorWords } from "./slovotvor";
 
 describe("Slovotvor word list", () => {
   it("filters by author on the server and counts that author's words", async () => {
@@ -43,5 +43,26 @@ describe("Slovotvor word list", () => {
     expect(queries[1]).toContain("w.created_at DESC, w.id DESC");
     expect(queries[2]).toContain("ORDER BY w.created_at DESC, w.id DESC");
     expect(queries[3]).toContain("ORDER BY w.created_at ASC, w.id ASC");
+  });
+
+  it("loads variants by stable parent publication ID", async () => {
+    const calls: Array<{ sql: string; values?: unknown[] }> = [];
+    const database = {
+      query: async (sql: string, values?: unknown[]) => {
+        calls.push({ sql, values });
+        return { rows: [], rowCount: 0 };
+      },
+    } as any;
+    const parent = {
+      id: "parent-id", word: null, sourceWord: "промпт", explanation: null,
+      authorId: "author-id", authorName: "Автор", parentId: null, slug: "prompt",
+      createdAt: new Date(), betterVotes: 0, worseVotes: 0,
+    };
+
+    await listSlovotvorVariants(parent, database);
+
+    expect(calls[0].sql).toContain("WHERE w.parent_id = $1");
+    expect(calls[0].sql).toContain("ORDER BY better_votes DESC, w.created_at DESC, w.id DESC");
+    expect(calls[0].values).toEqual(["parent-id"]);
   });
 });

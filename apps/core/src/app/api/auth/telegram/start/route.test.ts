@@ -56,6 +56,9 @@ describe("GET /api/auth/telegram/start", () => {
 
     const slovotvor = await GET(new NextRequest("https://core.daorus.org/api/auth/telegram/start?next=%2Fslovotvor"));
     expect(slovotvor.cookies.get("dao_tg_return_to")?.value).toBe("/slovotvor");
+    const task = "/slovotvor?parent=42a8c373-486f-4ebc-bc06-24dcd2a2f8c6";
+    const taskResponse = await GET(new NextRequest(`https://core.daorus.org/api/auth/telegram/start?next=${encodeURIComponent(task)}`));
+    expect(taskResponse.cookies.get("dao_tg_return_to")?.value).toBe(task);
 
     const external = await GET(new NextRequest("https://core.daorus.org/api/auth/telegram/start?next=https%3A%2F%2Fevil.example"));
     expect(external.cookies.get("dao_tg_return_to")?.value).toBe("");

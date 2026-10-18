@@ -5,6 +5,7 @@ import type { SlovotvorWord } from "./slovotvor";
 
 const MAX_WORD_LENGTH = 120;
 const MAX_EXPLANATION_LENGTH = 10000;
+const uuidPattern = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 const slugParts = new Map([
   ["а", "a"], ["б", "b"], ["в", "v"], ["г", "g"], ["д", "d"], ["е", "e"], ["ё", "yo"],
   ["ж", "zh"], ["з", "z"], ["и", "i"], ["й", "y"], ["к", "k"], ["л", "l"], ["м", "m"],
@@ -14,7 +15,7 @@ const slugParts = new Map([
 ]);
 
 export class SlovotvorPublicationError extends Error {
-  constructor(readonly code: "required" | "too_long" | "duplicate") {
+  constructor(readonly code: "required" | "too_long" | "duplicate" | "parent_invalid") {
     super(`Slovotvor publication: ${code}`);
   }
 }
@@ -58,6 +59,7 @@ function wordFromRow(row: Record<string, unknown>): SlovotvorWord {
     explanation: row.explanation === null ? null : String(row.explanation),
     authorId: String(row.author_id),
     authorName: String(row.author_name),
+    parentId: row.parent_id == null ? null : String(row.parent_id),
     slug: String(row.slug),
     createdAt: new Date(String(row.created_at)),
     betterVotes: Number(row.better_votes ?? 0),
@@ -67,7 +69,7 @@ function wordFromRow(row: Record<string, unknown>): SlovotvorWord {
 
 async function findDuplicate(client: PoolClient, input: NormalizedSlovotvorPublication): Promise<SlovotvorWord | null> {
   const result = await client.query(
-    `SELECT w.id,w.word,w.source_word,w.explanation,w.author_participant_id AS author_id,
+    `SELECT w.id,w.word,w.source_word,w.explanation,w.parent_id,w.author_participant_id AS author_id,
             p.display_name AS author_name,w.slug,w.created_at
        FROM slovotvor_words w JOIN participants p ON p.id=w.author_participant_id
       WHERE ($1::text IS NOT NULL AND $2::text IS NOT NULL
@@ -90,31 +92,48 @@ export async function publishSlovotvorWord(
   wordValue: unknown,
   sourceValue: unknown,
   explanationValue: unknown,
+  parentIdValue?: unknown,
 ): Promise<{ word: SlovotvorWord; duplicate: boolean }> {
-  const input = normalizePublicationInput(wordValue, sourceValue, explanationValue);
+  let input = normalizePublicationInput(wordValue, sourceValue, explanationValue);
+  const parentId = typeof parentIdValue === "string" ? parentIdValue.trim() : "";
+  if (parentId && !uuidPattern.test(parentId)) throw new SlovotvorPublicationError("parent_invalid");
   const id = randomUUID();
-  const baseSlug = input.word
-    ? transliterateSlovotvorSlug(input.word)
-    : input.sourceWord
-      ? transliterateSlovotvorSlug(input.sourceWord)
-      : `slovo-${id.replaceAll("-", "")}`;
   const client = await pool.connect();
   try {
     await client.query("BEGIN");
     await client.query("INSERT INTO slovotvor_users(participant_id) VALUES ($1) ON CONFLICT DO NOTHING", [participantId]);
+    if (parentId) {
+      const parent = await client.query(
+        "SELECT id, word, source_word, explanation FROM slovotvor_words WHERE id = $1 FOR SHARE",
+        [parentId],
+      );
+      const row = parent.rows[0] as Record<string, unknown> | undefined;
+      if (!row || row.word !== null || (!row.source_word && !row.explanation) || !input.word) {
+        throw new SlovotvorPublicationError("parent_invalid");
+      }
+      input = {
+        ...input,
+        sourceWord: row.source_word === null ? null : String(row.source_word),
+      };
+    }
+    const baseSlug = input.word
+      ? transliterateSlovotvorSlug(input.word)
+      : input.sourceWord
+        ? transliterateSlovotvorSlug(input.sourceWord)
+        : `slovo-${id.replaceAll("-", "")}`;
     for (let suffix = 0; suffix < 10000; suffix += 1) {
       const suffixText = suffix ? `-${suffix}` : "";
       const slug = `${baseSlug.slice(0, 120 - suffixText.length)}${suffixText}`.replace(/-+$/g, "");
       const result = await client.query(
-        `INSERT INTO slovotvor_words(id,word,source_word,explanation,author_participant_id,slug)
-         VALUES ($1,$2,$3,$4,$5,$6)
+        `INSERT INTO slovotvor_words(id,word,source_word,explanation,author_participant_id,slug,parent_id)
+         VALUES ($1,$2,$3,$4,$5,$6,$7)
          ON CONFLICT DO NOTHING
          RETURNING id`,
-        [id, input.word, input.sourceWord, input.explanation, participantId, slug],
+        [id, input.word, input.sourceWord, input.explanation, participantId, slug, parentId || null],
       );
       if (result.rowCount) {
         const created = await client.query(
-          `SELECT w.id,w.word,w.source_word,w.explanation,w.author_participant_id AS author_id,
+          `SELECT w.id,w.word,w.source_word,w.explanation,w.parent_id,w.author_participant_id AS author_id,
                   p.display_name AS author_name,w.slug,w.created_at
              FROM slovotvor_words w JOIN participants p ON p.id=w.author_participant_id WHERE w.id=$1`,
           [id],

@@ -1,7 +1,7 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 import { notFound } from "next/navigation";
-import { getSlovotvorVoteSummary, getSlovotvorWordBySlug, listSlovotvorVariants } from "@/lib/slovotvor";
+import { getSlovotvorVoteSummary, getSlovotvorWordById, getSlovotvorWordBySlug, listSlovotvorVariants } from "@/lib/slovotvor";
 import { getCurrentParticipant } from "@/lib/session";
 import { appBaseUrl } from "@/lib/config";
 import { SlovotvorShareAction } from "./share-action";
@@ -23,11 +23,12 @@ export default async function SlovotvorWordPage({ params }: { params: Promise<{ 
   const word = await getSlovotvorWordBySlug((await params).slug);
   if (!word) notFound();
   const participant = await getCurrentParticipant();
-  const [variants, votes] = await Promise.all([
-    word.sourceWord ? listSlovotvorVariants(word) : Promise.resolve([]),
+  const isTask = !word.word && Boolean(word.sourceWord || word.explanation);
+  const [variants, votes, parentWord] = await Promise.all([
+    isTask ? listSlovotvorVariants(word) : Promise.resolve([]),
     word.word ? getSlovotvorVoteSummary(word.id, participant?.id) : Promise.resolve({ better: 0, worse: 0, ownVote: null }),
+    word.parentId ? getSlovotvorWordById(word.parentId) : Promise.resolve(null),
   ]);
-  const hasWords = Boolean(word.word || word.sourceWord);
   const loginHref = `/api/auth/telegram/start?next=${encodeURIComponent(`/slovotvor/${word.slug}`)}`;
   const shareUrl = new URL(`/slovotvor/${word.slug}`, appBaseUrl()).toString();
 
@@ -37,10 +38,32 @@ export default async function SlovotvorWordPage({ params }: { params: Promise<{ 
         <Link className="slovotvorBackLink" href="/slovotvor">← На главную</Link>
         <div className="slovotvorWordHeading">
           {word.word ? <h1>{word.word}</h1> : null}
-          {word.sourceWord ? <p className="slovotvorSourceWord">← {word.sourceWord}</p> : null}
-          {!hasWords && word.explanation ? <p className="slovotvorDescriptionMain">{word.explanation}</p> : null}
+          {!word.word && word.sourceWord ? <h1>{word.sourceWord}</h1> : null}
+          {word.word && word.sourceWord ? <p className="slovotvorSourceWord">← {word.sourceWord}</p> : null}
+          {!word.word && word.sourceWord ? <p className="slovotvorTaskPrompt">Придумай лучше!</p> : null}
+          {!word.word && word.explanation ? <p className="slovotvorDescriptionMain">{word.explanation}</p> : null}
         </div>
-        {hasWords && word.explanation ? <p className="slovotvorWordExplanation">{word.explanation}</p> : null}
+        {word.explanation && (word.word || word.sourceWord) ? <p className="slovotvorWordExplanation">{word.explanation}</p> : null}
+        {!word.word ? <>
+          <Link className="slovotvorTaskAction" href={`/slovotvor?parent=${encodeURIComponent(word.id)}`}>
+            {word.sourceWord ? "Предложить замену" : "Предложить название"}
+          </Link>
+          <section className="slovotvorOtherVariants">
+            <h2>Предложенные варианты</h2>
+            {variants.length ? <div className="slovotvorVariantList">
+              {variants.map((variant) => <Link className="slovotvorVariantLink" key={variant.id} href={`/slovotvor/${variant.slug}`}>
+                <div className="slovotvorVariantMain">
+                  <strong>{variant.word}</strong>
+                  <span className="slovotvorAuthor">{variant.authorName}</span>
+                </div>
+                <div className="slovotvorCardVotes" aria-label="Оценки">
+                  <span className="slovotvorBetter" title="Удачное слово" aria-label={`Удачное слово: ${variant.betterVotes}`}><VoteThumb direction="up" />{variant.betterVotes}</span>
+                  <span className="slovotvorWorse" title="Неудачное слово" aria-label={`Неудачное слово: ${variant.worseVotes}`}><VoteThumb direction="down" />{variant.worseVotes}</span>
+                </div>
+              </Link>)}
+            </div> : <p className="slovotvorNoVariants">Пока нет предложений. Можно стать первым</p>}
+          </section>
+        </> : null}
         {word.word ? <section className="slovotvorVoting" aria-label="Оценка слова">
           <p className="slovotvorVotingQuestion">Удачное слово?</p>
           <div className="slovotvorVoteActions">
@@ -59,12 +82,7 @@ export default async function SlovotvorWordPage({ params }: { params: Promise<{ 
             </>}
           </div>
         </section> : null}
-        {variants.length ? <section className="slovotvorOtherVariants">
-          <h2>Другие варианты</h2>
-          {variants.map((variant) => variant.word ? <div className="slovotvorOtherVariant" key={variant.id}>
-            <strong>{variant.word}</strong>
-          </div> : null)}
-        </section> : null}
+        {parentWord ? <Link className="slovotvorParentLink" href={`/slovotvor/${parentWord.slug}`}>← К исходному заданию</Link> : null}
         <div className="slovotvorWordFooter">
           <SlovotvorShareAction url={shareUrl} />
           <Link className="slovotvorWordAuthor" href={`/slovotvor?author=${encodeURIComponent(word.authorId)}`}>

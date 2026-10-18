@@ -1,6 +1,6 @@
 import type { Metadata } from "next";
 import Link from "next/link";
-import { countSlovotvorWordsByAuthor, getSlovotvorAuthorById, getSlovotvorWordBySlug, listSlovotvorWords, type SlovotvorSort } from "@/lib/slovotvor";
+import { countSlovotvorWordsByAuthor, getSlovotvorAuthorById, getSlovotvorWordById, getSlovotvorWordBySlug, listSlovotvorWords, type SlovotvorSort } from "@/lib/slovotvor";
 import { getCurrentParticipant } from "@/lib/session";
 import { SlovotvorPublicationForm } from "./publication-form";
 
@@ -26,7 +26,7 @@ function VoteThumb({ direction }: { direction: "up" | "down" }) {
 }
 
 export default async function SlovotvorPage({ searchParams }: {
-  searchParams: Promise<{ error?: string; slug?: string; source?: string; author?: string; sort?: string }>;
+  searchParams: Promise<{ error?: string; slug?: string; source?: string; parent?: string; author?: string; sort?: string }>;
 }) {
   const params = await searchParams;
   const sort: SlovotvorSort = params.sort === "alpha" || params.sort === "new" || params.sort === "old" ? params.sort : "top";
@@ -36,10 +36,12 @@ export default async function SlovotvorPage({ searchParams }: {
     listSlovotvorWords(params.author, sort),
   ]);
   const ownWordCount = participant ? await countSlovotvorWordsByAuthor(participant.id) : 0;
+  const parentTask = params.parent ? await getSlovotvorWordById(params.parent) : null;
   const duplicate = params.error === "duplicate" && params.slug ? await getSlovotvorWordBySlug(params.slug) : null;
   const errorMessage = params.error === "required" ? "Заполните хотя бы одно поле"
     : params.error === "too_long" ? "Одно из полей превышает допустимую длину"
-      : params.error === "failed" ? "Не удалось выпустить слово" : null;
+      : params.error === "parent_invalid" ? "Не удалось связать вариант с заданием"
+        : params.error === "failed" ? "Не удалось выпустить слово" : null;
   const authorUsername = author ? normalizedTelegramUsername(author.telegramUsername) : null;
   const participantUsername = participant ? normalizedTelegramUsername(participant.telegramUsername) : null;
 
@@ -53,7 +55,10 @@ export default async function SlovotvorPage({ searchParams }: {
         {!params.author ? <>
           {errorMessage ? <p className="formError" role="alert">{errorMessage}</p> : null}
           {duplicate ? <p className="formError" role="alert">Слово уже добавлено. <Link href={`/slovotvor/${duplicate.slug}`}>Открыть карточку</Link></p> : null}
-          <SlovotvorPublicationForm defaultSource={params.source ?? ""} />
+          <SlovotvorPublicationForm
+            defaultSource={parentTask?.sourceWord ?? params.source ?? ""}
+            defaultParentId={parentTask?.word ? "" : parentTask?.id ?? ""}
+          />
         </> : null}
 
         <div className="slovotvorCatalogHeader">
