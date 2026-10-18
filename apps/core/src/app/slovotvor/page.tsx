@@ -1,16 +1,23 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 import { listSlovotvorWords, getSlovotvorWordBySlug } from "@/lib/slovotvor";
+import {
+  getSlovotvorReplacementRequestById,
+  listSlovotvorReplacementRequests,
+} from "@/lib/slovotvor-replacements";
 
 export const metadata: Metadata = { title: "Словотвор" };
 export const dynamic = "force-dynamic";
 
 export default async function SlovotvorPage({ searchParams }: {
-  searchParams: Promise<{ error?: string; slug?: string }>;
+  searchParams: Promise<{ error?: string; slug?: string; source?: string; replacement_error?: string; replacement_id?: string }>;
 }) {
   const words = await listSlovotvorWords();
   const params = await searchParams;
   const duplicate = params.error === "duplicate" && params.slug ? await getSlovotvorWordBySlug(params.slug) : null;
+  const replacements = await listSlovotvorReplacementRequests();
+  const replacementDuplicate = params.replacement_error === "duplicate" && params.replacement_id
+    ? await getSlovotvorReplacementRequestById(params.replacement_id) : null;
   const errorMessage = params.error === "required" ? "Заполните обязательные поля"
     : params.error === "too_long" ? "Одно из полей превышает допустимую длину"
       : params.error === "failed" ? "Не удалось выпустить слово" : null;
@@ -25,7 +32,7 @@ export default async function SlovotvorPage({ searchParams }: {
         <form className="slovotvorForm" action="/api/slovotvor" method="post">
           <div className="slovotvorWordFields">
             <input name="word" type="text" placeholder="Новое слово" aria-label="Новое слово" required />
-            <input name="source" type="text" placeholder="Вместо какого?" aria-label="Вместо какого?" required />
+            <input name="source" type="text" placeholder="Вместо какого?" aria-label="Вместо какого?" defaultValue={params.source ?? ""} required />
           </div>
           <label>
             Пояснение <span className="muted">(необязательно)</span>
@@ -33,6 +40,32 @@ export default async function SlovotvorPage({ searchParams }: {
           </label>
           <button className="button primary" type="submit">Выпустить слово</button>
         </form>
+
+        <section className="slovotvorReplacementSection">
+          <h2>Предложи заменить</h2>
+          {params.replacement_error === "required" ? <p className="formError" role="alert">Введите слово</p> : null}
+          {params.replacement_error === "too_long" ? <p className="formError" role="alert">Слово превышает допустимую длину</p> : null}
+          {params.replacement_error === "failed" ? <p className="formError" role="alert">Не удалось добавить слово</p> : null}
+          {replacementDuplicate ? <p className="formError" role="alert">Слово уже предложено. <Link href={`/slovotvor/replace/${replacementDuplicate.id}`}>Открыть задание</Link></p> : null}
+          <form className="slovotvorReplacementForm" action="/api/slovotvor/replacements" method="post">
+            <input name="source" type="text" placeholder="Какое слово заменить?" aria-label="Какое слово заменить?" required />
+            <button className="button primary" type="submit">Предложить</button>
+          </form>
+        </section>
+
+        <section className="slovotvorReplacementList">
+          <h2>Предлагают заменить</h2>
+          <div className="slovotvorCards">
+            {replacements.map((entry) => (
+              <article className="slovotvorCard" key={entry.id}>
+                <Link className="slovotvorCardLink" href={`/slovotvor/replace/${entry.id}`}>
+                  <div className="slovotvorWordLine"><strong>{entry.sourceWord}</strong></div>
+                  <div className="slovotvorCardFooter"><span className="slovotvorAuthor">{entry.authorName}</span></div>
+                </Link>
+              </article>
+            ))}
+          </div>
+        </section>
 
         <div className="slovotvorCatalogHeader">
           <h2>Список новых слов</h2>
