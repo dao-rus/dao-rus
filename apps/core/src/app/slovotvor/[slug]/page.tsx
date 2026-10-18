@@ -19,13 +19,12 @@ export default async function SlovotvorWordPage({ params }: { params: Promise<{ 
   return (
     <main className="shell">
       <article className="card slovotvorWordPage">
-        <Link className="slovotvorBackLink" href="/slovotvor">← К списку слов</Link>
+        <Link className="slovotvorBackLink" href="/slovotvor">← На главную</Link>
         <div className="slovotvorWordHeading">
           {word.word ? <h1>{word.word}</h1> : null}
           {word.sourceWord ? <p>← {word.sourceWord}</p> : null}
           {!hasWords && word.explanation ? <p className="slovotvorDescriptionMain">{word.explanation}</p> : null}
         </div>
-        <p className="slovotvorWordAuthor">Автор: {word.authorName}</p>
         {hasWords && word.explanation ? <p className="slovotvorWordExplanation">{word.explanation}</p> : null}
         {variants.length ? <section className="slovotvorOtherVariants">
           <h2>Другие варианты</h2>
@@ -33,6 +32,7 @@ export default async function SlovotvorWordPage({ params }: { params: Promise<{ 
             <strong>{variant.word}</strong>
           </div> : null)}
         </section> : null}
+        <p className="slovotvorWordAuthor">{word.authorName}</p>
       </article>
     </main>
   );
