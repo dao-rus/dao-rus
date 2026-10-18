@@ -908,6 +908,11 @@ div.userText > :last-child { margin-bottom: 0; }
 .slovotvorVotes { display: flex; flex-wrap: wrap; gap: 12px; font-size: 13px; font-weight: 700; }
 .slovotvorBetter { color: #28734a; }
 .slovotvorWorse { color: #8a571d; }
+.slovotvorAllWordsLink { display: block; margin-top: 12px; color: var(--muted); font-size: 12px; text-align: right; }
+.slovotvorUserBar { display: flex; flex-wrap: wrap; align-items: center; justify-content: flex-end; gap: 6px; margin-top: 24px; color: var(--muted); font-size: 12px; text-align: right; }
+.slovotvorUserBar a { color: inherit; }
+.slovotvorLogoutForm { display: inline; margin: 0; }
+.slovotvorLogoutButton { border: 0; padding: 0; background: transparent; color: inherit; font: inherit; cursor: pointer; }
 .slovotvorWordPage { width: min(760px, 100%); }
 .slovotvorBackLink { color: var(--muted); font-size: 14px; text-decoration: none; }
 .slovotvorBackLink:hover { color: var(--ink); }

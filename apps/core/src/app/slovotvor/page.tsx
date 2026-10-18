@@ -1,21 +1,26 @@
 import type { Metadata } from "next";
 import Link from "next/link";
-import { listSlovotvorWords, getSlovotvorWordBySlug } from "@/lib/slovotvor";
+import { countSlovotvorWordsByAuthor, listSlovotvorWords, getSlovotvorWordBySlug } from "@/lib/slovotvor";
 import {
   getSlovotvorReplacementRequestById,
   listSlovotvorReplacementRequests,
 } from "@/lib/slovotvor-replacements";
+import { getCurrentParticipant } from "@/lib/session";
 
 export const metadata: Metadata = { title: "Словотвор" };
 export const dynamic = "force-dynamic";
 
 export default async function SlovotvorPage({ searchParams }: {
-  searchParams: Promise<{ error?: string; slug?: string; source?: string; replacement_error?: string; replacement_id?: string }>;
+  searchParams: Promise<{ error?: string; slug?: string; source?: string; replacement_error?: string; replacement_id?: string; author?: string }>;
 }) {
-  const words = await listSlovotvorWords();
   const params = await searchParams;
+  const [participant, words, replacements] = await Promise.all([
+    getCurrentParticipant(),
+    listSlovotvorWords(params.author),
+    listSlovotvorReplacementRequests(),
+  ]);
+  const ownWordCount = participant ? await countSlovotvorWordsByAuthor(participant.id) : 0;
   const duplicate = params.error === "duplicate" && params.slug ? await getSlovotvorWordBySlug(params.slug) : null;
-  const replacements = await listSlovotvorReplacementRequests();
   const replacementDuplicate = params.replacement_error === "duplicate" && params.replacement_id
     ? await getSlovotvorReplacementRequestById(params.replacement_id) : null;
   const errorMessage = params.error === "required" ? "Заполните обязательные поля"
@@ -93,6 +98,23 @@ export default async function SlovotvorPage({ searchParams }: {
             </article>
           ))}
         </div>
+
+        {params.author ? <Link className="slovotvorAllWordsLink" href="/slovotvor">Все слова</Link> : null}
+
+        {participant ? (() => {
+          const telegramUsername = participant.telegramUsername?.trim().replace(/^@+/, "") || null;
+          const telegramHref = telegramUsername && /^[A-Za-z0-9_]{5,32}$/.test(telegramUsername)
+            ? `https://t.me/${encodeURIComponent(telegramUsername)}` : null;
+          return <div className="slovotvorUserBar">
+            <span>Вы вошли как: {telegramHref ? <a href={telegramHref}>{telegramUsername}</a> : telegramUsername ?? participant.displayName}</span>
+            <span aria-hidden="true">·</span>
+            <span>Ваши слова: <Link href={`/slovotvor?author=${encodeURIComponent(participant.id)}`}>{ownWordCount}</Link></span>
+            <span aria-hidden="true">·</span>
+            <form className="slovotvorLogoutForm" action="/api/auth/logout" method="post">
+              <button className="slovotvorLogoutButton" type="submit">Выйти</button>
+            </form>
+          </div>;
+        })() : null}
       </section>
     </main>
   );

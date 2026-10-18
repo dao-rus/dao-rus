@@ -34,9 +34,15 @@ const wordColumns = `
     FROM slovotvor_words w
     JOIN participants p ON p.id = w.author_participant_id`;
 
-export async function listSlovotvorWords(database: Database = pool): Promise<SlovotvorWord[]> {
-  const result = await database.query(`${wordColumns} ORDER BY w.created_at DESC, w.id DESC`);
+export async function listSlovotvorWords(authorId?: string, database: Database = pool): Promise<SlovotvorWord[]> {
+  const filter = authorId ? " WHERE w.author_participant_id::text = $1" : "";
+  const result = await database.query(`${wordColumns}${filter} ORDER BY w.created_at DESC, w.id DESC`, authorId ? [authorId] : []);
   return result.rows.map(wordFromRow);
+}
+
+export async function countSlovotvorWordsByAuthor(authorId: string, database: Database = pool): Promise<number> {
+  const result = await database.query("SELECT count(*)::int AS count FROM slovotvor_words WHERE author_participant_id = $1", [authorId]);
+  return Number(result.rows[0]?.count ?? 0);
 }
 
 export async function getSlovotvorWordBySlug(slug: string, database: Database = pool): Promise<SlovotvorWord | null> {
