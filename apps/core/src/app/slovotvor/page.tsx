@@ -1,28 +1,37 @@
 import type { Metadata } from "next";
 import Link from "next/link";
-import { listSlovotvorWords } from "@/lib/slovotvor";
+import { listSlovotvorWords, getSlovotvorWordBySlug } from "@/lib/slovotvor";
 
 export const metadata: Metadata = { title: "Словотвор" };
 export const dynamic = "force-dynamic";
 
-export default async function SlovotvorPage() {
+export default async function SlovotvorPage({ searchParams }: {
+  searchParams: Promise<{ error?: string; slug?: string }>;
+}) {
   const words = await listSlovotvorWords();
+  const params = await searchParams;
+  const duplicate = params.error === "duplicate" && params.slug ? await getSlovotvorWordBySlug(params.slug) : null;
+  const errorMessage = params.error === "required" ? "Заполните обязательные поля"
+    : params.error === "too_long" ? "Одно из полей превышает допустимую длину"
+      : params.error === "failed" ? "Не удалось выпустить слово" : null;
   return (
     <main className="shell">
       <section className="card slovotvorPage">
         <h1>Словотвор</h1>
         <p className="lead">Придумай лучше</p>
 
-        <form className="slovotvorForm">
+        {errorMessage ? <p className="formError" role="alert">{errorMessage}</p> : null}
+        {duplicate ? <p className="formError" role="alert">Слово уже добавлено. <Link href={`/slovotvor/${duplicate.slug}`}>Открыть карточку</Link></p> : null}
+        <form className="slovotvorForm" action="/api/slovotvor" method="post">
           <div className="slovotvorWordFields">
-            <input name="word" type="text" placeholder="Новое слово" aria-label="Новое слово" disabled />
-            <input name="source" type="text" placeholder="Вместо какого?" aria-label="Вместо какого?" disabled />
+            <input name="word" type="text" placeholder="Новое слово" aria-label="Новое слово" required />
+            <input name="source" type="text" placeholder="Вместо какого?" aria-label="Вместо какого?" required />
           </div>
           <label>
             Пояснение <span className="muted">(необязательно)</span>
-            <textarea name="explanation" placeholder="Почему это слово подходит?" rows={3} disabled />
+            <textarea name="explanation" placeholder="Пояснение" rows={3} />
           </label>
-          <button className="button primary" type="button" disabled>Выпустить слово</button>
+          <button className="button primary" type="submit">Выпустить слово</button>
         </form>
 
         <div className="slovotvorCatalogHeader">
