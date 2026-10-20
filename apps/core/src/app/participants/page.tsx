@@ -18,7 +18,7 @@ export const dynamic = "force-dynamic";
 export const metadata: Metadata = { title: "Сеть" };
 
 type ParticipantsPageProps = {
-  searchParams: Promise<{ q?: string; interest?: string; residence_name?: string; residence_type?: string; residence_country?: string; post?: string; sort?: string; dir?: string }>;
+  searchParams: Promise<{ q?: string; interest?: string; without_residence?: string; residence_name?: string; residence_type?: string; residence_country?: string; post?: string; sort?: string; dir?: string }>;
 };
 
 function residenceFromQuery(params: Awaited<ParticipantsPageProps["searchParams"]>): Residence | null {
@@ -42,12 +42,15 @@ export default async function ParticipantsPage({ searchParams }: ParticipantsPag
   const { q = "", interest = "" } = params;
   const interestFilter = typeof interest === "string" ? interest.trim() : "";
   const residenceFilter = residenceFromQuery(params);
+  const withoutResidence = params.without_residence === "1" && !interestFilter
+    && !params.residence_name && !params.residence_type && !params.residence_country;
   const community = communityFromParams(params);
-  if (!isParticipantsDirectoryEnabled() && community?.type !== "residence") redirect("/");
+  if (!isParticipantsDirectoryEnabled() && community?.type !== "residence" && !withoutResidence) redirect("/");
   const sort: DirectorySort = params.sort === "verification" || params.sort === "reputation" || params.sort === "core" || params.sort === "joined"
     ? params.sort : "name";
   const dir: "asc" | "desc" = sort === "joined" && params.dir === "desc" ? "desc" : "asc";
   const filterParams = new URLSearchParams();
+  if (withoutResidence) filterParams.set("without_residence", "1");
   if (interestFilter) filterParams.set("interest", interestFilter);
   if (residenceFilter) {
     filterParams.set("residence_name", residenceFilter.name);
@@ -66,7 +69,7 @@ export default async function ParticipantsPage({ searchParams }: ParticipantsPag
     return query.size ? `/participants?${query.toString()}` : "/participants";
   };
   const directoryFilters = { interest: interestFilter, residence: residenceFilter, viewerParticipantId: viewer.id,
-    ...(sort !== "name" ? { sort } : {}), ...(sort === "joined" ? { dir } : {}) };
+    ...(withoutResidence ? { withoutResidence: true } : {}), ...(sort !== "name" ? { sort } : {}), ...(sort === "joined" ? { dir } : {}) };
   const [participants, { values: texts }, posts] = await Promise.all([
     listParticipantsDirectory(q, directoryFilters),
     readInterfaceTexts(),
@@ -93,7 +96,7 @@ export default async function ParticipantsPage({ searchParams }: ParticipantsPag
         <div className="profileHeader">
           <div>
             <div className="eyebrow">ДАО Русь</div>
-            <h1>{community
+            <h1>{withoutResidence ? texts["nearby.unspecified"] : community
               ? community.type === "residence"
                 ? `${texts["community.residence_title"]} ${residenceLabel(community.residence)}`
                 : `${texts["community.interest_title"]}: ${community.interest}`
@@ -110,6 +113,7 @@ export default async function ParticipantsPage({ searchParams }: ParticipantsPag
 
         <form className="participantsSearch" method="get">
           <label htmlFor="participants-search">Имя или имя в Telegram</label>
+          {withoutResidence ? <input type="hidden" name="without_residence" value="1" /> : null}
           {interestFilter ? <input type="hidden" name="interest" value={interestFilter} /> : null}
           {residenceFilter ? <>
             <input type="hidden" name="residence_name" value={residenceFilter.name} />
@@ -208,7 +212,7 @@ export default async function ParticipantsPage({ searchParams }: ParticipantsPag
             ))}
           </ul>
         ) : (
-          <p className="muted">{residenceFilter
+          <p className="muted">{withoutResidence && !q ? texts["nearby.unspecified_empty"] : residenceFilter
             ? (q ? "Люди из этого места по запросу не найдены." : "Люди из этого места пока не найдены.")
             : interestFilter ? (q ? "Участники с этим интересом по запросу не найдены." : "Участники с этим интересом не найдены.")
               : "Профили по этому запросу не найдены."}</p>

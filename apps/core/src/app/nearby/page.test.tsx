@@ -75,14 +75,15 @@ describe("/nearby", () => {
     expect(hasNearbyNavigation(page)).toBe(true);
   });
 
-it("lists unspecified participants separately below residences and links their profiles", async () => {
+it("links the unspecified community without listing its people on nearby", async () => {
   mocks.getCurrentParticipant.mockResolvedValue({ id: "viewer" });
   mocks.listResidenceCommunities.mockResolvedValue([]);
   mocks.listParticipantsDirectory.mockResolvedValue([{ participantId: "person", displayName: "Анна" }]);
   const page = await NearbyPage();
   expect(content(page)).toContain("Не указавшие");
-  expect(content(page)).toContain("Анна");
-  expect(propsWithHref(page).map(p => p.href)).toContain("/profile/person");
+  expect(content(page)).not.toContain("Анна");
+  expect(propsWithHref(page).map(p => p.href)).toContain("/participants?without_residence=1");
+  expect(propsWithHref(page).map(p => p.href)).not.toContain("/profile/person");
   expect(mocks.listParticipantsDirectory).toHaveBeenCalledWith("", { withoutResidence: true, viewerParticipantId: "viewer" });
 });
 

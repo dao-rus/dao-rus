@@ -36,14 +36,12 @@ export default async function NearbyPage() {
             ))}
           </ul>
         ) : <p className="muted">{texts["nearby.empty"]}</p>}
-        <section aria-labelledby="unspecified-residence-title">
-          <h2 id="unspecified-residence-title">{texts["nearby.unspecified"]} <span className="muted">{unspecified.length}</span></h2>
-          {unspecified.length ? <ul className="nearbyCommunities">
-            {unspecified.map(person => <li key={person.participantId}>
-              <Link href={`/profile/${person.participantId}`}>{person.displayName}</Link>
-            </li>)}
-          </ul> : <p className="muted">{texts["nearby.unspecified_empty"]}</p>}
-        </section>
+        <ul className="nearbyCommunities">
+          <li>
+            <Link href="/participants?without_residence=1">{texts["nearby.unspecified"]}</Link>
+            <span className="muted">{unspecified.length}</span>
+          </li>
+        </ul>
       </section>
     </main>
   );

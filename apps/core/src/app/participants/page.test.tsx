@@ -413,3 +413,40 @@ describe("residence communities with the general directory disabled", () => {
     expect(mocks.listParticipantsDirectory).not.toHaveBeenCalled();
   });
 });
+
+describe("unspecified residence list", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    mocks.isParticipantsDirectoryEnabled.mockReturnValue(false);
+    mocks.getCurrentParticipant.mockResolvedValue({ id: "viewer" });
+    mocks.redirect.mockImplementation((destination: string) => { throw new Error(`redirect:${destination}`); });
+    mocks.listParticipantsDirectory.mockResolvedValue([]);
+    mocks.readInterfaceTexts.mockResolvedValue({ values: { "nearby.unspecified": "Не указавшие", "nearby.unspecified_empty": "Все указали" } });
+  });
+  it("uses the missing residence filter and preserves it in search, reset and sort links", async () => {
+    const page = await ParticipantsPage({ searchParams: Promise.resolve({ without_residence: "1", q: "Анна", sort: "joined", dir: "desc" }) });
+    expect(textContent(page)).toContain("Не указавшие");
+    expect(mocks.listParticipantsDirectory).toHaveBeenCalledWith("Анна", expect.objectContaining({ withoutResidence: true, sort: "joined", dir: "desc" }));
+    const urls = hrefs(page).filter(href => href.startsWith("/participants"));
+    expect(urls.length).toBeGreaterThan(0);
+    expect(urls.every(href => new URL(href, "https://core.daorus.org").searchParams.get("without_residence") === "1")).toBe(true);
+    function inputs(node: ReactNode): Array<{ name?: string; value?: string }> {
+      if (Array.isArray(node)) return node.flatMap(inputs);
+      if (!isValidElement(node)) return [];
+      const props = node.props as { children?: ReactNode; name?: string; value?: string };
+      return [...(node.type === "input" ? [props] : []), ...inputs(props.children)];
+    }
+    expect(inputs(page)).toContainEqual(expect.objectContaining({ name: "without_residence", value: "1" }));
+    expect(mocks.listCommunityPosts).not.toHaveBeenCalled();
+    expect(mocks.listCommunitySignals).not.toHaveBeenCalled();
+  });
+  it.each([{}, { without_residence: "0" }, { without_residence: "1", residence_name: "Москва" }, { without_residence: "1", interest: "История" }])("does not allow an unfiltered catalogue via %j", async params => {
+    await expect(ParticipantsPage({ searchParams: Promise.resolve(params) })).rejects.toThrow("redirect:/");
+    expect(mocks.listParticipantsDirectory).not.toHaveBeenCalled();
+  });
+  it("requires authentication", async () => {
+    mocks.getCurrentParticipant.mockResolvedValue(null);
+    await expect(ParticipantsPage({ searchParams: Promise.resolve({ without_residence: "1" }) })).rejects.toThrow("redirect:/");
+    expect(mocks.listParticipantsDirectory).not.toHaveBeenCalled();
+  });
+});
