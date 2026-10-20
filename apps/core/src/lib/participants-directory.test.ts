@@ -200,3 +200,11 @@ describe("participants directory", () => {
     expect(sql).toContain("ORDER BY lower(participant.display_name), participant.id");
   });
 });
+
+it("filters incomplete and absent residences without changing catalogue visibility", async () => {
+  let sql = "";
+  await listParticipantsDirectoryWithDatabase({ async query(text) { sql = text; return { rows: [] }; } }, "", { withoutResidence: true });
+  for (const field of ["name", "type", "country"]) expect(sql).toContain(`NULLIF(btrim(participant.residence_${field}), '') IS NULL`);
+  expect(sql).toContain("forum.forum_status = 'joined'");
+  expect(sql).toContain("login.event_type = 'participant.logged_in'");
+});

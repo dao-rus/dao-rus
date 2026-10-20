@@ -386,3 +386,30 @@ describe("/participants", () => {
 });
 
 vi.mock("@/lib/award-views", () => ({ getAwardBadges: vi.fn().mockResolvedValue({}), getOwnAwardOffers: vi.fn().mockResolvedValue([]) }));
+
+describe("residence communities with the general directory disabled", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    mocks.isParticipantsDirectoryEnabled.mockReturnValue(false);
+    mocks.getCurrentParticipant.mockResolvedValue({ id: "viewer" });
+    mocks.redirect.mockImplementation((destination: string) => { throw new Error(`redirect:${destination}`); });
+    mocks.listParticipantsDirectory.mockResolvedValue([]);
+    mocks.listCommunityPosts.mockResolvedValue([]);
+    mocks.listCommunitySignals.mockResolvedValue([]);
+    mocks.readInterfaceTexts.mockResolvedValue({ values: { "community.residence_title": "Сообщество" } });
+  });
+  it("opens a complete residence community for a signed-in viewer", async () => {
+    const page = await ParticipantsPage({ searchParams: Promise.resolve({ residence_name: "Казань", residence_type: "город", residence_country: "Россия" }) });
+    expect(textContent(page)).toContain("Казань");
+    expect(mocks.listParticipantsDirectory).toHaveBeenCalledWith("", expect.objectContaining({ residence: { name: "Казань", type: "город", country: "Россия" } }));
+  });
+  it.each([{}, { residence_name: "Казань" }, { interest: "История" }])("does not open the general catalogue for %j", async params => {
+    await expect(ParticipantsPage({ searchParams: Promise.resolve(params) })).rejects.toThrow("redirect:/");
+    expect(mocks.listParticipantsDirectory).not.toHaveBeenCalled();
+  });
+  it("does not open residence communities to guests", async () => {
+    mocks.getCurrentParticipant.mockResolvedValue(null);
+    await expect(ParticipantsPage({ searchParams: Promise.resolve({ residence_name: "Казань", residence_type: "город", residence_country: "Россия" }) })).rejects.toThrow("redirect:/");
+    expect(mocks.listParticipantsDirectory).not.toHaveBeenCalled();
+  });
+});

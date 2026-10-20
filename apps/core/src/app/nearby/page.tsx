@@ -2,11 +2,11 @@ import Link from "next/link";
 import type { Metadata } from "next";
 import { redirect } from "next/navigation";
 import { CoreNavigation } from "../../components/core-navigation";
-import { listResidenceCommunities } from "@/lib/communities";
+import { communityHref, listResidenceCommunities } from "@/lib/communities";
 import { readInterfaceTexts } from "@/lib/interface-texts";
-import { residenceDirectoryHref, residenceLabel } from "@/lib/profile-about";
+import { residenceLabel } from "@/lib/profile-about";
 import { getCurrentParticipant } from "@/lib/session";
-import { isParticipantsDirectoryEnabled } from "@/lib/config";
+import { listParticipantsDirectory } from "@/lib/participants-directory";
 
 export const dynamic = "force-dynamic";
 export const metadata: Metadata = { title: "Рядом" };
@@ -14,10 +14,10 @@ export const metadata: Metadata = { title: "Рядом" };
 export default async function NearbyPage() {
   const participant = await getCurrentParticipant();
   if (!participant) redirect("/");
-  const directoryEnabled = isParticipantsDirectoryEnabled();
 
-  const [communities, { values: texts }] = await Promise.all([
+  const [communities, { values: texts }, unspecified] = await Promise.all([
     listResidenceCommunities(), readInterfaceTexts(),
+    listParticipantsDirectory("", { withoutResidence: true, viewerParticipantId: participant.id }),
   ]);
 
   return (
@@ -30,13 +30,20 @@ export default async function NearbyPage() {
           <ul className="nearbyCommunities">
             {communities.map(({ residence, participantCount }) => (
               <li key={JSON.stringify([residence.country, residence.type, residence.name])}>
-                {directoryEnabled ? <Link href={residenceDirectoryHref(residence)}>{residenceLabel(residence)}</Link>
-                  : <span>{residenceLabel(residence)}</span>}
+                <Link href={communityHref({ type: "residence", residence })}>{residenceLabel(residence)}</Link>
                 <span className="muted">{participantCount}</span>
               </li>
             ))}
           </ul>
         ) : <p className="muted">{texts["nearby.empty"]}</p>}
+        <section aria-labelledby="unspecified-residence-title">
+          <h2 id="unspecified-residence-title">{texts["nearby.unspecified"]} <span className="muted">{unspecified.length}</span></h2>
+          {unspecified.length ? <ul className="nearbyCommunities">
+            {unspecified.map(person => <li key={person.participantId}>
+              <Link href={`/profile/${person.participantId}`}>{person.displayName}</Link>
+            </li>)}
+          </ul> : <p className="muted">{texts["nearby.unspecified_empty"]}</p>}
+        </section>
       </section>
     </main>
   );

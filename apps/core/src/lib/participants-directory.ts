@@ -22,7 +22,7 @@ export type ParticipantDirectoryEntry = {
 };
 
 export type DirectorySort = "name" | "verification" | "reputation" | "core" | "joined";
-export type DirectoryFilters = { interest?: string; residence?: Residence | null; viewerParticipantId?: string; sort?: DirectorySort; dir?: "asc" | "desc" };
+export type DirectoryFilters = { withoutResidence?: boolean; interest?: string; residence?: Residence | null; viewerParticipantId?: string; sort?: DirectorySort; dir?: "asc" | "desc" };
 
 type QueryResult = {
   rows: Array<Record<string, unknown>>;
@@ -110,6 +110,9 @@ export async function listParticipantsDirectoryWithDatabase(
         )
       )
         ${coreOnly}
+        ${filters.withoutResidence ? `AND (NULLIF(btrim(participant.residence_name), '') IS NULL
+          OR NULLIF(btrim(participant.residence_type), '') IS NULL
+          OR NULLIF(btrim(participant.residence_country), '') IS NULL)` : ""}
         AND (
           $1::text = ''
           OR participant.display_name ILIKE '%' || $1 || '%'

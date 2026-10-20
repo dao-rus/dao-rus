@@ -37,13 +37,13 @@ function residenceFromQuery(params: Awaited<ParticipantsPageProps["searchParams"
 export default async function ParticipantsPage({ searchParams }: ParticipantsPageProps) {
   const viewer = await getCurrentParticipant();
   if (!viewer) redirect("/");
-  if (!isParticipantsDirectoryEnabled()) redirect("/");
 
   const params = await searchParams;
   const { q = "", interest = "" } = params;
   const interestFilter = typeof interest === "string" ? interest.trim() : "";
   const residenceFilter = residenceFromQuery(params);
   const community = communityFromParams(params);
+  if (!isParticipantsDirectoryEnabled() && community?.type !== "residence") redirect("/");
   const sort: DirectorySort = params.sort === "verification" || params.sort === "reputation" || params.sort === "core" || params.sort === "joined"
     ? params.sort : "name";
   const dir: "asc" | "desc" = sort === "joined" && params.dir === "desc" ? "desc" : "asc";
