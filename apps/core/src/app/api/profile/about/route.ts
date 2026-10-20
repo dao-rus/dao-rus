@@ -7,6 +7,7 @@ import {
   ProfileAboutValidationError,
   removeProfileInterest,
   updateProfileBio,
+  updateProfileInterest,
 } from "@/lib/profile-about";
 import { getCurrentParticipant } from "@/lib/session";
 import type { OnboardingReward } from "@/lib/onboarding-quests";
@@ -51,6 +52,13 @@ export async function POST(request: NextRequest) {
         formData.get("label"),
         formData.get("visibility"),
       );
+    } else if (action === "update_interest") {
+      await updateProfileInterest(
+        participant.id,
+        requiredId(formData.get("interest_id")),
+        formData.get("label"),
+        formData.get("visibility"),
+      );
     } else if (action === "remove_interest") {
       await removeProfileInterest(participant.id, requiredId(formData.get("interest_id")));
     } else if (action === "add_signal") {
@@ -68,13 +76,16 @@ export async function POST(request: NextRequest) {
       return profileRedirect("invalid");
     }
 
-    if (action === "add_interest" || action === "remove_interest") {
+    if (action === "add_interest" || action === "update_interest" || action === "remove_interest") {
       await (await import("../../../../lib/guardian-forum-actions")).afterProfileChanged(participant.id);
     }
     return profileRedirect("updated", reward?.id);
   } catch (error) {
     if (error instanceof ProfileAboutValidationError) {
-      return profileRedirect("invalid");
+      return profileRedirect(error.message === "Interest already exists" ? "duplicate_interest" : "invalid");
+    }
+    if (typeof error === "object" && error !== null && "code" in error && error.code === "23505" && action === "update_interest") {
+      return profileRedirect("duplicate_interest");
     }
     throw error;
   }
