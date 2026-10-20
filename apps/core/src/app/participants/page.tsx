@@ -171,7 +171,6 @@ export default async function ParticipantsPage({ searchParams }: ParticipantsPag
                         ? `@${participant.telegramUsername}`
                         : "Имя в Telegram не указано"}
                     </span>
-                    {participant.telegramBio ? <small className="muted">{participant.telegramBio}</small> : null}
                     {participant.residence ? <small className="muted">{residenceLabel(participant.residence)}</small> : null}</> : null}
                     {!community && (participant.profileAge || participant.profileCity || participant.profileOccupation
                       || participant.profileEducation || participant.profileFamilyStatus) ? <dl className="participantProfileFacts">
