@@ -13,7 +13,7 @@ import { isParticipantsDirectoryEnabled } from "@/lib/config";
 import { getReputationSummary } from "@/lib/reputation";
 import { getCurrentParticipant } from "@/lib/session";
 import { formatDarusAmount, getVerificationRewardForFeedback } from "@/lib/tokenization";
-import { getVerificationProfile } from "@/lib/verification";
+import { getVerificationProfile, verificationConfirmationLabel } from "@/lib/verification";
 import { getProfileTimeline } from "../../../lib/profile-timeline";
 import { LocalDateTime } from "../../../components/local-date-time";
 
@@ -136,7 +136,7 @@ export default async function SubjectProfilePage({ params, searchParams }: Subje
             {texts["profile.write_telegram"]}
           </a> : null}
 
-          {profile.hasLoggedIn && profile.telegramBio ? <p className="profileBio muted">{texts["profile.telegram_bio"]}: {profile.telegramBio}</p> : null}
+
         </div>
 
         {showAbout && about ? (
@@ -194,10 +194,7 @@ export default async function SubjectProfilePage({ params, searchParams }: Subje
 
           <div className="publicTrustPart">
             <p className="publicTrustRow">
-              <span className={profile.isVerified ? "verificationBadge verified" : "verificationBadge"}>
-                {profile.isVerified ? "✓ Личность подтверждена" : "Личность пока не подтверждена"}
-              </span>
-              <span className="muted">{profile.verificationPoints} подтверждений</span>
+              <strong>{verificationConfirmationLabel(profile.verificationPoints)}</strong>
             </p>
             {profile.isRoot ? <small className="muted">В начальном ядре доверия</small> : null}
             <div className="verificationRewardAnchor">
