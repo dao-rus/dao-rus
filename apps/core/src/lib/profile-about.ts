@@ -367,6 +367,40 @@ export async function addProfileInterestWithDatabase(
   });
 }
 
+// Edits keep the same interest ID and are restricted to its owner.
+export async function updateProfileInterestWithDatabase(
+  database: ProfileAboutDatabase,
+  participantId: string,
+  interestId: string,
+  labelValue: unknown,
+  visibilityValue: unknown,
+): Promise<void> {
+  const label = normalizeInterest(labelValue);
+  const normalizedLabel = label.toLocaleLowerCase("ru-RU");
+  const visibility = normalizeProfileVisibility(visibilityValue);
+  await withProfileTransaction(database, async (client) => {
+    const duplicate = await client.query(
+      `SELECT 1 FROM participant_interests
+        WHERE participant_id = $1::uuid AND normalized_label = $2 AND id <> $3::uuid
+        LIMIT 1`,
+      [participantId, normalizedLabel, interestId],
+    );
+    if (duplicate.rowCount) throw new ProfileAboutValidationError("Interest already exists");
+    const result = await client.query(
+      `UPDATE participant_interests SET label = $3, normalized_label = $4,
+          visibility = $5, updated_at = now()
+        WHERE id = $1::uuid AND participant_id = $2::uuid
+        RETURNING id`,
+      [interestId, participantId, label, normalizedLabel, visibility],
+    );
+    if (!result.rowCount) throw new ProfileAboutValidationError("Interest not found");
+    await recordEvent(client, participantId, "participant.interest_saved", {
+      interest_id: interestId,
+      visibility,
+    });
+  });
+}
+
 export async function removeProfileInterestWithDatabase(
   database: ProfileAboutDatabase,
   participantId: string,
@@ -442,6 +476,16 @@ export async function addProfileInterest(
 ) {
   const { pool } = await import("./db");
   return addProfileInterestWithDatabase(pool, participantId, label, visibility);
+}
+
+export async function updateProfileInterest(
+  participantId: string,
+  interestId: string,
+  label: unknown,
+  visibility: unknown,
+) {
+  const { pool } = await import("./db");
+  return updateProfileInterestWithDatabase(pool, participantId, interestId, label, visibility);
 }
 
 export async function removeProfileInterest(participantId: string, interestId: string) {
