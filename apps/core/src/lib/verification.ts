@@ -1,3 +1,14 @@
+// The graph's eligibility status remains separate from the visible count.
+export function verificationConfirmationLabel(points: number): string {
+  const value = Math.abs(points);
+  const ending = value % 100;
+  const digit = value % 10;
+  const word = ending >= 11 && ending <= 14 ? "подтверждений"
+    : digit === 1 ? "подтверждение"
+    : digit >= 2 && digit <= 4 ? "подтверждения" : "подтверждений";
+  return `${points} ${word}`;
+}
+
 export type VerificationEdge = {
   verifierSubjectId: string;
   subjectId: string;
