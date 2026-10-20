@@ -18,7 +18,10 @@ const mocks = vi.hoisted(() => ({
 
 vi.mock("next/navigation", () => ({ redirect: mocks.redirect, notFound: mocks.notFound }));
 vi.mock("@/lib/session", () => ({ getCurrentParticipant: mocks.getCurrentParticipant }));
-vi.mock("@/lib/verification", () => ({ getVerificationProfile: mocks.getVerificationProfile }));
+vi.mock("@/lib/verification", () => ({
+  getVerificationProfile: mocks.getVerificationProfile,
+  verificationConfirmationLabel: (points: number) => `${points} подтверждений`,
+}));
 vi.mock("@/lib/profile-about", () => ({
   getVisibleProfileAbout: mocks.getVisibleProfileAbout,
   residenceLabel: ({ name, country }: { name: string; country: string }) => `${name}, ${country}`,
@@ -192,7 +195,7 @@ describe("public subject profile name", () => {
     const text = textContent(page);
     expect(text).toContain("Имя из Telegram");
     expect(text).toContain("@telegram_name");
-    expect(text).toContain("Биография из Telegram");
+    expect(text).not.toContain("Биография из Telegram");
     expect(text).toContain("Моё био в ДАО");
     expect(text).toContain("История");
     expect(text).toContain("Казань, Россия");

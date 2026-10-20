@@ -353,12 +353,11 @@ export async function addProfileInterestWithDatabase(
       `INSERT INTO participant_interests(participant_id, label, normalized_label, visibility)
        VALUES ($1::uuid, $2, $3, $4)
        ON CONFLICT (participant_id, normalized_label)
-       DO UPDATE SET label = EXCLUDED.label,
-                     visibility = EXCLUDED.visibility,
-                     updated_at = now()
+       DO NOTHING
        RETURNING id`,
       [participantId, label, normalizedLabel, visibility],
     );
+    if (!result.rowCount) throw new ProfileAboutValidationError("Interest already exists");
     await recordEvent(client, participantId, "participant.interest_saved", {
       interest_id: String(result.rows[0]?.id ?? ""),
       visibility,

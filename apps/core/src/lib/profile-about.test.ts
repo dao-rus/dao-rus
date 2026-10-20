@@ -277,6 +277,41 @@ describe("profile residence reads", () => {
   });
 });
 
+describe("profile visibility reads", () => {
+  const modes = ["public", "members", "private", "circle", "match_only"] as const;
+
+  it("keeps the owner's existing visibility modes and only publishes public/member content", async () => {
+    for (const mode of modes) {
+      const database = {
+        async query(text: string) {
+          if (text.includes("FROM participants")) {
+            const visibleToOther = text.includes("WHEN profile_bio_visibility IN ('public', 'members')");
+            return { rowCount: 1, rows: [{
+              profile_bio: visibleToOther && mode !== "public" && mode !== "members" ? "" : "Секрет",
+              profile_bio_visibility: mode,
+            }] };
+          }
+          if (text.includes("FROM participant_interests")) {
+            const visibleToOther = text.includes("visibility IN ('public', 'members')");
+            return visibleToOther && mode !== "public" && mode !== "members"
+              ? { rowCount: 0, rows: [] }
+              : { rowCount: 1, rows: [{ id: "interest", label: "История", visibility: mode }] };
+          }
+          return { rowCount: 0, rows: [] };
+        },
+      };
+
+      const own = await getProfileAboutWithDatabase(database, "owner");
+      const foreign = await getVisibleProfileAboutWithDatabase(database, "owner", "viewer");
+      expect(own?.bioVisibility).toBe(mode);
+      expect(own?.interests[0]?.visibility).toBe(mode);
+      expect(foreign?.bio).toBe(mode === "public" || mode === "members" ? "Секрет" : "");
+      expect(foreign?.interests.map((interest) => interest.label))
+        .toEqual(mode === "public" || mode === "members" ? ["История"] : []);
+    }
+  });
+});
+
 describe("anonymous signal publication boundary", () => {
   it("keeps network-blind and match-only signals out of another participant's profile", async () => {
     const signals = [

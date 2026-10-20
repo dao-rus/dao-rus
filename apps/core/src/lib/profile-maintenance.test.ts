@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import {
+  addProfileInterestWithDatabase,
   updateProfileInterestWithDatabase,
   type ProfileAboutDatabase,
 } from "./profile-about";
@@ -26,6 +27,24 @@ function fakeInterestDatabase({ duplicate = false, found = true } = {}) {
 }
 
 describe("profile interest editing", () => {
+  it("does not overwrite an existing interest when adding a duplicate", async () => {
+    const queries: Array<{ sql: string; values?: unknown[] }> = [];
+    const client = {
+      query: async (sql: string, values?: unknown[]) => {
+        queries.push({ sql, values });
+        if (sql.includes("INSERT INTO participant_interests")) return { rowCount: 0, rows: [] };
+        return { rowCount: 0, rows: [] };
+      },
+      release: () => {},
+    };
+    const database: ProfileAboutDatabase = { connect: async () => client, query: client.query };
+
+    await expect(addProfileInterestWithDatabase(database, OWNER, "История", "public"))
+      .rejects.toThrow("Interest already exists");
+    expect(queries.some(({ sql }) => sql.includes("UPDATE participant_interests"))).toBe(false);
+    expect(queries.at(-1)?.sql).toBe("ROLLBACK");
+  });
+
   it("updates the owner's existing interest in place, keeping its ID", async () => {
     const { database, queries } = fakeInterestDatabase();
     await updateProfileInterestWithDatabase(database, OWNER, INTEREST, "История", "private");
