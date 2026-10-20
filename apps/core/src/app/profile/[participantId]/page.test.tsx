@@ -196,7 +196,7 @@ describe("public subject profile name", () => {
     expect(text).toContain("Моё био в ДАО");
     expect(text).toContain("История");
     expect(text).toContain("Казань, Россия");
-    expect(hrefs(page)).not.toContain("/participants?residence_name=Kazan");
+    expect(hrefs(page)).toContain("/participants?residence_name=Kazan");
     expect(hrefs(page)).not.toContain(`/participants?interest=${encodeURIComponent("История")}`);
     expect(text).toContain("Могу редактировать тексты");
     for (const kind of ["need", "can", "want", "have"]) {

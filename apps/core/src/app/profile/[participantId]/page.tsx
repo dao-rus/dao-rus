@@ -127,9 +127,7 @@ export default async function SubjectProfilePage({ params, searchParams }: Subje
                 {timeline.leftDaoAt ? <span>{texts["profile.left_dao"]} <LocalDateTime dateOnly value={timeline.leftDaoAt.toISOString()} /></span> : null}
                 {timeline.leftForumAt ? <span>{texts["profile.left_forum"]} <LocalDateTime dateOnly value={timeline.leftForumAt.toISOString()} /></span> : null}
               </div>
-              {about?.residence ? directoryEnabled
-                ? <Link className="residenceLink" href={residenceDirectoryHref(about.residence)}>{residenceLabel(about.residence)}</Link>
-                : <span className="residenceLink">{residenceLabel(about.residence)}</span> : null}
+              {about?.residence ? <Link className="residenceLink" href={residenceDirectoryHref(about.residence)}>{residenceLabel(about.residence)}</Link> : null}
             </div>
           ) : null}
 
