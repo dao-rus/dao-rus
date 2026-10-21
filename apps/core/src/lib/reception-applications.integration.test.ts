@@ -61,12 +61,12 @@ describe.skipIf(!databaseUrl)("Reception applications on isolated PostgreSQL", (
     expect(await application(response)).toMatchObject({ ...form, revision: 1, status: "submitted", invitationStatus: "not_requested" });
     expect(Number((await db.query("SELECT count(*) FROM participants")).rows[0].count)).toBe(Number(before.count) + 1);
     expect((await db.query("SELECT participant_id FROM reception_applications")).rows[0].participant_id).not.toBeNull();
-    expect((await db.query(`SELECT p.profile_age, p.profile_city, p.profile_occupation
+    expect((await db.query(`SELECT p.profile_age, p.residence_name, p.profile_occupation
       FROM participants p JOIN reception_applications a ON a.participant_id=p.id
       WHERE a.telegram_user_id='42'`)).rows[0])
-      .toEqual({ profile_age: 35, profile_city: "Москва", profile_occupation: "Мастер" });
+      .toEqual({ profile_age: 35, residence_name: "Москва", profile_occupation: "Мастер" });
     await PUT(request("PUT"));
-    expect((await db.query("SELECT count(*)::int AS count FROM participants WHERE profile_city='Москва'")).rows[0].count).toBe(1);
+    expect((await db.query("SELECT count(*)::int AS count FROM participants WHERE residence_name='Москва'")).rows[0].count).toBe(1);
     expect((await db.query("SELECT count(*)::int AS count FROM external_identities WHERE external_user_id='42'")).rows[0].count).toBe(1);
     expect((await db.query("SELECT kind FROM reception_application_deliveries")).rows).toEqual([]);
   });
@@ -106,13 +106,13 @@ describe.skipIf(!databaseUrl)("Reception applications on isolated PostgreSQL", (
     expect((await POST(request("POST", form, data))).status).toBe(401);
     expect((await db.query("SELECT count(*)::int AS count FROM reception_applications")).rows[0].count).toBe(0);
   });
-  it("uses existing OIDC Telegram identity and updates only reception profile fields", async () => {
-    const p = (await db.query("INSERT INTO participants(display_name, profile_bio, display_name_chosen_in_core) VALUES ('Core name', 'Core bio', true) RETURNING *")).rows[0];
+  it("uses existing OIDC Telegram identity and preserves independently edited residence and occupation", async () => {
+    const p = (await db.query("INSERT INTO participants(display_name, profile_bio, display_name_chosen_in_core, residence_name, profile_occupation) VALUES ('Core name', 'Core bio', true, 'Свой город', 'Своё занятие') RETURNING *")).rows[0];
     const identity = (await db.query("INSERT INTO external_identities(participant_id,provider,provider_subject,external_user_id) VALUES($1,'telegram','oidc:existing','42') RETURNING *", [p.id])).rows[0];
     await POST(request("POST")); await PUT(request("PUT", { ...form, occupation: "Новые сведения" }));
     expect((await db.query("SELECT participant_id FROM reception_applications")).rows[0].participant_id).toBe(p.id);
-    expect((await db.query("SELECT profile_city, profile_occupation FROM participants WHERE id=$1", [p.id])).rows[0])
-      .toEqual({ profile_city: "Москва", profile_occupation: "Новые сведения" });
+    expect((await db.query("SELECT residence_name, profile_occupation FROM participants WHERE id=$1", [p.id])).rows[0])
+      .toEqual({ residence_name: "Свой город", profile_occupation: "Своё занятие" });
     expect((await db.query("SELECT * FROM external_identities WHERE id=$1", [identity.id])).rows[0]).toEqual(identity);
     await db.query("DELETE FROM external_identities WHERE id=$1", [identity.id]);
   });
@@ -123,8 +123,8 @@ describe.skipIf(!databaseUrl)("Reception applications on isolated PostgreSQL", (
       VALUES('42','draft',1,NULL,NULL)`);
     const response = await PUT(request("PUT", { ...form, education: "Высшее", familyStatus: "женат" }));
     expect(response.status).toBe(200);
-    expect((await db.query("SELECT profile_age, profile_city, profile_occupation, profile_education, profile_family_status FROM participants WHERE id=$1", [p])).rows[0])
-      .toEqual({ profile_age: 35, profile_city: "Москва", profile_occupation: "Мастер", profile_education: "Высшее", profile_family_status: "женат" });
+    expect((await db.query("SELECT profile_age, residence_name, profile_occupation, profile_education, profile_family_status FROM participants WHERE id=$1", [p])).rows[0])
+      .toEqual({ profile_age: 35, residence_name: "Москва", profile_occupation: "Мастер", profile_education: "Высшее", profile_family_status: "женат" });
     expect((await db.query("SELECT count(*)::int AS count FROM reception_applications WHERE telegram_user_id='42'")).rows[0].count).toBe(1);
     expect((await db.query("SELECT count(*)::int AS count FROM reception_application_deliveries WHERE application_id=(SELECT id FROM reception_applications WHERE telegram_user_id='42')")).rows[0].count).toBe(0);
   });
@@ -148,8 +148,8 @@ describe.skipIf(!databaseUrl)("Reception applications on isolated PostgreSQL", (
     try {
       expect((await POST(request("POST"))).status).toBe(201);
       expect((await db.query("SELECT participant_id FROM reception_applications")).rows[0].participant_id).toBe(p.id);
-      expect((await db.query("SELECT profile_age, profile_city, profile_occupation FROM participants WHERE id=$1", [p.id])).rows[0])
-        .toEqual({ profile_age: 35, profile_city: "Москва", profile_occupation: "Мастер" });
+      expect((await db.query("SELECT profile_age, residence_name, profile_occupation FROM participants WHERE id=$1", [p.id])).rows[0])
+        .toEqual({ profile_age: 35, residence_name: "Москва", profile_occupation: "Мастер" });
       expect((await db.query("SELECT * FROM telegram_roster_entries WHERE telegram_user_id=42")).rows[0]).toEqual(roster);
       expect((await db.query("SELECT count(*)::int AS count FROM external_identities WHERE participant_id=$1", [p.id])).rows[0].count).toBe(1);
     } finally { await db.query("DELETE FROM telegram_roster_entries WHERE telegram_user_id=42"); }

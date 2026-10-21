@@ -36,6 +36,12 @@ export type Residence = {
   country: string;
 };
 
+export type ResidenceFields = {
+  name: string | null;
+  type: string | null;
+  country: string | null;
+};
+
 export type ProfileAbout = {
   bio: string;
   bioVisibility: ProfileVisibility;
@@ -76,16 +82,24 @@ export function normalizeProfileBio(value: unknown): string {
 }
 
 export function normalizeResidence(values: { name: unknown; type: unknown; country: unknown }): Residence | null {
+  const fields = normalizeResidenceFields(values);
+  if (!fields.name) return null;
+  if (!fields.type || !fields.country) return null;
+  return { name: fields.name, type: fields.type, country: fields.country };
+}
+
+export function normalizeResidenceFields(values: { name: unknown; type: unknown; country: unknown }): ResidenceFields {
   const parts = [values.name, values.type, values.country];
   if (parts.some((value) => typeof value !== "string")) {
     throw new ProfileAboutValidationError("Residence must be text");
   }
   const [name, type, country] = (parts as string[]).map((value) => value.trim().replace(/\s+/gu, " "));
-  if (!name) return null;
-  if (!type || !country || name.length > 120 || type.length > 80 || country.length > 120) {
+  if (!name) return { name: null, type: null, country: null };
+  if (name.length > 200 || (type && type.length > 80) || (country && country.length > 120)
+    || Boolean(type) !== Boolean(country)) {
     throw new ProfileAboutValidationError("Invalid residence");
   }
-  return { name, type, country };
+  return { name, type: type || null, country: country || null };
 }
 
 export function residenceLabel(residence: Residence): string {
@@ -114,7 +128,7 @@ function aboutFromRows(
     bio: String(participantRow.profile_bio ?? ""),
     bioVisibility: String(participantRow.profile_bio_visibility) as ProfileVisibility,
     age: participantRow.profile_age === null || participantRow.profile_age === undefined ? null : Number(participantRow.profile_age),
-    city: participantRow.profile_city ? String(participantRow.profile_city) : null,
+    city: participantRow.city ? String(participantRow.city) : null,
     occupation: participantRow.profile_occupation ? String(participantRow.profile_occupation) : null,
     education: participantRow.profile_education ? String(participantRow.profile_education) : null,
     familyStatus: participantRow.profile_family_status ? String(participantRow.profile_family_status) : null,
@@ -145,8 +159,8 @@ export async function getProfileAboutWithDatabase(
   const [participant, interests, signals] = await Promise.all([
     database.query(
       `SELECT profile_bio, profile_bio_visibility,
-              profile_age, residence_name, residence_type, residence_country,
-              profile_city, profile_occupation, profile_education, profile_family_status
+              profile_age, residence_name AS city, residence_type, residence_country,
+              profile_occupation, profile_education, profile_family_status
          FROM participants
         WHERE id = $1::uuid`,
       [participantId],
@@ -182,8 +196,8 @@ export async function getVisibleProfileAboutWithDatabase(
                 ELSE ''
               END AS profile_bio,
               profile_bio_visibility,
-              NULL AS profile_age, residence_name, residence_type, residence_country,
-              NULL AS profile_city, NULL AS profile_occupation, NULL AS profile_education, NULL AS profile_family_status
+              NULL AS profile_age, residence_name AS city, residence_type, residence_country,
+              profile_occupation, NULL AS profile_education, NULL AS profile_family_status
          FROM participants
         WHERE id = $1::uuid`,
       [participantId],
@@ -272,7 +286,7 @@ export async function saveProfileWithDatabase(
   const displayName = normalizeDisplayName(displayNameValue);
   const bio = normalizeProfileBio(bioValue);
   const visibility = normalizeProfileVisibility(visibilityValue);
-  const residence = residenceValues === undefined ? undefined : normalizeResidence(residenceValues);
+  const residence = residenceValues === undefined ? undefined : normalizeResidenceFields(residenceValues);
 
   return withProfileTransaction(database, async (client) => {
     const result = await client.query(
@@ -297,7 +311,7 @@ export async function saveProfileWithDatabase(
           country: String(previous.residence_country),
         }
       : null;
-    const nextResidence = residence === undefined ? previousResidence : residence;
+    const nextResidence = residence === undefined ? previousResidence : residence.name ? residence : null;
     const residenceChanged = previousResidence?.name !== nextResidence?.name
       || previousResidence?.type !== nextResidence?.type
       || previousResidence?.country !== nextResidence?.country;

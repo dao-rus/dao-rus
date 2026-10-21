@@ -30,6 +30,7 @@ vi.mock("@/lib/forum-join-history", () => ({ getForumJoinDate: vi.fn().mockResol
 
 vi.mock("@/lib/config", () => ({
   hasPrototypeAdminAccess: mocks.hasPrototypeAdminAccess,
+  isParticipantsDirectoryEnabled: () => false,
   telegramReceptionConfig: () => ({}),
 }));
 

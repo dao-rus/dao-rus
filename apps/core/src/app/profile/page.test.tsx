@@ -133,8 +133,8 @@ describe("/profile copy", () => {
       interests: [], signals: [],
     });
     const blankPage = await ProfilePage({ searchParams: Promise.resolve({}) });
-    expect(findProps(blankPage, (props) => props.name === "residence_type")?.defaultValue).toBe("город");
-    expect(findProps(blankPage, (props) => props.name === "residence_country")?.defaultValue).toBe("Россия");
+    expect(findProps(blankPage, (props) => props.name === "residence_type")?.defaultValue).toBe("");
+    expect(findProps(blankPage, (props) => props.name === "residence_country")?.defaultValue).toBe("");
     mocks.getProfileAbout.mockResolvedValue({ bio: "", bioVisibility: "members",
       residence: { name: "Кущёвская", type: "станица", country: "Россия" }, interests: [], signals: [],
     });

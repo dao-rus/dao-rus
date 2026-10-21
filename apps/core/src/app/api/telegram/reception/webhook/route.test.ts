@@ -83,7 +83,7 @@ describe("Reception webhook", () => {
     expect(mocks.start).not.toHaveBeenCalled();
     // An introduction relayed from a private chat is acknowledged; a member's reply relayed back is not.
     await POST(request({ update_id: 5, message: { chat: { id: 42, type: "private" }, from: { id: 42 }, message_id: 7, text: "О себе" } }));
-    expect(mocks.relayed).toHaveBeenCalledWith("42");
+    expect(mocks.relayed).toHaveBeenCalledWith("42", "О себе", 5);
     mocks.relayed.mockClear();
     await POST(request({ update_id: 6, message: { chat: { id: -1001234567890, type: "supergroup" }, from: { id: 7 }, message_id: 9, text: "Ответ" } }));
     mocks.relayReceptionUpdate.mockResolvedValue("failed");
