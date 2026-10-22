@@ -1,3 +1,4 @@
+import { unreadCodeComments } from "../lib/code-comment-reads";
 import Link from "next/link";
 import { devAuthEnabled, isParticipantsDirectoryEnabled, isTelegramConfigured } from "@/lib/config";
 import { DAO_CODE_CLAUSES } from "../lib/dao-code";
@@ -23,9 +24,9 @@ export default async function Home({
   ]);
   const telegramReady = isTelegramConfigured();
   const devReady = devAuthEnabled();
-  const [quests, unreadCount] = participant
-    ? await Promise.all([getOnboardingQuests(participant.id), countUnreadNotifications(participant.id)])
-    : [[], 0];
+  const [quests, unreadCount, unreadComments] = participant
+    ? await Promise.all([getOnboardingQuests(participant.id), countUnreadNotifications(participant.id), unreadCodeComments(participant.id)])
+    : [[], 0, null];
 
   return (
     <main className="shell">
@@ -78,7 +79,8 @@ export default async function Home({
           </div>
         )}
 
-        {quests.length ? <div className="homeActions">
+        {quests.length || unreadComments ? <div className="homeActions">
+          {unreadComments ? <ActionPill href={`/code?section=${unreadComments.section}#comment-${unreadComments.id}`}>{texts["home.code_unread"]} · {unreadComments.count}</ActionPill> : null}
           {quests.map(quest => <ActionPill key={quest.sourceType} href={quest.href}>
             {texts[quest.textKey]} · +{formatDarusAmount(quest.amount)} DARUS
           </ActionPill>)}

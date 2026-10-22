@@ -1,3 +1,4 @@
+import { CodeDiscussionDetails } from "./code-discussion-details";
 import Link from "next/link";
 import { LocalDateTime } from "./local-date-time";
 import { ParticipantName } from "./participant-name";
@@ -135,7 +136,7 @@ export function CodeDiscussion({ section, comments, sort, viewerId, isAdmin, ini
     repliesByParent.set(comment.parentId, replies);
   }
   return (
-    <details className="codeDiscussion" open={initiallyOpen}>
+    <CodeDiscussionDetails initiallyOpen={initiallyOpen} commentIds={viewerId ? inSection.filter(c => !c.deleted && !c.hidden).map(c => c.id) : []}>
       <summary>Обсуждение · {count}</summary>
       <div className="codeDiscussionContent">
         <nav className="codeSort" aria-label="Сортировка комментариев">
@@ -162,6 +163,6 @@ export function CodeDiscussion({ section, comments, sort, viewerId, isAdmin, ini
           </form>
         ) : <p className="muted">Чтобы участвовать в обсуждении, войдите через главную страницу.</p>}
       </div>
-    </details>
+    </CodeDiscussionDetails>
   );
 }
