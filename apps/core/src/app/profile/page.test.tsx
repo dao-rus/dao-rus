@@ -92,6 +92,7 @@ describe("/profile copy", () => {
       occupation: "Автослесарь",
       residence: { name: "Казань", type: "город", country: "Россия" },
       interests: [],
+      resources: [{ id: "resource-1", url: "https://example.org/anna" }],
       signals: [],
     });
     mocks.readInterfaceTexts.mockResolvedValue({ values: {
@@ -106,6 +107,10 @@ describe("/profile copy", () => {
 
     expect(text).toContain("О себе");
     expect(text).toContain("Интересы");
+    expect(text).toContain("Мои ресурсы в сети");
+    expect(findProps(page, (props) => props.href === "https://example.org/anna")?.target).toBe("_blank");
+    expect(findProps(page, (props) => props.href === "https://example.org/anna")?.rel).toBe("noreferrer");
+    expect(findProps(page, (props) => props.name === "action" && props.value === "add_resource")).not.toBeNull();
     expect(text).toContain("Добавить сигнал");
     expect(text).not.toContain("Я хочу");
     expect(text).not.toContain("Мне нужно");

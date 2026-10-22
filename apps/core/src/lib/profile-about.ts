@@ -25,6 +25,8 @@ export type ProfileInterest = {
   visibility: ProfileVisibility;
 };
 
+export type ProfileResource = { id: string; url: string };
+
 export type ProfileSignal = Pick<Signal, "id" | "label" | "description" | "visibility" | "legacyBody"> & {
   kind: SignalTypeKey;
   body: string;
@@ -52,6 +54,7 @@ export type ProfileAbout = {
   familyStatus?: string | null;
   residence: Residence | null;
   interests: ProfileInterest[];
+  resources: ProfileResource[];
   signals: ProfileSignal[];
 };
 
@@ -122,6 +125,7 @@ export function normalizeInterest(value: unknown): string {
 function aboutFromRows(
   participantRow: Record<string, unknown>,
   interestRows: Array<Record<string, unknown>>,
+  resourceRows: Array<Record<string, unknown>>,
   signals: Signal[],
 ): ProfileAbout {
   const residenceName = participantRow.city || participantRow.residence_name;
@@ -145,6 +149,7 @@ function aboutFromRows(
       label: String(row.label),
       visibility: String(row.visibility) as ProfileVisibility,
     })),
+    resources: resourceRows.map((row) => ({ id: String(row.id), url: String(row.url) })),
     signals: signals.map((signal) => ({
       id: signal.id, kind: signal.typeKey, label: signal.label, description: signal.description,
       legacyBody: signal.legacyBody, body: signalBodyProjection(signal), visibility: signal.visibility,
@@ -157,7 +162,7 @@ export async function getProfileAboutWithDatabase(
   participantId: string,
   includeSignals = true,
 ): Promise<ProfileAbout | null> {
-  const [participant, interests, signals] = await Promise.all([
+  const [participant, interests, resources, signals] = await Promise.all([
     database.query(
       `SELECT profile_bio, profile_bio_visibility,
               profile_age, residence_name AS city, residence_type, residence_country,
@@ -173,10 +178,15 @@ export async function getProfileAboutWithDatabase(
         ORDER BY created_at, id`,
       [participantId],
     ),
+    database.query(
+      `SELECT id, url FROM participant_profile_resources
+        WHERE participant_id = $1::uuid ORDER BY created_at, id`,
+      [participantId],
+    ),
     includeSignals ? listParticipantSignalsWithDatabase(database, participantId, participantId) : Promise.resolve([]),
   ]);
   if (!participant.rowCount) return null;
-  return aboutFromRows(participant.rows[0], interests.rows, signals);
+  return aboutFromRows(participant.rows[0], interests.rows, resources.rows, signals);
 }
 
 export async function getVisibleProfileAboutWithDatabase(
@@ -189,7 +199,7 @@ export async function getVisibleProfileAboutWithDatabase(
     return getProfileAboutWithDatabase(database, participantId, includeSignals);
   }
 
-  const [participant, interests, signals] = await Promise.all([
+  const [participant, interests, resources, signals] = await Promise.all([
     database.query(
       `SELECT CASE
                 WHEN profile_bio_visibility IN ('public', 'members')
@@ -211,10 +221,57 @@ export async function getVisibleProfileAboutWithDatabase(
         ORDER BY created_at, id`,
       [participantId],
     ),
+    database.query(
+      `SELECT id, url FROM participant_profile_resources
+        WHERE participant_id = $1::uuid ORDER BY created_at, id`,
+      [participantId],
+    ),
     includeSignals ? listParticipantSignalsWithDatabase(database, participantId, viewerParticipantId) : Promise.resolve([]),
   ]);
   if (!participant.rowCount) return null;
-  return aboutFromRows(participant.rows[0], interests.rows, signals);
+  return aboutFromRows(participant.rows[0], interests.rows, resources.rows, signals);
+}
+
+export function normalizeProfileResourceUrl(value: unknown): string {
+  const input = normalizeBoundedText(value, "Resource URL", 2048);
+  let url: URL;
+  try { url = new URL(input); } catch { throw new ProfileAboutValidationError("Invalid resource URL"); }
+  if ((url.protocol !== "https:" && url.protocol !== "http:") || !url.hostname || url.username || url.password) {
+    throw new ProfileAboutValidationError("Invalid resource URL");
+  }
+  url.hash = "";
+  return url.toString();
+}
+
+export async function addProfileResourceWithDatabase(
+  database: ProfileAboutDatabase, participantId: string, urlValue: unknown,
+): Promise<void> {
+  const url = normalizeProfileResourceUrl(urlValue);
+  await withProfileTransaction(database, async (client) => {
+    const result = await client.query(
+      `INSERT INTO participant_profile_resources(participant_id, url, normalized_url)
+       VALUES ($1::uuid, $2, $3) ON CONFLICT (participant_id, normalized_url) DO NOTHING RETURNING id`,
+      [participantId, url, url],
+    );
+    if (!result.rowCount) throw new ProfileAboutValidationError("Resource already exists");
+    await recordEvent(client, participantId, "participant.profile_resource_added", {
+      resource_id: String(result.rows[0]?.id ?? ""),
+    });
+  });
+}
+
+export async function removeProfileResourceWithDatabase(
+  database: ProfileAboutDatabase, participantId: string, resourceId: string,
+): Promise<void> {
+  await withProfileTransaction(database, async (client) => {
+    const result = await client.query(
+      `DELETE FROM participant_profile_resources WHERE id = $1::uuid AND participant_id = $2::uuid RETURNING id`,
+      [resourceId, participantId],
+    );
+    if (result.rowCount) await recordEvent(client, participantId, "participant.profile_resource_removed", {
+      resource_id: resourceId,
+    });
+  });
 }
 
 async function withProfileTransaction<T>(
@@ -505,6 +562,16 @@ export async function updateProfileInterest(
 export async function removeProfileInterest(participantId: string, interestId: string) {
   const { pool } = await import("./db");
   return removeProfileInterestWithDatabase(pool, participantId, interestId);
+}
+
+export async function addProfileResource(participantId: string, url: unknown) {
+  const { pool } = await import("./db");
+  return addProfileResourceWithDatabase(pool, participantId, url);
+}
+
+export async function removeProfileResource(participantId: string, resourceId: string) {
+  const { pool } = await import("./db");
+  return removeProfileResourceWithDatabase(pool, participantId, resourceId);
 }
 
 export async function addProfileSignal(

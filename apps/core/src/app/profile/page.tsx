@@ -65,6 +65,7 @@ const aboutMessages: Record<string, string> = {
   updated: "Раздел «О себе» обновлён.",
   invalid: "Проверьте введённые данные.",
   duplicate_interest: "Такой интерес уже указан. Измените существующую запись.",
+  duplicate_resource: "Эта ссылка уже добавлена.",
 };
 
 export default async function ProfilePage({ searchParams }: ProfilePageProps) {
@@ -234,8 +235,27 @@ export default async function ProfilePage({ searchParams }: ProfilePageProps) {
             </form>
           </div>
 
+          <div className="aboutBlock">
+            <h3>Мои ресурсы в сети</h3>
+            {about?.resources?.length ? <ul className="profileItems">
+              {about.resources.map((resource) => <li key={resource.id}>
+                <a href={resource.url} target="_blank" rel="noreferrer">{resource.url}</a>
+                <form action="/api/profile/about" method="post">
+                  <input type="hidden" name="action" value="remove_resource" />
+                  <input type="hidden" name="resource_id" value={resource.id} />
+                  <button className="button secondary compact" type="submit">Удалить</button>
+                </form>
+              </li>)}
+            </ul> : <p className="muted">Пока не добавлены.</p>}
+            <form className="inlineAboutForm" action="/api/profile/about" method="post">
+              <input type="hidden" name="action" value="add_resource" />
+              <input name="url" type="url" inputMode="url" maxLength={2048} placeholder="https://…" aria-label="Ссылка на ресурс" required />
+              <button className="button secondary" type="submit">Добавить</button>
+            </form>
+          </div>
+
           <ProfileSignals signals={signals} types={signalTypes} texts={texts} owner />
-          {aboutMessage ? <p className={params.about_update === "invalid" || params.about_update === "duplicate_interest" ? "formError" : "formNotice"} role={params.about_update === "invalid" || params.about_update === "duplicate_interest" ? "alert" : "status"}>{aboutMessage}</p> : null}
+          {aboutMessage ? <p className={params.about_update === "invalid" || params.about_update === "duplicate_interest" || params.about_update === "duplicate_resource" ? "formError" : "formNotice"} role={params.about_update === "invalid" || params.about_update === "duplicate_interest" || params.about_update === "duplicate_resource" ? "alert" : "status"}>{aboutMessage}</p> : null}
         </section>
 
         <dl className="facts">

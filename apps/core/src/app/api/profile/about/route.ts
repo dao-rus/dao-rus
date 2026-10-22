@@ -2,10 +2,12 @@ import { NextRequest, NextResponse } from "next/server";
 import { appBaseUrl } from "@/lib/config";
 import {
   addProfileInterest,
+  addProfileResource,
   addProfileSignal,
   archiveProfileSignal,
   ProfileAboutValidationError,
   removeProfileInterest,
+  removeProfileResource,
   updateProfileBio,
   updateProfileInterest,
 } from "@/lib/profile-about";
@@ -61,6 +63,10 @@ export async function POST(request: NextRequest) {
       );
     } else if (action === "remove_interest") {
       await removeProfileInterest(participant.id, requiredId(formData.get("interest_id")));
+    } else if (action === "add_resource") {
+      await addProfileResource(participant.id, formData.get("url"));
+    } else if (action === "remove_resource") {
+      await removeProfileResource(participant.id, requiredId(formData.get("resource_id")));
     } else if (action === "add_signal") {
       reward = await addProfileSignal(
         participant.id,
@@ -76,13 +82,15 @@ export async function POST(request: NextRequest) {
       return profileRedirect("invalid");
     }
 
-    if (action === "add_interest" || action === "update_interest" || action === "remove_interest") {
+    if (action === "add_interest" || action === "update_interest" || action === "remove_interest"
+      || action === "add_resource" || action === "remove_resource") {
       await (await import("../../../../lib/guardian-forum-actions")).afterProfileChanged(participant.id);
     }
     return profileRedirect("updated", reward?.id);
   } catch (error) {
     if (error instanceof ProfileAboutValidationError) {
-      return profileRedirect(error.message === "Interest already exists" ? "duplicate_interest" : "invalid");
+      return profileRedirect(error.message === "Interest already exists" ? "duplicate_interest"
+        : error.message === "Resource already exists" ? "duplicate_resource" : "invalid");
     }
     if (typeof error === "object" && error !== null && "code" in error && error.code === "23505" && action === "update_interest") {
       return profileRedirect("duplicate_interest");

@@ -212,6 +212,18 @@ describe("public subject profile name", () => {
     expect(text).not.toContain("+79990000000");
   });
 
+  it("shows the owner's network resources to an authenticated profile viewer", async () => {
+    mocks.getVisibleProfileAbout.mockResolvedValue({
+      bio: "", bioVisibility: "members", interests: [], signals: [],
+      resources: [{ id: "r1", url: "https://example.org/portfolio" }],
+    });
+    const page = await SubjectProfilePage({
+      params: Promise.resolve({ participantId: rosterProfile.subjectId }), searchParams: Promise.resolve({}),
+    });
+    expect(textContent(page)).toContain("Ресурсы в сети");
+    expect(hrefs(page)).toContain("https://example.org/portfolio");
+  });
+
   it("shows only positive totals and the viewer's own quality flag", async () => {
     mocks.getReputationSummary.mockResolvedValue({ positiveCount: 2, viewerSignal: "quality_flag" });
     const page = await SubjectProfilePage({

@@ -99,7 +99,7 @@ export default async function SubjectProfilePage({ params, searchParams }: Subje
   const initials = shownName.replace(/^@/, "").split(/\s+/).filter(Boolean).slice(0, 2)
     .map((part) => Array.from(part)[0]?.toLocaleUpperCase("ru-RU") ?? "").join("");
   const telegramUrl = profile.telegramUsername ? `https://t.me/${encodeURIComponent(profile.telegramUsername)}` : null;
-  const showAbout = Boolean(about && (about.bio || about.city || about.occupation || about.residence || about.interests.length || signals.length));
+  const showAbout = Boolean(about && (about.bio || about.city || about.occupation || about.residence || about.interests.length || about.resources?.length || signals.length));
 
   return (
     <main className="shell">
@@ -159,6 +159,12 @@ export default async function SubjectProfilePage({ params, searchParams }: Subje
                 ))}</div>
               </div>
             ) : null}
+            {about.resources?.length ? <div className="aboutBlock">
+              <h3>Ресурсы в сети</h3>
+              <ul className="profileItems">{about.resources.map((resource) => <li key={resource.id}>
+                <a href={resource.url} target="_blank" rel="noreferrer">{resource.url}</a>
+              </li>)}</ul>
+            </div> : null}
             <ProfileSignals signals={signals} types={signalTypes} texts={texts} />
           </section>
         ) : null}

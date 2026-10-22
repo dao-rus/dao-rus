@@ -3,6 +3,9 @@ import {
   getProfileAboutWithDatabase,
   getVisibleProfileAboutWithDatabase,
   normalizeInterest,
+  normalizeProfileResourceUrl,
+  addProfileResourceWithDatabase,
+  removeProfileResourceWithDatabase,
   normalizeProfileBio,
   normalizeSignalVisibility,
   normalizeResidence,
@@ -36,6 +39,41 @@ describe("profile-about validation", () => {
     expect(() => normalizeSignalBody("")).toThrow(ProfileAboutValidationError);
     expect(() => normalizeSignalKind("Offer with spaces")).toThrow(ProfileAboutValidationError);
     expect(() => normalizeProfileVisibility("everyone")).toThrow(ProfileAboutValidationError);
+  });
+
+  it("accepts only safe web URLs and removes fragments", () => {
+    expect(normalizeProfileResourceUrl(" https://Example.org/profile#about ")).toBe("https://example.org/profile");
+    for (const value of ["javascript:alert(1)", "data:text/html,x", "https://user:pass@example.org", "not a URL"]) {
+      expect(() => normalizeProfileResourceUrl(value)).toThrow(ProfileAboutValidationError);
+    }
+  });
+
+  it("deduplicates a participant's resources and scopes deletion to the owner", async () => {
+    const queries: Array<{ sql: string; values?: unknown[] }> = [];
+    let insertCount = 0;
+    const client = {
+      async query(sql: string, values?: unknown[]) {
+        queries.push({ sql, values });
+        if (sql.includes("INSERT INTO participant_profile_resources")) {
+          insertCount++;
+          return insertCount === 1 ? { rowCount: 1, rows: [{ id: "resource" }] } : { rowCount: 0, rows: [] };
+        }
+        if (sql.includes("DELETE FROM participant_profile_resources")) return { rowCount: 0, rows: [] };
+        return { rowCount: 1, rows: [] };
+      },
+      release() {},
+    };
+    const database: ProfileAboutDatabase = { connect: async () => client, query: client.query };
+    await addProfileResourceWithDatabase(database, "owner", "https://example.org/#bio");
+    await expect(addProfileResourceWithDatabase(database, "owner", "https://example.org/#contact"))
+      .rejects.toThrow("Resource already exists");
+    await removeProfileResourceWithDatabase(database, "another-owner", "resource");
+    const insert = queries.find(({ sql }) => sql.includes("INSERT INTO participant_profile_resources"));
+    expect(insert?.values).toEqual(["owner", "https://example.org/", "https://example.org/"]);
+    const deletion = queries.find(({ sql }) => sql.includes("DELETE FROM participant_profile_resources"));
+    expect(deletion?.sql).toContain("id = $1::uuid AND participant_id = $2::uuid");
+    expect(deletion?.values).toEqual(["resource", "another-owner"]);
+    expect(queries.filter(({ sql }) => sql.includes("participant.profile_resource_removed"))).toHaveLength(0);
   });
 
   it("allows an empty bio so a participant can clear it", () => {
@@ -300,6 +338,9 @@ describe("profile visibility reads", () => {
               ? { rowCount: 0, rows: [] }
               : { rowCount: 1, rows: [{ id: "interest", label: "История", visibility: mode }] };
           }
+          if (text.includes("FROM participant_profile_resources")) {
+            return { rowCount: 1, rows: [{ id: "resource", url: "https://example.org/profile" }] };
+          }
           return { rowCount: 0, rows: [] };
         },
       };
@@ -311,6 +352,8 @@ describe("profile visibility reads", () => {
       expect(foreign?.bio).toBe(mode === "public" || mode === "members" ? "Секрет" : "");
       expect(foreign?.interests.map((interest) => interest.label))
         .toEqual(mode === "public" || mode === "members" ? ["История"] : []);
+      expect(own?.resources).toEqual([{ id: "resource", url: "https://example.org/profile" }]);
+      expect(foreign?.resources).toEqual([{ id: "resource", url: "https://example.org/profile" }]);
     }
   });
 });
