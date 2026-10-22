@@ -462,6 +462,7 @@ button.notificationEntry:focus-visible { outline: 2px solid var(--accent); outli
 .participantSignalIndicators a:hover { text-decoration: underline; }
 .communityShell { display: block; }
 .communityPage { width: min(1280px, 100%); margin: 0 auto; }
+.communityPage h1 { overflow-wrap: anywhere; }
 .communityColumns { display: grid; grid-template-columns: minmax(0, 1.3fr) minmax(0, 1fr); gap: 36px; align-items: start; }
 .communityMembers, .communityFeed { min-width: 0; }
 .communityMembers .participantsDirectory > li { border: 0; padding: 12px 0; align-items: flex-start; flex-direction: column; }
