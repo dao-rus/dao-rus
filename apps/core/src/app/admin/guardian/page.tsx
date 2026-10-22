@@ -60,7 +60,7 @@ export default async function GuardianPage({ searchParams }: { searchParams: Pro
       <GuardianMessageComposer key={selectedTemplate + ":" + conditions.join(",")} templates={templates} selectedTemplate={selectedTemplate}
         initialConditions={conditions.filter(c => [...guardianAudienceConditions, "all_current", "city", "interests"].includes(c))}
         initialCity={params.city ?? ""} initialInterests={typeof params.interest === "string" ? [params.interest] : params.interest ?? []}
-        cities={overview.cities.map(c => ({ key: c.key, label: residenceLabel(c.residence) + " (" + c.residence.type + ")" }))}
+        cities={overview.cities.map(c => ({ key: c.key, label: residenceLabel(c.residence) }))}
         interests={overview.interests} submissionId={randomUUID()}
         audiences={["all_current", ...guardianAudienceConditions, "city", "interests"].map(key => ({ key, label: labels(key) }))}
         texts={Object.fromEntries(Object.entries(texts).filter(([key]) => key.startsWith("guardian.")))} />

@@ -1,6 +1,7 @@
 import { randomUUID } from "node:crypto";
 import { getGuardianCampaignRewardWithDatabase } from "./guardian-campaign-reward";
 import { getGuardianAudienceWithDatabase } from "./guardian-audience";
+import { normalizeAudienceCityKey } from "./participant-audience";
 import { GuardianCampaignValidationError, parseGuardianCampaignDraft, parseTechnicalBroadcastDraft, parseGuardianMessageDraft, type GuardianMessageDraft, type TechnicalBroadcastDraft } from "./guardian-campaign-input";
 import { guardianResidenceOptions, guardianScenario, guardianScenarios, resolveGuardianScenarioAudience, type GuardianScenarioType } from "./guardian-campaign-scenarios";
 
@@ -128,7 +129,7 @@ async function resolveMessage(database: Pick<GuardianCampaignDatabase, "query">,
   const recipientIds = [...new Set(overview.audience.filter(p => !allowed || allowed.has(p.id)).map(p => p.id))];
   const reward = scenario ? await getGuardianCampaignRewardWithDatabase(database, scenario.type) : null;
   const { text } = parseGuardianCampaignDraft({ text: reward ? draft.text + "\n\n" + reward.sentence : draft.text });
-  const residence = scenario?.type === "town_meeting" ? guardianResidenceOptions(overview).find(p => p.key === draft.city) : null;
+  const residence = scenario?.type === "town_meeting" ? guardianResidenceOptions(overview).find(p => p.key === normalizeAudienceCityKey(draft.city)) : null;
   const rule = { current: "forum_joined_or_logged_in", excludeMembershipStatuses: ["left", "excluded"], excludeRosterBots: true,
     selection: scenario?.audienceRule ?? "technical_broadcast", filters, channels: { core: draft.core, telegram: draft.telegram },
     ...(draft.template ? { template: draft.template } : {}),

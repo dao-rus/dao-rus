@@ -1,4 +1,4 @@
-import { normalizeInterest, normalizeResidence, type Residence } from "./profile-about";
+import { normalizeInterest, normalizeResidence, residenceKey, type Residence } from "./profile-about";
 
 export type Community = { type: "interest"; interest: string } | { type: "residence"; residence: Residence };
 type QueryResult = { rowCount: number | null; rows: Array<Record<string, unknown>> };
@@ -22,15 +22,13 @@ export function communityFromParams(params: {
 export function communityKey(community: Community): string {
   return community.type === "interest"
     ? community.interest.toLocaleLowerCase("ru-RU")
-    : JSON.stringify([community.residence.country, community.residence.type, community.residence.name]
-      .map((part) => part.toLocaleLowerCase("ru-RU")));
+    : residenceKey(community.residence);
 }
 
 export function communityHref(community: Community): string {
   const query = community.type === "interest"
     ? new URLSearchParams({ interest: community.interest })
-    : new URLSearchParams({ residence_name: community.residence.name,
-      residence_type: community.residence.type, residence_country: community.residence.country });
+    : new URLSearchParams({ residence_name: community.residence.name });
   return `/participants?${query}`;
 }
 
@@ -42,12 +40,10 @@ export async function listResidenceCommunitiesWithDatabase(
   database: Pick<CommunityDatabase, "query">,
 ): Promise<ResidenceCommunity[]> {
   const result = await database.query(
-    `SELECT participant.residence_name, participant.residence_type, participant.residence_country,
+    `SELECT min(btrim(participant.residence_name)) AS residence_name,
             count(*)::integer AS participant_count
        FROM participants participant
       WHERE participant.residence_name IS NOT NULL AND btrim(participant.residence_name) <> ''
-        AND participant.residence_type IS NOT NULL AND btrim(participant.residence_type) <> ''
-        AND participant.residence_country IS NOT NULL AND btrim(participant.residence_country) <> ''
         AND (
           EXISTS (
             SELECT 1 FROM participant_forum_onboarding forum
@@ -58,14 +54,11 @@ export async function listResidenceCommunitiesWithDatabase(
              WHERE login.participant_id = participant.id AND login.event_type = 'participant.logged_in'
           )
         )
-      GROUP BY participant.residence_name, participant.residence_type, participant.residence_country
-      ORDER BY participant_count DESC, lower(participant.residence_name),
-               lower(participant.residence_country), lower(participant.residence_type),
-               participant.residence_name, participant.residence_country, participant.residence_type`,
+      GROUP BY lower(btrim(participant.residence_name))
+      ORDER BY participant_count DESC, lower(btrim(participant.residence_name))`,
   );
   return result.rows.map((row) => ({
-    residence: { name: String(row.residence_name), type: String(row.residence_type),
-      country: String(row.residence_country) },
+    residence: { name: String(row.residence_name) },
     participantCount: Number(row.participant_count),
   }));
 }
@@ -116,11 +109,8 @@ export async function isCommunityMemberWithDatabase(
     )
     : await database.query(
       `SELECT 1 FROM participants WHERE id = $1::uuid
-        AND lower(residence_name) = $2 AND lower(residence_type) = $3
-        AND lower(residence_country) = $4 LIMIT 1`,
-      [participantId, community.residence.name.toLocaleLowerCase("ru-RU"),
-        community.residence.type.toLocaleLowerCase("ru-RU"),
-        community.residence.country.toLocaleLowerCase("ru-RU")],
+        AND lower(btrim(residence_name)) = $2 LIMIT 1`,
+      [participantId, residenceKey(community.residence)],
     );
   return Boolean(result.rowCount);
 }

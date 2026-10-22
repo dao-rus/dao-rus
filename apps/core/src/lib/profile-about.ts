@@ -34,14 +34,13 @@ export type ProfileSignal = Pick<Signal, "id" | "label" | "description" | "visib
 
 export type Residence = {
   name: string;
-  type: string;
-  country: string;
+  /** Legacy metadata; not part of geographical identity. */
+  type?: string;
+  country?: string;
 };
 
 export type ResidenceFields = {
   name: string | null;
-  type: string | null;
-  country: string | null;
 };
 
 export type ProfileAbout = {
@@ -84,36 +83,35 @@ export function normalizeProfileBio(value: unknown): string {
   return normalized;
 }
 
-export function normalizeResidence(values: { name: unknown; type: unknown; country: unknown }): Residence | null {
+export function normalizeResidence(values: { name: unknown; type?: unknown; country?: unknown }): Residence | null {
   const fields = normalizeResidenceFields(values);
   if (!fields.name) return null;
-  if (!fields.type || !fields.country) return null;
-  return { name: fields.name, type: fields.type, country: fields.country };
+  return { name: fields.name };
 }
 
-export function normalizeResidenceFields(values: { name: unknown; type: unknown; country: unknown }): ResidenceFields {
-  const parts = [values.name, values.type, values.country];
-  if (parts.some((value) => typeof value !== "string")) {
+export function normalizeResidenceFields(values: { name: unknown; type?: unknown; country?: unknown }): ResidenceFields {
+  if (typeof values.name !== "string") {
     throw new ProfileAboutValidationError("Residence must be text");
   }
-  const [name, type, country] = (parts as string[]).map((value) => value.trim().replace(/\s+/gu, " "));
-  if (!name) return { name: null, type: null, country: null };
-  if (name.length > 200 || (type && type.length > 80) || (country && country.length > 120)
-    || Boolean(type) !== Boolean(country)) {
+  const name = values.name.trim().replace(/\s+/gu, " ");
+  if (!name) return { name: null };
+  if (name.length > 200) {
     throw new ProfileAboutValidationError("Invalid residence");
   }
-  return { name, type: type || null, country: country || null };
+  return { name };
 }
 
 export function residenceLabel(residence: Residence): string {
-  return `${residence.name}, ${residence.country}`;
+  return residence.name;
+}
+
+export function residenceKey(residence: Residence): string {
+  return residence.name.trim().toLocaleLowerCase("ru-RU");
 }
 
 export function residenceDirectoryHref(residence: Residence): string {
   const params = new URLSearchParams({
     residence_name: residence.name,
-    residence_type: residence.type,
-    residence_country: residence.country,
   });
   return `/participants?${params.toString()}`;
 }
@@ -129,8 +127,7 @@ function aboutFromRows(
   signals: Signal[],
 ): ProfileAbout {
   const residenceName = participantRow.city || participantRow.residence_name;
-  const completeResidence = [residenceName, participantRow.residence_type, participantRow.residence_country]
-    .every(value => typeof value === "string" && value.trim().length > 0);
+  const hasResidence = typeof residenceName === "string" && residenceName.trim().length > 0;
   return {
     bio: String(participantRow.profile_bio ?? ""),
     bioVisibility: String(participantRow.profile_bio_visibility) as ProfileVisibility,
@@ -139,12 +136,8 @@ function aboutFromRows(
     occupation: participantRow.profile_occupation ? String(participantRow.profile_occupation) : null,
     education: participantRow.profile_education ? String(participantRow.profile_education) : null,
     familyStatus: participantRow.profile_family_status ? String(participantRow.profile_family_status) : null,
-    residence: completeResidence
-      ? {
-          name: String(residenceName),
-          type: String(participantRow.residence_type),
-          country: String(participantRow.residence_country),
-        }
+    residence: hasResidence
+      ? { name: String(residenceName) }
       : null,
     interests: interestRows.map((row) => ({
       id: String(row.id),
@@ -167,7 +160,7 @@ export async function getProfileAboutWithDatabase(
   const [participant, interests, resources, signals] = await Promise.all([
     database.query(
       `SELECT profile_bio, profile_bio_visibility,
-              profile_age, residence_name AS city, residence_type, residence_country,
+              profile_age, residence_name AS city,
               profile_occupation, profile_education, profile_family_status
          FROM participants
         WHERE id = $1::uuid`,
@@ -209,7 +202,7 @@ export async function getVisibleProfileAboutWithDatabase(
                 ELSE ''
               END AS profile_bio,
               profile_bio_visibility,
-              NULL AS profile_age, residence_name AS city, residence_type, residence_country,
+              NULL AS profile_age, residence_name AS city,
               profile_occupation, NULL AS profile_education, NULL AS profile_family_status
          FROM participants
         WHERE id = $1::uuid`,
@@ -341,7 +334,7 @@ export async function saveProfileWithDatabase(
   displayNameValue: unknown,
   bioValue: unknown,
   visibilityValue: unknown,
-  residenceValues?: { name: unknown; type: unknown; country: unknown },
+  residenceValues?: { name: unknown; type?: unknown; country?: unknown },
 ): Promise<{ changed: boolean; reward?: OnboardingReward }> {
   const displayName = normalizeDisplayName(displayNameValue);
   const bio = normalizeProfileBio(bioValue);
@@ -351,7 +344,7 @@ export async function saveProfileWithDatabase(
   return withProfileTransaction(database, async (client) => {
     const result = await client.query(
       `SELECT display_name, profile_bio, profile_bio_visibility,
-              residence_name, residence_type, residence_country
+              residence_name
          FROM participants
         WHERE id = $1::uuid
         FOR UPDATE`,
@@ -364,17 +357,11 @@ export async function saveProfileWithDatabase(
     const nameChanged = oldDisplayName !== displayName;
     const bioChanged = String(previous.profile_bio ?? "") !== bio
       || String(previous.profile_bio_visibility) !== visibility;
-    const previousResidence = previous.residence_name && previous.residence_type && previous.residence_country
-      ? {
-          name: String(previous.residence_name),
-          type: String(previous.residence_type),
-          country: String(previous.residence_country),
-        }
+    const previousResidence = previous.residence_name
+      ? { name: String(previous.residence_name) }
       : null;
     const nextResidence = residence === undefined ? previousResidence : residence.name ? residence : null;
-    const residenceChanged = previousResidence?.name !== nextResidence?.name
-      || previousResidence?.type !== nextResidence?.type
-      || previousResidence?.country !== nextResidence?.country;
+    const residenceChanged = previousResidence?.name !== nextResidence?.name;
     const changed = nameChanged || bioChanged || residenceChanged;
 
     await client.query(
@@ -384,12 +371,10 @@ export async function saveProfileWithDatabase(
               profile_bio = $3,
               profile_bio_visibility = $4,
               residence_name = $6,
-              residence_type = $7,
-              residence_country = $8,
               updated_at = CASE WHEN $5::boolean THEN now() ELSE updated_at END
         WHERE id = $1::uuid`,
       [participantId, displayName, bio, visibility, changed,
-        nextResidence?.name ?? null, nextResidence?.type ?? null, nextResidence?.country ?? null],
+        nextResidence?.name ?? null],
     );
     if (nameChanged) {
       await recordEvent(client, participantId, "participant.profile_updated", {
@@ -536,7 +521,7 @@ export async function saveProfile(
   displayName: unknown,
   bio: unknown,
   visibility: unknown,
-  residence?: { name: unknown; type: unknown; country: unknown },
+  residence?: { name: unknown; type?: unknown; country?: unknown },
 ) {
   const { pool } = await import("./db");
   return saveProfileWithDatabase(pool, participantId, displayName, bio, visibility, residence);

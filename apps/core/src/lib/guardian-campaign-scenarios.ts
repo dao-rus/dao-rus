@@ -1,5 +1,6 @@
 import { cityKey, type GuardianParticipant, getGuardianAudienceWithDatabase } from "./guardian-audience";
 import { residenceLabel } from "./profile-about";
+import { normalizeAudienceCityKey } from "./participant-audience";
 import { GuardianCampaignValidationError } from "./guardian-campaign-input";
 
 export type GuardianScenarioType = "profile_residence_prompt" | "profile_interests_prompt" | "core_login_prompt" | "town_meeting" | "online_meeting";
@@ -13,7 +14,7 @@ function unique(people: GuardianParticipant[]): GuardianParticipant[] {
 export function guardianResidenceOptions(overview: Overview) {
   return overview.cities.map(({ key, residence }) => ({
     key,
-    label: `${residenceLabel(residence)} (${residence.type})`,
+    label: residenceLabel(residence),
     count: unique(overview.audience.filter((person) => person.residence && cityKey(person.residence) === key)).length,
   }));
 }
@@ -60,7 +61,7 @@ export const guardianScenarios = {
     audienceRule: "current_exact_residence",
     audienceDescription: "Актуальные участники выбранного города",
     resolveAudience: (overview: Overview, parameters: GuardianScenarioParameters) => {
-      const option = guardianResidenceOptions(overview).find(({ key }) => key === parameters.residenceKey);
+      const option = guardianResidenceOptions(overview).find(({ key }) => key === normalizeAudienceCityKey(parameters.residenceKey ?? ""));
       if (!option) throw new GuardianCampaignValidationError("Выберите город из списка Core.");
       return unique(overview.audience.filter((person) => person.residence && cityKey(person.residence) === option.key));
     },

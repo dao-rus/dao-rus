@@ -22,11 +22,8 @@ export async function POST(request: NextRequest) {
   const formData = await request.formData();
   const bio = formData.get("bio");
   const visibility = formData.get("visibility");
-  const residenceFields = ["residence_name", "residence_type", "residence_country"] as const;
-  const residence = residenceFields.some((field) => formData.has(field)) ? {
+  const residence = formData.has("residence_name") ? {
     name: formData.get("residence_name"),
-    type: formData.get("residence_type"),
-    country: formData.get("residence_country"),
   } : undefined;
 
   try {

@@ -2,7 +2,7 @@ import { notFound } from "next/navigation";
 import { requireAwardAdmin, awardRouteId } from "@/lib/award-admin";
 import { pool } from "@/lib/db";
 import { readInterfaceTexts } from "@/lib/interface-texts";
-import { selectParticipantAudienceWithDatabase, audienceConditions, type AudienceFilters } from "@/lib/participant-audience";
+import { selectParticipantAudienceWithDatabase, audienceConditions, normalizeAudienceCityKey, type AudienceFilters } from "@/lib/participant-audience";
 import { AdminCrumbs } from "@/components/admin-crumbs";
 import { AwardNotice } from "@/components/award-content";
 import { AwardLink } from "@/components/award-link";
@@ -90,7 +90,7 @@ export default async function AwardBatchPage({ params, searchParams }: {
       <label>{texts["award.joinFrom"]}<input type="date" name="joinedFrom" defaultValue={rule.joinedFrom || ""} /></label>
       <label>{texts["award.joinTo"]}<input type="date" name="joinedTo" defaultValue={rule.joinedTo || ""} /></label>
       <p className="muted">{texts["award.joinHint"]}</p>
-      <label>{texts["award.city"]}<select name="city" defaultValue={rule.city || ""}><option value="">{texts["award.all"]}</option>{options.cities.map(city => <option key={city.key} value={city.key}>{city.residence.name}, {city.residence.country}</option>)}</select></label>
+      <label>{texts["award.city"]}<select name="city" defaultValue={rule.city ? normalizeAudienceCityKey(rule.city) : ""}><option value="">{texts["award.all"]}</option>{options.cities.map(city => <option key={city.key} value={city.key}>{city.residence.name}</option>)}</select></label>
       <label>{texts["award.interests"]}<select multiple name="interests" defaultValue={rule.interests ?? []}>{options.interests.map(interest => <option key={interest.key} value={interest.key}>{interest.label}</option>)}</select></label>
       <label>{texts["award.verification"]}<select name="verification" defaultValue={rule.verification || ""}><option value="">{texts["award.all"]}</option><option value="verified">{texts["award.verified"]}</option><option value="unverified">{texts["award.unverified"]}</option></select></label>
       <label>{texts["award.membership"]}<select name="membership" defaultValue={rule.membership || ""}><option value="">{texts["award.all"]}</option>{(["none", "participant", "left", "excluded"] as const).map(value => <option key={value} value={value}>{texts[`award.${value === "excluded" ? "excludedMembership" : value}`]}</option>)}</select></label>

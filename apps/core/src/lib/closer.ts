@@ -90,10 +90,8 @@ const matchFrom = `
         AND theirs.kind = '${CLOSER_TYPE_KEY}' AND theirs.status = 'active' AND theirs.visibility = 'match_only'
         AND theirs.participant_id <> mine.participant_id
         AND (mk.any_city OR tk.any_city OR (
-              mp.residence_name IS NOT NULL AND tp.residence_name IS NOT NULL
-              AND lower(mp.residence_name) = lower(tp.residence_name)
-              AND lower(mp.residence_type) = lower(tp.residence_type)
-              AND lower(mp.residence_country) = lower(tp.residence_country)))
+              NULLIF(btrim(mp.residence_name), '') IS NOT NULL
+              AND lower(btrim(mp.residence_name)) = lower(btrim(tp.residence_name))))
         AND (NOT g.asks_gender OR (
               (mk.seeks_gender = 'any' OR mk.seeks_gender = tk.self_gender)
               AND (tk.seeks_gender = 'any' OR tk.seeks_gender = mk.self_gender)))

@@ -561,7 +561,7 @@ button.notificationEntry:focus-visible { outline: 2px solid var(--accent); outli
 }
 .aboutForm textarea { min-height: 110px; resize: vertical; }
 .aboutForm .button { justify-self: start; }
-.residenceFields { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; }
+.residenceFields { display: grid; grid-template-columns: minmax(0, 1fr); gap: 8px; }
 .residenceLink { color: var(--accent); overflow-wrap: anywhere; }
 .inlineAboutForm {
   display: grid;

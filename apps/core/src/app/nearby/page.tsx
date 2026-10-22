@@ -29,7 +29,7 @@ export default async function NearbyPage() {
         {communities.length ? (
           <ul className="nearbyCommunities">
             {communities.map(({ residence, participantCount }) => (
-              <li key={JSON.stringify([residence.country, residence.type, residence.name])}>
+              <li key={residence.name.toLocaleLowerCase("ru-RU")}>
                 <Link href={communityHref({ type: "residence", residence })}>{residenceLabel(residence)}</Link>
                 <span className="muted">{participantCount}</span>
               </li>

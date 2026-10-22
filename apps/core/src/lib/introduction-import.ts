@@ -85,8 +85,8 @@ export async function importIntroductions(
           if (writeResidence) {
             await close("residence_first_filled");
             await client.query(
-              `UPDATE participants SET residence_name = $2, residence_type = $3, residence_country = $4, updated_at = now() WHERE id = $1::uuid`,
-              [id, entry.residence!.name, entry.residence!.type, entry.residence!.country]);
+              `UPDATE participants SET residence_name = $2, updated_at = now() WHERE id = $1::uuid`,
+              [id, entry.residence!.name]);
           }
           if (writeInterests) {
             await close("interest_first_added");

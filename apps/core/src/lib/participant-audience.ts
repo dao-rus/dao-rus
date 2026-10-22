@@ -1,4 +1,4 @@
-import type { Residence } from "./profile-about";
+import { residenceKey, type Residence } from "./profile-about";
 import { VERIFIED_SUBJECTS_CTE } from "./verification";
 
 type QueryResult = { rows: Array<Record<string, unknown>> };
@@ -23,8 +23,20 @@ export type AudienceCondition = typeof audienceConditions[number];
 export type AudienceFilters = { city?: string; interests?: string[]; conditions?: AudienceCondition[]; membership?: string; verification?: string; joinedFrom?: string; joinedTo?: string };
 
 export function cityKey(residence: Residence): string {
-  return JSON.stringify([residence.name, residence.type, residence.country]
-    .map((part) => part.trim().toLocaleLowerCase("ru-RU")));
+  return residenceKey(residence);
+}
+
+// Saved audience rules used [name, type, country]. Keep those rules readable.
+export function normalizeAudienceCityKey(value: string): string {
+  if (value.startsWith("[")) {
+    try {
+      const legacy = JSON.parse(value);
+      if (Array.isArray(legacy) && legacy.length === 3 && typeof legacy[0] === "string") {
+        return residenceKey({ name: legacy[0] });
+      }
+    } catch { /* A non-legacy name is matched literally. */ }
+  }
+  return residenceKey({ name: value });
 }
 
 export async function selectParticipantAudienceWithDatabase(
@@ -38,7 +50,7 @@ export async function selectParticipantAudienceWithDatabase(
             btrim(p.profile_bio) <> '' AS has_bio,
             EXISTS (SELECT 1 FROM verified WHERE subject_id = p.id) AS is_verified,
             ARRAY(SELECT DISTINCT kind FROM profile_signals WHERE participant_id = p.id AND status = 'active') AS active_signal_kinds,
-            p.residence_name, p.residence_type, p.residence_country,
+            p.residence_name,
             telegram.username AS telegram_username,
             (telegram.external_user_id IS NOT NULL AND btrim(telegram.external_user_id) <> '') AS has_telegram_user_id,
             EXISTS (
@@ -90,12 +102,8 @@ export async function selectParticipantAudienceWithDatabase(
       displayName: String(row.display_name), membership: String(row.membership_status),
       telegramUsername: row.telegram_username ? String(row.telegram_username) : null,
       hasTelegramUserId: row.has_telegram_user_id === true,
-      residence: row.residence_name && row.residence_type && row.residence_country
-        ? {
-            name: String(row.residence_name),
-            type: String(row.residence_type),
-            country: String(row.residence_country),
-          }
+      residence: typeof row.residence_name === "string" && row.residence_name.trim()
+        ? { name: row.residence_name }
         : null,
       interests: (row.interests as Array<{ key: string; label: string }> | null) ?? [],
       hasAnyInterests: row.has_any_interests === true,
@@ -129,7 +137,7 @@ export async function selectParticipantAudienceWithDatabase(
     return !person.activeSignalKinds.includes(condition.slice("without_".length));
   };
   const matchingProfiles = participants.filter((person) =>
-    (!filters.membership || person.membership === filters.membership) && (!filters.verification || person.verified === (filters.verification === "verified")) && (!filters.city || (person.residence !== null && cityKey(person.residence) === filters.city))
+    (!filters.membership || person.membership === filters.membership) && (!filters.verification || person.verified === (filters.verification === "verified")) && (!filters.city || (person.residence !== null && cityKey(person.residence) === normalizeAudienceCityKey(filters.city)))
     && (selectedInterests.size === 0 || person.interests.some((interest) => selectedInterests.has(interest.key)))
     && (filters.conditions ?? []).every(condition => matches(person, condition)));
 

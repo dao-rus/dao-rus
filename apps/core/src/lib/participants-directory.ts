@@ -58,8 +58,6 @@ export async function listParticipantsDirectoryWithDatabase(
             telegram.bot_profile->'photo'->>'file_id' AS telegram_photo_file_id,
             telegram.bot_profile->>'photo_count' AS telegram_photo_count,
             participant.residence_name,
-            participant.residence_type,
-            participant.residence_country,
             CASE WHEN participant.id = $3::uuid THEN participant.profile_age ELSE NULL END AS profile_age,
             participant.residence_name AS profile_city,
             participant.profile_occupation,
@@ -110,9 +108,7 @@ export async function listParticipantsDirectoryWithDatabase(
         )
       )
         ${coreOnly}
-        ${filters.withoutResidence ? `AND (NULLIF(btrim(participant.residence_name), '') IS NULL
-          OR NULLIF(btrim(participant.residence_type), '') IS NULL
-          OR NULLIF(btrim(participant.residence_country), '') IS NULL)` : ""}
+        ${filters.withoutResidence ? `AND NULLIF(btrim(participant.residence_name), '') IS NULL` : ""}
         AND (
           $1::text = ''
           OR participant.display_name ILIKE '%' || $1 || '%'
@@ -133,16 +129,12 @@ export async function listParticipantsDirectoryWithDatabase(
         AND (
           $4::text = ''
           OR (
-            lower(participant.residence_name) = $4
-            AND lower(participant.residence_type) = $5
-            AND lower(participant.residence_country) = $6
+            lower(btrim(participant.residence_name)) = $4
           )
         )
       ORDER BY ${orderBy}lower(participant.display_name), participant.id`,
     [normalizedSearch, normalizedInterest, filters.viewerParticipantId ?? null,
-      residence?.name.toLocaleLowerCase("ru-RU") ?? "",
-      residence?.type.toLocaleLowerCase("ru-RU") ?? "",
-      residence?.country.toLocaleLowerCase("ru-RU") ?? ""],
+      residence?.name.trim().toLocaleLowerCase("ru-RU") ?? ""],
   );
 
   return result.rows.map((row) => ({
@@ -161,12 +153,8 @@ export async function listParticipantsDirectoryWithDatabase(
       want: Number(row.want_count ?? 0), have: Number(row.have_count ?? 0),
     },
     joinedAt: row.joined_at ? new Date(String(row.joined_at)) : null,
-    residence: row.residence_name && row.residence_type && row.residence_country
-      ? {
-          name: String(row.residence_name),
-          type: String(row.residence_type),
-          country: String(row.residence_country),
-        }
+    residence: typeof row.residence_name === "string" && row.residence_name.trim()
+      ? { name: row.residence_name }
       : null,
     profileAge: row.profile_age === null || row.profile_age === undefined ? null : Number(row.profile_age),
     profileCity: row.profile_city ? String(row.profile_city) : null,

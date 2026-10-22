@@ -48,7 +48,6 @@ const visibilityLabels: Record<string, string> = {
 const bioVisibilityOptions = ["public", "members", "private"] as const;
 // Circle and match-only access rules are not yet implemented for interests.
 const interestVisibilityOptions = ["public", "members", "private"] as const;
-const residenceTypeOptions = ["город", "п.г.т.", "деревня", "село"] as const;
 
 type ProfilePageProps = {
   searchParams: Promise<{ profile_update?: string; about_update?: string; award_update?: string; onboarding_reward?: string }>;
@@ -153,17 +152,8 @@ export default async function ProfilePage({ searchParams }: ProfilePageProps) {
             <div className="residenceFields">
               <input id="residence-name" form="profile-form" name="residence_name" maxLength={200}
                 defaultValue={about?.city ?? ""} placeholder="Название, например Казань" />
-              <select form="profile-form" name="residence_type" defaultValue={about?.residence?.type ?? ""}
-                aria-label="Тип населённого пункта">
-                <option value="">Тип не указан</option>
-                {about?.residence?.type && !residenceTypeOptions.some((type) => type === about.residence?.type)
-                  ? <option value={about.residence.type}>{about.residence.type}</option> : null}
-                {residenceTypeOptions.map((type) => <option key={type} value={type}>{type}</option>)}
-              </select>
-              <input form="profile-form" name="residence_country" maxLength={120}
-                defaultValue={about?.residence?.country ?? ""} placeholder="Страна" aria-label="Страна" />
             </div>
-            <p className="muted privacyHint">Город и род занятий, которые вы указали, видны всем пользователям Core. Тип населённого пункта и страна нужны только для точной географической привязки.</p>
+            <p className="muted privacyHint">Город и род занятий, которые вы указали, видны всем пользователям Core.</p>
             {(about?.age || about?.city || about?.occupation || about?.education || about?.familyStatus) ? <dl className="facts">
               {about.age ? <div><dt>Возраст</dt><dd>{about.age}</dd></div> : null}
               {about.city ? <div><dt>Город</dt><dd>{about.residence

@@ -26,8 +26,6 @@ function residenceFromQuery(params: Awaited<ParticipantsPageProps["searchParams"
   try {
     return normalizeResidence({
       name: params.residence_name,
-      type: params.residence_type,
-      country: params.residence_country,
     });
   } catch {
     return null;
@@ -56,8 +54,6 @@ export default async function ParticipantsPage({ searchParams }: ParticipantsPag
   if (interestFilter) filterParams.set("interest", interestFilter);
   if (residenceFilter) {
     filterParams.set("residence_name", residenceFilter.name);
-    filterParams.set("residence_type", residenceFilter.type);
-    filterParams.set("residence_country", residenceFilter.country);
   }
   const filterAndSortParams = new URLSearchParams(filterParams);
   if (sort !== "name") filterAndSortParams.set("sort", sort);
@@ -119,8 +115,6 @@ export default async function ParticipantsPage({ searchParams }: ParticipantsPag
           {interestFilter ? <input type="hidden" name="interest" value={interestFilter} /> : null}
           {residenceFilter ? <>
             <input type="hidden" name="residence_name" value={residenceFilter.name} />
-            <input type="hidden" name="residence_type" value={residenceFilter.type} />
-            <input type="hidden" name="residence_country" value={residenceFilter.country} />
           </> : null}
           {sort !== "name" ? <input type="hidden" name="sort" value={sort} /> : null}
           {sort === "joined" ? <input type="hidden" name="dir" value={dir} /> : null}
