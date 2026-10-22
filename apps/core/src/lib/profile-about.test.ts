@@ -266,7 +266,7 @@ describe("profile residence reads", () => {
       queries.push(text);
       if (text.includes("FROM participants")) return { rowCount: 1, rows: [{
         profile_bio: "", profile_bio_visibility: "members", city: "Казань", profile_occupation: "Юрист",
-        residence_name: "Казань", residence_type: "город", residence_country: "Россия",
+        residence_type: "город", residence_country: "Россия",
       }] };
       return { rowCount: 0, rows: [] };
     } };

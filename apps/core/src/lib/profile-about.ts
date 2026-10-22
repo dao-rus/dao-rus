@@ -124,17 +124,18 @@ function aboutFromRows(
   interestRows: Array<Record<string, unknown>>,
   signals: Signal[],
 ): ProfileAbout {
+  const residenceName = participantRow.city || participantRow.residence_name;
   return {
     bio: String(participantRow.profile_bio ?? ""),
     bioVisibility: String(participantRow.profile_bio_visibility) as ProfileVisibility,
     age: participantRow.profile_age === null || participantRow.profile_age === undefined ? null : Number(participantRow.profile_age),
-    city: participantRow.city ? String(participantRow.city) : null,
+    city: residenceName ? String(residenceName) : null,
     occupation: participantRow.profile_occupation ? String(participantRow.profile_occupation) : null,
     education: participantRow.profile_education ? String(participantRow.profile_education) : null,
     familyStatus: participantRow.profile_family_status ? String(participantRow.profile_family_status) : null,
-    residence: participantRow.residence_name && participantRow.residence_type && participantRow.residence_country
+    residence: residenceName && participantRow.residence_type && participantRow.residence_country
       ? {
-          name: String(participantRow.residence_name),
+          name: String(residenceName),
           type: String(participantRow.residence_type),
           country: String(participantRow.residence_country),
         }
