@@ -9,7 +9,7 @@ import { TelegramAvatar } from "@/components/telegram-avatar";
 import { CoreNavigation } from "../../../components/core-navigation";
 import { ParticipantName } from "../../../components/participant-name";
 import { getVisibleProfileAbout, residenceDirectoryHref, residenceLabel } from "@/lib/profile-about";
-import { isParticipantsDirectoryEnabled } from "@/lib/config";
+import { communityHref } from "../../../lib/communities";
 import { getReputationSummary } from "@/lib/reputation";
 import { getCurrentParticipant } from "@/lib/session";
 import { formatDarusAmount, getVerificationRewardForFeedback } from "@/lib/tokenization";
@@ -71,7 +71,6 @@ export default async function SubjectProfilePage({ params, searchParams }: Subje
 
   const awardBadges = await getAwardBadges([profile.subjectId]);
   const ownProfile = viewer.id === profile.subjectId;
-  const directoryEnabled = isParticipantsDirectoryEnabled();
   const admin = hasPrototypeAdminAccess(viewer.id);
   const formattedReward = rewardAmount ? formatDarusAmount(rewardAmount) : null;
   const actionMessage = formattedReward
@@ -102,7 +101,7 @@ export default async function SubjectProfilePage({ params, searchParams }: Subje
   const showAbout = Boolean(about && (about.bio || about.city || about.occupation || about.residence || about.interests.length || about.resources?.length || signals.length));
 
   return (
-    <main className="shell">
+    <main className="shell profileShell">
       <section className="card profile publicProfile">
         <CoreNavigation current="participants" texts={texts} />
         <div className="publicProfileHead">
@@ -145,7 +144,9 @@ export default async function SubjectProfilePage({ params, searchParams }: Subje
             {about.bio ? <UserText className="profileBio" text={about.bio} /> : null}
             {about.city || about.occupation ? (
               <dl className="facts">
-                {about.city ? <div><dt>Город</dt><dd>{about.city}</dd></div> : null}
+                {about.city ? <div><dt>Город</dt><dd>{about.residence
+                  ? <Link className="residenceLink" href={residenceDirectoryHref(about.residence)}>{about.city}</Link>
+                  : about.city}</dd></div> : null}
                 {about.occupation ? <div><dt>Род занятий</dt><dd>{about.occupation}</dd></div> : null}
               </dl>
             ) : null}
@@ -153,9 +154,8 @@ export default async function SubjectProfilePage({ params, searchParams }: Subje
               <div className="aboutBlock">
                 <h3>Интересы</h3>
                 <div className="interestChips">{about.interests.map((interest) => (
-                  directoryEnabled ? <Link key={interest.id} href={`/participants?interest=${encodeURIComponent(interest.label)}`}
+                  <Link key={interest.id} href={communityHref({ type: "interest", interest: interest.label })}
                     aria-label={`Найти людей с интересом «${interest.label}»`}>{interest.label}</Link>
-                    : <span key={interest.id}>{interest.label}</span>
                 ))}</div>
               </div>
             ) : null}

@@ -47,7 +47,8 @@ vi.mock("@/lib/profile-about", () => ({
   getProfileAbout: vi.fn().mockResolvedValue(null),
   getVisibleProfileAbout: vi.fn().mockResolvedValue(null),
 }));
-vi.mock("./../lib/signals", () => ({
+vi.mock("./../lib/signals", async (importOriginal) => ({
+  ...await importOriginal<typeof import("../lib/signals")>(),
   listParticipantSignals: vi.fn().mockResolvedValue([]),
   listSignalTypes: vi.fn().mockResolvedValue([]),
 }));

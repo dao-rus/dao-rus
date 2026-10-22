@@ -45,7 +45,9 @@ export default async function ParticipantsPage({ searchParams }: ParticipantsPag
   const withoutResidence = params.without_residence === "1" && !interestFilter
     && !params.residence_name && !params.residence_type && !params.residence_country;
   const community = communityFromParams(params);
-  if (!isParticipantsDirectoryEnabled() && community?.type !== "residence" && !withoutResidence) redirect("/");
+  const directoryEnabled = isParticipantsDirectoryEnabled();
+  const intersectionAllowed = params.without_residence === "1" ? withoutResidence : Boolean(community);
+  if (!directoryEnabled && !intersectionAllowed) redirect("/");
   const sort: DirectorySort = params.sort === "verification" || params.sort === "reputation" || params.sort === "core" || params.sort === "joined"
     ? params.sort : "name";
   const dir: "asc" | "desc" = sort === "joined" && params.dir === "desc" ? "desc" : "asc";
@@ -103,10 +105,10 @@ export default async function ParticipantsPage({ searchParams }: ParticipantsPag
               : texts["participants.title"]}</h1>
             <p className="muted">{community ? "Участников" : "Найдено"}: {community ? members.length : participants.length}.</p>
             {interestFilter ? (
-              <p className="muted">Интерес: {interestFilter} · <Link href="/participants">Показать всех</Link></p>
+              <p className="muted">Интерес: {interestFilter}{directoryEnabled ? <> · <Link href="/participants">Показать всех</Link></> : null}</p>
             ) : null}
             {residenceFilter ? (
-              <p className="muted">Место жительства: {residenceLabel(residenceFilter)} · <Link href="/participants">Показать всех</Link></p>
+              <p className="muted">Место жительства: {residenceLabel(residenceFilter)}{directoryEnabled ? <> · <Link href="/participants">Показать всех</Link></> : null}</p>
             ) : null}
           </div>
         </div>

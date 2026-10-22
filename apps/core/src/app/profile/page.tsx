@@ -15,7 +15,7 @@ import {
   membershipEventLabel,
 } from "@/lib/membership-history";
 import { getProfileAbout, residenceDirectoryHref, residenceLabel } from "@/lib/profile-about";
-import { isParticipantsDirectoryEnabled } from "@/lib/config";
+import { communityHref } from "../../lib/communities";
 import { getReputationSummary } from "@/lib/reputation";
 import { getCurrentParticipant } from "@/lib/session";
 import { getForumJoinDate } from "@/lib/forum-join-history";
@@ -71,7 +71,6 @@ const aboutMessages: Record<string, string> = {
 export default async function ProfilePage({ searchParams }: ProfilePageProps) {
   const participant = await getCurrentParticipant();
   if (!participant) redirect("/");
-  const directoryEnabled = isParticipantsDirectoryEnabled();
 
   const params = await searchParams;
   const onboardingReward = await getOnboardingRewardFeedback(participant.id, params.onboarding_reward);
@@ -95,7 +94,7 @@ export default async function ProfilePage({ searchParams }: ProfilePageProps) {
   const aboutMessage = params.about_update ? aboutMessages[params.about_update] : null;
 
   return (
-    <main className="shell">
+    <main className="shell profileShell">
       <section className="card profile">
         <CoreNavigation current="profile" texts={texts} />
         {onboardingReward ? <p className="formNotice" role="status">{onboardingReward}</p> : null}
@@ -167,7 +166,9 @@ export default async function ProfilePage({ searchParams }: ProfilePageProps) {
             <p className="muted privacyHint">Город и род занятий, которые вы указали, видны всем пользователям Core. Тип населённого пункта и страна нужны только для точной географической привязки.</p>
             {(about?.age || about?.city || about?.occupation || about?.education || about?.familyStatus) ? <dl className="facts">
               {about.age ? <div><dt>Возраст</dt><dd>{about.age}</dd></div> : null}
-              {about.city ? <div><dt>Город</dt><dd>{about.city}</dd></div> : null}
+              {about.city ? <div><dt>Город</dt><dd>{about.residence
+                ? <Link className="residenceLink" href={residenceDirectoryHref(about.residence)}>{about.city}</Link>
+                : about.city}</dd></div> : null}
               {about.occupation ? <div><dt>Род занятий</dt><dd>{about.occupation}</dd></div> : null}
               {about.education ? <div><dt>Образование</dt><dd>{about.education}</dd></div> : null}
               {about.familyStatus ? <div><dt>Семейное положение</dt><dd>{about.familyStatus}</dd></div> : null}
@@ -186,8 +187,7 @@ export default async function ProfilePage({ searchParams }: ProfilePageProps) {
           {about?.residence ? (
             <div className="aboutBlock">
               <h3>Место жительства</h3>
-              {directoryEnabled ? <Link className="residenceLink" href={residenceDirectoryHref(about.residence)}>{residenceLabel(about.residence)}</Link>
-                : <span className="residenceLink">{residenceLabel(about.residence)}</span>}
+              <Link className="residenceLink" href={residenceDirectoryHref(about.residence)}>{residenceLabel(about.residence)}</Link>
             </div>
           ) : null}
 
@@ -198,7 +198,8 @@ export default async function ProfilePage({ searchParams }: ProfilePageProps) {
                 {about.interests.map((interest) => (
                   <li key={interest.id}>
                     <div className="profileInterestContent">
-                      <strong>{interest.label}</strong>
+                      <strong><Link href={communityHref({ type: "interest", interest: interest.label })}
+                        aria-label={`Найти людей с интересом «${interest.label}»`}>{interest.label}</Link></strong>
                       <small>{visibilityLabels[interest.visibility] ?? interest.visibility}</small>
                       <details className="profileInterestDetails">
                         <summary>Изменить</summary>

@@ -144,6 +144,9 @@ h1 { margin: 0 0 12px; font-size: clamp(34px, 7vw, 64px); line-height: 1; }
 
 .profileHeader { display: flex; justify-content: space-between; gap: 24px; align-items: flex-start; }
 .profileIdentity, .directoryIdentity { display: flex; align-items: flex-start; gap: 14px; min-width: 0; }
+.profileShell { grid-template-columns: minmax(0, 1fr); }
+.profileShell > .profile { min-width: 0; }
+.profileShell h1 .participantName { max-width: 100%; }
 .telegramAvatar { display: block; width: 72px; height: 72px; flex: none; object-fit: cover; border-radius: 50%; background: var(--bg); }
 .directoryIdentity .telegramAvatar { width: 48px; height: 48px; }
 .profileBio { white-space: pre-wrap; overflow-wrap: anywhere; max-width: 580px; }
@@ -558,7 +561,7 @@ button.notificationEntry:focus-visible { outline: 2px solid var(--accent); outli
 .aboutForm textarea { min-height: 110px; resize: vertical; }
 .aboutForm .button { justify-self: start; }
 .residenceFields { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; }
-.residenceLink { color: var(--accent); }
+.residenceLink { color: var(--accent); overflow-wrap: anywhere; }
 .inlineAboutForm {
   display: grid;
   grid-template-columns: minmax(0, 1fr) auto auto;
@@ -598,6 +601,8 @@ button.notificationEntry:focus-visible { outline: 2px solid var(--accent); outli
 .publicAbout { padding-top: 22px; }
 .interestChips { display: flex; flex-wrap: wrap; gap: 8px; }
 .interestChips a {
+  max-width: 100%;
+  overflow-wrap: anywhere;
   padding: 7px 10px;
   border: 1px solid var(--line);
   border-radius: 999px;
@@ -1026,8 +1031,8 @@ div.userText > :last-child { margin-bottom: 0; }
 .publicProfileWrite { gap: 8px; min-height: 48px; justify-self: start; }
 .publicAbout h2 { margin: 0 0 14px; }
 .publicTrust h2 { margin: 0; font-size: 20px; }
-.publicTrust { display: grid; gap: 18px; }
-.publicTrustPart { display: grid; gap: 10px; }
+.publicTrust { display: grid; grid-template-columns: minmax(0, 1fr); gap: 18px; }
+.publicTrust > .publicTrustPart { display: grid; gap: 10px; min-width: 0; }
 .publicTrustPart + .publicTrustPart { padding-top: 18px; border-top: 1px solid var(--line); }
 .publicTrustRow { display: flex; flex-wrap: wrap; gap: 8px 12px; align-items: center; margin: 0; }
 .publicTrust .actions { margin-top: 0; }

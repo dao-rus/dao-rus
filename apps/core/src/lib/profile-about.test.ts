@@ -319,6 +319,16 @@ describe("profile residence reads", () => {
 });
 
 describe("profile visibility reads", () => {
+  it.each([null, "", "   "])("does not invent a community when the residence type is %j", async type => {
+    const database = { async query(text: string) {
+      return text.includes("FROM participants")
+        ? { rowCount: 1, rows: [{ city: "Киров Калужская область", residence_type: type, residence_country: "Россия" }] }
+        : { rowCount: 0, rows: [] };
+    } };
+    const about = await getVisibleProfileAboutWithDatabase(database, "owner", "viewer", false);
+    expect(about?.city).toBe("Киров Калужская область");
+    expect(about?.residence).toBeNull();
+  });
   const modes = ["public", "members", "private", "circle", "match_only"] as const;
 
   it("keeps the owner's existing visibility modes and only publishes public/member content", async () => {

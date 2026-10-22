@@ -129,6 +129,8 @@ function aboutFromRows(
   signals: Signal[],
 ): ProfileAbout {
   const residenceName = participantRow.city || participantRow.residence_name;
+  const completeResidence = [residenceName, participantRow.residence_type, participantRow.residence_country]
+    .every(value => typeof value === "string" && value.trim().length > 0);
   return {
     bio: String(participantRow.profile_bio ?? ""),
     bioVisibility: String(participantRow.profile_bio_visibility) as ProfileVisibility,
@@ -137,7 +139,7 @@ function aboutFromRows(
     occupation: participantRow.profile_occupation ? String(participantRow.profile_occupation) : null,
     education: participantRow.profile_education ? String(participantRow.profile_education) : null,
     familyStatus: participantRow.profile_family_status ? String(participantRow.profile_family_status) : null,
-    residence: residenceName && participantRow.residence_type && participantRow.residence_country
+    residence: completeResidence
       ? {
           name: String(residenceName),
           type: String(participantRow.residence_type),

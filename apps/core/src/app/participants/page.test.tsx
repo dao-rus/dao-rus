@@ -20,24 +20,12 @@ vi.mock("@/lib/participants-directory", () => ({
   listParticipantsDirectory: mocks.listParticipantsDirectory,
 }));
 vi.mock("@/lib/interface-texts", () => ({ readInterfaceTexts: mocks.readInterfaceTexts }));
-vi.mock("@/lib/communities", () => ({
-  communityFromParams: (params: { interest?: string; residence_name?: string; residence_type?: string; residence_country?: string }) =>
-    params.interest?.trim() ? { type: "interest", interest: params.interest.trim() }
-      : params.residence_name && params.residence_type && params.residence_country
-        ? { type: "residence", residence: { name: params.residence_name, type: params.residence_type, country: params.residence_country } }
-        : null,
-  communityHref: (community: { type: string; interest?: string; residence?: { name: string; type: string; country: string } }) =>
-    community.type === "interest" ? `/participants?interest=${encodeURIComponent(community.interest ?? "")}`
-      : `/participants?${new URLSearchParams({ residence_name: community.residence!.name,
-        residence_type: community.residence!.type, residence_country: community.residence!.country })}`,
+vi.mock("@/lib/communities", async () => ({
+  ...await import("../../lib/communities"),
   listCommunityPosts: mocks.listCommunityPosts,
   listCommunitySignals: mocks.listCommunitySignals,
 }));
-vi.mock("@/lib/profile-about", () => ({
-  normalizeResidence: ({ name, type, country }: { name: string; type: string; country: string }) =>
-    name && type && country ? { name: name.trim(), type: type.trim(), country: country.trim() } : null,
-  residenceLabel: ({ name, country }: { name: string; country: string }) => `${name}, ${country}`,
-}));
+vi.mock("@/lib/profile-about", async () => await import("../../lib/profile-about"));
 vi.mock("@/components/telegram-avatar", () => ({ TelegramAvatar: () => null }));
 vi.mock("@/components/local-date-time", () => ({ LocalDateTime: () => null }));
 
@@ -403,7 +391,8 @@ describe("residence communities with the general directory disabled", () => {
     expect(textContent(page)).toContain("Казань");
     expect(mocks.listParticipantsDirectory).toHaveBeenCalledWith("", expect.objectContaining({ residence: { name: "Казань", type: "город", country: "Россия" } }));
   });
-  it.each([{}, { residence_name: "Казань" }, { interest: "История" }])("does not open the general catalogue for %j", async params => {
+  it.each([{}, { q: "Анна" }, { residence_name: "Казань" }, { interest: "   " }, { interest: "x".repeat(81) },
+    { interest: "История", residence_name: "Казань" }])("does not open the general catalogue for %j", async params => {
     await expect(ParticipantsPage({ searchParams: Promise.resolve(params) })).rejects.toThrow("redirect:/");
     expect(mocks.listParticipantsDirectory).not.toHaveBeenCalled();
   });
@@ -411,6 +400,20 @@ describe("residence communities with the general directory disabled", () => {
     mocks.getCurrentParticipant.mockResolvedValue(null);
     await expect(ParticipantsPage({ searchParams: Promise.resolve({ residence_name: "Казань", residence_type: "город", residence_country: "Россия" }) })).rejects.toThrow("redirect:/");
     expect(mocks.listParticipantsDirectory).not.toHaveBeenCalled();
+  });
+  it("opens an interest intersection and keeps search, sorting and reset within it", async () => {
+    const page = await ParticipantsPage({ searchParams: Promise.resolve({ interest: " История & культура ", q: "Анна", sort: "joined", dir: "desc" }) });
+    expect(mocks.listParticipantsDirectory).toHaveBeenCalledWith("Анна", expect.objectContaining({ interest: "История & культура", viewerParticipantId: "viewer" }));
+    const urls = hrefs(page).filter(href => href.startsWith("/participants"));
+    expect(urls.length).toBeGreaterThan(0);
+    expect(urls.every(href => new URL(href, "https://core.daorus.org").searchParams.get("interest") === "История & культура")).toBe(true);
+    expect(textContent(page)).not.toContain("Показать всех");
+  });
+  it("does not open interest intersections to guests", async () => {
+    mocks.getCurrentParticipant.mockResolvedValue(null);
+    await expect(ParticipantsPage({ searchParams: Promise.resolve({ interest: "История" }) })).rejects.toThrow("redirect:/");
+    expect(mocks.listParticipantsDirectory).not.toHaveBeenCalled();
+    expect(mocks.listCommunityPosts).not.toHaveBeenCalled();
   });
 });
 

@@ -45,7 +45,7 @@ vi.mock("@/components/telegram-avatar", () => ({ TelegramAvatar: () => null }));
 
 import ProfilePage from "./page";
 import { ProfileSignals } from "../../components/profile-signals";
-vi.mock("../../lib/signals", () => ({ listParticipantSignals: mocks.signals, listSignalTypes: mocks.types }));
+vi.mock("../../lib/signals", async (importOriginal) => ({ ...await importOriginal<typeof import("../../lib/signals")>(), listParticipantSignals: mocks.signals, listSignalTypes: mocks.types }));
 
 function textContent(node: ReactNode): string {
   if (typeof node === "string" || typeof node === "number") return String(node);
@@ -91,7 +91,7 @@ describe("/profile copy", () => {
       city: "Пенза",
       occupation: "Автослесарь",
       residence: { name: "Казань", type: "город", country: "Россия" },
-      interests: [],
+      interests: [{ id: "interest-1", label: "История & культура", visibility: "private" }],
       resources: [{ id: "resource-1", url: "https://example.org/anna" }],
       signals: [],
     });
@@ -107,6 +107,8 @@ describe("/profile copy", () => {
 
     expect(text).toContain("О себе");
     expect(text).toContain("Интересы");
+    expect(findProps(page, props => props.href === `/participants?${new URLSearchParams({ interest: "История & культура" })}`)).not.toBeNull();
+    expect(findProps(page, props => props.href === "/participants?residence_name=Kazan")).not.toBeNull();
     expect(text).toContain("Мои ресурсы в сети");
     expect(findProps(page, (props) => props.href === "https://example.org/anna")?.target).toBe("_blank");
     expect(findProps(page, (props) => props.href === "https://example.org/anna")?.rel).toBe("noreferrer");
@@ -140,12 +142,14 @@ describe("/profile copy", () => {
     expect(text).toContain("п.г.т.");
     expect(text).toContain("деревня");
     expect(text).toContain("село");
-    mocks.getProfileAbout.mockResolvedValue({ bio: "", bioVisibility: "members", residence: null,
+    mocks.getProfileAbout.mockResolvedValue({ bio: "", bioVisibility: "members", city: "Киров Калужская область", residence: null,
       interests: [], signals: [],
     });
     const blankPage = await ProfilePage({ searchParams: Promise.resolve({}) });
     expect(findProps(blankPage, (props) => props.name === "residence_type")?.defaultValue).toBe("");
     expect(findProps(blankPage, (props) => props.name === "residence_country")?.defaultValue).toBe("");
+    expect(textContent(blankPage)).toContain("Киров Калужская область");
+    expect(findProps(blankPage, props => typeof props.href === "string" && props.href.includes("residence_name="))).toBeNull();
     mocks.getProfileAbout.mockResolvedValue({ bio: "", bioVisibility: "members",
       residence: { name: "Кущёвская", type: "станица", country: "Россия" }, interests: [], signals: [],
     });

@@ -47,7 +47,7 @@ import SubjectProfilePage from "./page";
 import { ProfileSignals } from "../../../components/profile-signals";
 import { UserText } from "../../../components/user-text";
 import { SignalPreview } from "../../../components/signal-preview";
-vi.mock("../../../lib/signals", () => ({ listParticipantSignals: mocks.signals, listSignalTypes: mocks.types }));
+vi.mock("../../../lib/signals", async (importOriginal) => ({ ...await importOriginal<typeof import("../../../lib/signals")>(), listParticipantSignals: mocks.signals, listSignalTypes: mocks.types }));
 vi.mock("../../../lib/interface-texts", () => ({ readInterfaceTexts: mocks.texts }));
 
 const { interfaceTextFields } = await vi.importActual<typeof import("../../../lib/interface-texts")>("../../../lib/interface-texts");
@@ -204,7 +204,7 @@ describe("public subject profile name", () => {
     expect(text).toContain("История");
     expect(text).toContain("Казань, Россия");
     expect(hrefs(page)).toContain("/participants?residence_name=Kazan");
-    expect(hrefs(page)).not.toContain(`/participants?interest=${encodeURIComponent("История")}`);
+    expect(hrefs(page)).toContain(`/participants?interest=${encodeURIComponent("История")}`);
     expect(text).toContain("Могу редактировать тексты");
     for (const kind of ["need", "can", "want", "have"]) {
       expect(ids(page).filter((id) => id === `signal-${kind}`)).toHaveLength(1);
@@ -222,6 +222,13 @@ describe("public subject profile name", () => {
     });
     expect(textContent(page)).toContain("Ресурсы в сети");
     expect(hrefs(page)).toContain("https://example.org/portfolio");
+  });
+
+  it("keeps incomplete residence as text without inventing a geographical community", async () => {
+    mocks.getVisibleProfileAbout.mockResolvedValue({ bio: "", city: "Киров Калужская область", residence: null, interests: [], signals: [] });
+    const page = await SubjectProfilePage({ params: Promise.resolve({ participantId: rosterProfile.subjectId }), searchParams: Promise.resolve({}) });
+    expect(textContent(page)).toContain("Киров Калужская область");
+    expect(hrefs(page).some(href => href.includes("residence_name="))).toBe(false);
   });
 
   it("shows only positive totals and the viewer's own quality flag", async () => {
