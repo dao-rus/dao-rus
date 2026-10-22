@@ -54,6 +54,7 @@ vi.mock("./../lib/signals", () => ({
 
 vi.mock("@/lib/verification", () => ({
   getVerificationProfile: mocks.getVerificationProfile,
+  verificationConfirmationLabel: (points: number) => `${points} подтверждений`,
 }));
 
 vi.mock("@/lib/interface-texts", () => ({ readInterfaceTexts: mocks.readInterfaceTexts }));
@@ -61,6 +62,7 @@ vi.mock("../lib/interface-texts", async (importOriginal) => ({ ...await importOr
 vi.mock("@/lib/tokenization", () => ({
   getDarusBalance: mocks.getDarusBalance,
   getCurrentRewardRule: mocks.getCurrentRewardRule,
+  formatDarusAmount: (amount: string) => amount,
 }));
 vi.mock("@/lib/reputation", () => ({ getReputationSummary: mocks.getReputationSummary }));
 

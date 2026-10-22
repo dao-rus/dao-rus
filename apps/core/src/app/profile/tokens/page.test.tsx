@@ -13,6 +13,7 @@ vi.mock("@/lib/session", () => ({ getCurrentParticipant: mocks.getCurrentPartici
 vi.mock("@/lib/tokenization", () => ({
   getDarusBalance: mocks.getDarusBalance,
   getDarusHistory: mocks.getDarusHistory,
+  formatDarusAmount: (amount: string) => amount === "0.100000" ? "0,1" : amount,
 }));
 vi.mock("@/components/local-date-time", () => ({ LocalDateTime: () => null }));
 

@@ -150,7 +150,7 @@ describe("/participants", () => {
     expect(text).toContain("Сеть");
     expect(text).toContain("Алиса");
     expect(text).toContain("@alice");
-    expect(text).toContain("Биография Алисы");
+    expect(text).not.toContain("Биография Алисы");
     expect(text).not.toContain("Род занятий");
     expect(text).not.toContain("+79990000000");
     expect(text).not.toContain('Подтвердили:');

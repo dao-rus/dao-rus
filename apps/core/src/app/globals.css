@@ -575,6 +575,13 @@ button.notificationEntry:focus-visible { outline: 2px solid var(--accent); outli
   border-top: 1px solid var(--line);
 }
 .profileItems li > div { display: grid; gap: 5px; min-width: 0; }
+.profileInterestContent { flex: 1; min-width: 0; }
+.profileInterestDetails { margin-top: 5px; }
+.profileInterestDetails summary { width: fit-content; cursor: pointer; color: var(--accent); text-decoration: underline; text-underline-offset: 2px; }
+.profileInterestDetails .inlineAboutForm { grid-template-columns: minmax(0, 1fr) minmax(150px, auto) auto; }
+@media (max-width: 620px) {
+  .profileInterestDetails .inlineAboutForm { grid-template-columns: 1fr; }
+}
 .profileItems strong { overflow-wrap: anywhere; }
 .signalItems strong, .exchangeCard > strong { white-space: pre-wrap; overflow-wrap: anywhere; }
 .profileItems small { color: var(--muted); font-size: 12px; }

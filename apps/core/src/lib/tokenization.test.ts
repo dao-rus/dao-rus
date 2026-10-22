@@ -32,6 +32,9 @@ describe("DARUS tokenization", () => {
     expect(formatDarusAmount("0.100000")).toBe("0,1");
     expect(formatDarusAmount("1.000001")).toBe("1,000001");
     expect(formatDarusAmount("2.000000")).toBe("2");
+    expect(formatDarusAmount("0.000000")).toBe("0");
+    expect(formatDarusAmount("-1.250000")).toBe("-1,25");
+    expect(formatDarusAmount("10.010000")).toBe("10,01");
   });
 
   it("reads a reward only for its verifier and subject", async () => {

@@ -19,8 +19,8 @@ import { isParticipantsDirectoryEnabled } from "@/lib/config";
 import { getReputationSummary } from "@/lib/reputation";
 import { getCurrentParticipant } from "@/lib/session";
 import { getForumJoinDate } from "@/lib/forum-join-history";
-import { getDarusBalance } from "@/lib/tokenization";
-import { getVerificationProfile } from "@/lib/verification";
+import { formatDarusAmount, getDarusBalance } from "@/lib/tokenization";
+import { getVerificationProfile, verificationConfirmationLabel } from "@/lib/verification";
 import { getOnboardingRewardFeedback } from "../../lib/onboarding-quests";
 
 import { listParticipantSignals, listSignalTypes } from "../../lib/signals";
@@ -38,15 +38,16 @@ const statusLabels: Record<string, string> = {
 
 const visibilityLabels: Record<string, string> = {
   public: "Всем",
-  members: "Участникам ДАО",
-  circle: "Моему кругу",
-  match_only: "Только при совпадении",
+  members: "Вошедшим в Ядро",
+  circle: "Моему кругу (пока скрыто)",
+  match_only: "Только при совпадении (пока скрыто)",
   network_blind: "Анонимно в «Нужно / есть»",
   private: "Только мне",
 };
 
 const bioVisibilityOptions = ["public", "members", "private"] as const;
-const matchableVisibilityOptions = ["public", "members", "match_only", "private"] as const;
+// Circle and match-only access rules are not yet implemented for interests.
+const interestVisibilityOptions = ["public", "members", "private"] as const;
 const residenceTypeOptions = ["город", "п.г.т.", "деревня", "село"] as const;
 
 type ProfilePageProps = {
@@ -63,6 +64,7 @@ const updateMessages: Record<string, string> = {
 const aboutMessages: Record<string, string> = {
   updated: "Раздел «О себе» обновлён.",
   invalid: "Проверьте введённые данные.",
+  duplicate_interest: "Такой интерес уже указан. Измените существующую запись.",
 };
 
 export default async function ProfilePage({ searchParams }: ProfilePageProps) {
@@ -109,7 +111,7 @@ export default async function ProfilePage({ searchParams }: ProfilePageProps) {
               {participant.telegramName && participant.telegramName !== participant.displayName ? (
                 <p className="muted">В Telegram: {participant.telegramName}</p>
               ) : null}
-              {participant.telegramBio ? <p className="profileBio muted">Telegram: {participant.telegramBio}</p> : null}
+              {participant.telegramBio ? <p className="profileBio muted">Биография из Telegram (не публикуется в Ядре): {participant.telegramBio}</p> : null}
             </div>
           </div>
           <div className="profileActions">
@@ -141,8 +143,12 @@ export default async function ProfilePage({ searchParams }: ProfilePageProps) {
             <textarea id="profile-bio" form="profile-form" name="bio" maxLength={2000} defaultValue={about?.bio ?? ""} placeholder="Несколько слов о себе" />
             <label htmlFor="bio-visibility">Кому видно</label>
             <select id="bio-visibility" form="profile-form" name="visibility" defaultValue={about?.bioVisibility ?? "members"}>
+              {about?.bioVisibility && !bioVisibilityOptions.some((value) => value === about.bioVisibility) ? (
+                <option value={about.bioVisibility}>{visibilityLabels[about.bioVisibility] ?? about.bioVisibility}</option>
+              ) : null}
               {bioVisibilityOptions.map((value) => <option key={value} value={value}>{visibilityLabels[value]}</option>)}
             </select>
+            <p className="muted privacyHint">«Вошедшим в Ядро» — всем авторизованным пользователям, независимо от членства. «Всем» не открывает профиль без входа. Ранее выбранные режимы «Моему кругу» и «Только при совпадении» сохраняются, но пока скрыты от других.</p>
             <label htmlFor="residence-name">Место жительства</label>
             <div className="residenceFields">
               <input id="residence-name" form="profile-form" name="residence_name" maxLength={200}
@@ -190,9 +196,24 @@ export default async function ProfilePage({ searchParams }: ProfilePageProps) {
               <ul className="profileItems">
                 {about.interests.map((interest) => (
                   <li key={interest.id}>
-                    <div>
+                    <div className="profileInterestContent">
                       <strong>{interest.label}</strong>
                       <small>{visibilityLabels[interest.visibility] ?? interest.visibility}</small>
+                      <details className="profileInterestDetails">
+                        <summary>Изменить</summary>
+                        <form className="inlineAboutForm" action="/api/profile/about" method="post">
+                          <input type="hidden" name="action" value="update_interest" />
+                          <input type="hidden" name="interest_id" value={interest.id} />
+                          <input name="label" aria-label="Название интереса" maxLength={80} defaultValue={interest.label} required />
+                          <select name="visibility" aria-label="Кому виден интерес" defaultValue={interest.visibility}>
+                            {!interestVisibilityOptions.some((value) => value === interest.visibility) ? (
+                              <option value={interest.visibility}>{visibilityLabels[interest.visibility] ?? interest.visibility}</option>
+                            ) : null}
+                            {interestVisibilityOptions.map((value) => <option key={value} value={value}>{visibilityLabels[value]}</option>)}
+                          </select>
+                          <button className="button secondary compact" type="submit">Сохранить</button>
+                        </form>
+                      </details>
                     </div>
                     <form action="/api/profile/about" method="post">
                       <input type="hidden" name="action" value="remove_interest" />
@@ -207,14 +228,14 @@ export default async function ProfilePage({ searchParams }: ProfilePageProps) {
               <input type="hidden" name="action" value="add_interest" />
               <input name="label" maxLength={80} placeholder="Например: история" required />
               <select name="visibility" defaultValue="members">
-                {matchableVisibilityOptions.map((value) => <option key={value} value={value}>{visibilityLabels[value]}</option>)}
+                {interestVisibilityOptions.map((value) => <option key={value} value={value}>{visibilityLabels[value]}</option>)}
               </select>
               <button className="button secondary" type="submit">Добавить</button>
             </form>
           </div>
 
           <ProfileSignals signals={signals} types={signalTypes} texts={texts} owner />
-          {aboutMessage ? <p className={params.about_update === "invalid" ? "formError" : "formNotice"}>{aboutMessage}</p> : null}
+          {aboutMessage ? <p className={params.about_update === "invalid" || params.about_update === "duplicate_interest" ? "formError" : "formNotice"} role={params.about_update === "invalid" || params.about_update === "duplicate_interest" ? "alert" : "status"}>{aboutMessage}</p> : null}
         </section>
 
         <dl className="facts">
@@ -225,8 +246,8 @@ export default async function ProfilePage({ searchParams }: ProfilePageProps) {
             </div>
           ) : null}
           <div>
-            <dt>Подтверждение личности</dt>
-            <dd><strong>{verification?.isVerified ? "✓ Личность подтверждена" : "Личность пока не подтверждена"}</strong></dd>
+            <dt>Подтверждения знакомства</dt>
+            <dd><strong>{verificationConfirmationLabel(verification?.verificationPoints ?? 0)}</strong></dd>
           </div>
           <div><dt>Статус</dt><dd>{statusLabels[participant.membershipStatus] ?? participant.membershipStatus}</dd></div>
           {forumJoinedAt
@@ -234,7 +255,7 @@ export default async function ProfilePage({ searchParams }: ProfilePageProps) {
             : <div><dt>Дата регистрации</dt><dd><LocalDateTime value={participant.createdAt.toISOString()} /></dd></div>}
         </dl>
 
-        <p><Link className="metricLink" href={`/profile/${participant.id}`}>Подтверждение личности →</Link></p>
+        <p><Link className="metricLink" href={`/profile/${participant.id}`}>Мои подтверждения и доверие →</Link></p>
 
         <section className="activityHistory membershipHistory">
           <h2>История участия</h2>
@@ -269,7 +290,7 @@ export default async function ProfilePage({ searchParams }: ProfilePageProps) {
           </article>
           <article>
             <span>DARUS</span>
-            <strong>{darusBalance} DARUS</strong>
+            <strong>{formatDarusAmount(darusBalance)} DARUS</strong>
             <Link className="metricLink" href="/profile/tokens">История начислений →</Link>
           </article>
         </div>

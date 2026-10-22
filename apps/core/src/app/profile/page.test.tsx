@@ -21,14 +21,20 @@ vi.mock("@/lib/membership-history", () => ({
   getMembershipHistory: mocks.getMembershipHistory,
   membershipEventLabel: vi.fn(),
 }));
-vi.mock("@/lib/verification", () => ({ getVerificationProfile: mocks.getVerificationProfile }));
+vi.mock("@/lib/verification", () => ({
+  getVerificationProfile: mocks.getVerificationProfile,
+  verificationConfirmationLabel: (points: number) => `${points} подтверждений`,
+}));
 vi.mock("@/lib/profile-about", () => ({
   getProfileAbout: mocks.getProfileAbout,
   residenceLabel: ({ name, country }: { name: string; country: string }) => `${name}, ${country}`,
   residenceDirectoryHref: () => "/participants?residence_name=Kazan",
 }));
 vi.mock("@/lib/interface-texts", () => ({ readInterfaceTexts: mocks.readInterfaceTexts }));
-vi.mock("@/lib/tokenization", () => ({ getDarusBalance: mocks.getDarusBalance }));
+vi.mock("@/lib/tokenization", () => ({
+  getDarusBalance: mocks.getDarusBalance,
+  formatDarusAmount: (amount: string) => amount,
+}));
 vi.mock("@/lib/forum-join-history", () => ({ getForumJoinDate: async () => null }));
 vi.mock("@/lib/reputation", () => ({ getReputationSummary: mocks.getReputationSummary }));
 vi.mock("@/lib/config", () => ({ hasPrototypeAdminAccess: () => false, isParticipantsDirectoryEnabled: () => false, telegramReceptionConfig: () => ({
@@ -110,7 +116,7 @@ describe("/profile copy", () => {
     expect(findProps(page, (props) => props.current === "profile")?.texts).toMatchObject({
       "participants.title": "Моя сеть", "exchange.title": "Обмен",
     });
-    expect(text).not.toContain("Ядро");
+    expect(text).toContain("Подтверждения знакомства");
     expect(text).toContain("О себе в Telegram");
     expect(text).toContain("+79990000000");
     expect(text).toContain("0.100000");
