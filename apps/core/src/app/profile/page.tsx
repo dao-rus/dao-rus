@@ -151,21 +151,22 @@ export default async function ProfilePage({ searchParams }: ProfilePageProps) {
             <p className="muted privacyHint">«Вошедшим в Ядро» — всем авторизованным пользователям, независимо от членства. «Всем» не открывает профиль без входа. Ранее выбранные режимы «Моему кругу» и «Только при совпадении» сохраняются, но пока скрыты от других.</p>
             <label htmlFor="residence-name">Место жительства</label>
             <div className="residenceFields">
-              <input id="residence-name" form="profile-form" name="residence_name" maxLength={120}
-                defaultValue={about?.residence?.name ?? ""} placeholder="Название, например Казань" />
-              <select form="profile-form" name="residence_type" defaultValue={about?.residence?.type ?? "город"}
+              <input id="residence-name" form="profile-form" name="residence_name" maxLength={200}
+                defaultValue={about?.city ?? ""} placeholder="Название, например Казань" />
+              <select form="profile-form" name="residence_type" defaultValue={about?.residence?.type ?? ""}
                 aria-label="Тип населённого пункта">
+                <option value="">Тип не указан</option>
                 {about?.residence?.type && !residenceTypeOptions.some((type) => type === about.residence?.type)
                   ? <option value={about.residence.type}>{about.residence.type}</option> : null}
                 {residenceTypeOptions.map((type) => <option key={type} value={type}>{type}</option>)}
               </select>
               <input form="profile-form" name="residence_country" maxLength={120}
-                defaultValue={about?.residence?.country ?? "Россия"} placeholder="Страна" aria-label="Страна" />
+                defaultValue={about?.residence?.country ?? ""} placeholder="Страна" aria-label="Страна" />
             </div>
-            <p className="muted privacyHint">Место жительства необязательно. Оставьте название пустым, если не хотите его указывать. Указанное место видно только вошедшим участникам.</p>
+            <p className="muted privacyHint">Город и род занятий, которые вы указали, видны всем пользователям Core. Тип населённого пункта и страна нужны только для точной географической привязки.</p>
             {(about?.age || about?.city || about?.occupation || about?.education || about?.familyStatus) ? <dl className="facts">
               {about.age ? <div><dt>Возраст</dt><dd>{about.age}</dd></div> : null}
-              {about.city ? <div><dt>Город из анкеты Приёмной</dt><dd>{about.city}</dd></div> : null}
+              {about.city ? <div><dt>Город</dt><dd>{about.city}</dd></div> : null}
               {about.occupation ? <div><dt>Род занятий</dt><dd>{about.occupation}</dd></div> : null}
               {about.education ? <div><dt>Образование</dt><dd>{about.education}</dd></div> : null}
               {about.familyStatus ? <div><dt>Семейное положение</dt><dd>{about.familyStatus}</dd></div> : null}

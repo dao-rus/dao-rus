@@ -172,6 +172,8 @@ describe("public subject profile name", () => {
     mocks.getVisibleProfileAbout.mockResolvedValue({
       bio: "Моё био в ДАО",
       bioVisibility: "members",
+      city: "Киров Калужская область",
+      occupation: "МЧС",
       residence: { name: "Казань", type: "город", country: "Россия" },
       interests: [{ id: "i1", label: "История", visibility: "members" }],
       signals: [
@@ -197,6 +199,8 @@ describe("public subject profile name", () => {
     expect(text).toContain("@telegram_name");
     expect(text).not.toContain("Биография из Telegram");
     expect(text).toContain("Моё био в ДАО");
+    expect(text).toContain("Киров Калужская область");
+    expect(text).toContain("МЧС");
     expect(text).toContain("История");
     expect(text).toContain("Казань, Россия");
     expect(hrefs(page)).toContain("/participants?residence_name=Kazan");

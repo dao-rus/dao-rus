@@ -61,8 +61,8 @@ export async function listParticipantsDirectoryWithDatabase(
             participant.residence_type,
             participant.residence_country,
             CASE WHEN participant.id = $3::uuid THEN participant.profile_age ELSE NULL END AS profile_age,
-            CASE WHEN participant.id = $3::uuid THEN participant.profile_city ELSE NULL END AS profile_city,
-            CASE WHEN participant.id = $3::uuid THEN participant.profile_occupation ELSE NULL END AS profile_occupation,
+            participant.residence_name AS profile_city,
+            participant.profile_occupation,
             CASE WHEN participant.id = $3::uuid THEN participant.profile_education ELSE NULL END AS profile_education,
             CASE WHEN participant.id = $3::uuid THEN participant.profile_family_status ELSE NULL END AS profile_family_status,
             (

@@ -99,7 +99,7 @@ export default async function SubjectProfilePage({ params, searchParams }: Subje
   const initials = shownName.replace(/^@/, "").split(/\s+/).filter(Boolean).slice(0, 2)
     .map((part) => Array.from(part)[0]?.toLocaleUpperCase("ru-RU") ?? "").join("");
   const telegramUrl = profile.telegramUsername ? `https://t.me/${encodeURIComponent(profile.telegramUsername)}` : null;
-  const showAbout = Boolean(about && (about.bio || about.residence || about.interests.length || signals.length));
+  const showAbout = Boolean(about && (about.bio || about.city || about.occupation || about.residence || about.interests.length || signals.length));
 
   return (
     <main className="shell">
@@ -143,6 +143,12 @@ export default async function SubjectProfilePage({ params, searchParams }: Subje
           <section className="profileAbout publicAbout" aria-labelledby="public-about">
             <h2 id="public-about">О себе</h2>
             {about.bio ? <UserText className="profileBio" text={about.bio} /> : null}
+            {about.city || about.occupation ? (
+              <dl className="facts">
+                {about.city ? <div><dt>Город</dt><dd>{about.city}</dd></div> : null}
+                {about.occupation ? <div><dt>Род занятий</dt><dd>{about.occupation}</dd></div> : null}
+              </dl>
+            ) : null}
             {about.interests.length ? (
               <div className="aboutBlock">
                 <h3>Интересы</h3>

@@ -79,10 +79,10 @@ export async function saveReceptionApplication(
     }
     await client.query(`UPDATE participants SET
       profile_age = COALESCE($2, profile_age),
-      profile_city = COALESCE($3, profile_city),
-      profile_occupation = COALESCE($4, profile_occupation),
-      profile_education = COALESCE($5, profile_education),
-      profile_family_status = COALESCE($6, profile_family_status),
+      residence_name = CASE WHEN NULLIF(btrim(residence_name), '') IS NULL THEN $3 ELSE residence_name END,
+      profile_occupation = CASE WHEN NULLIF(btrim(profile_occupation), '') IS NULL THEN $4 ELSE profile_occupation END,
+      profile_education = COALESCE(profile_education, $5),
+      profile_family_status = COALESCE(profile_family_status, $6),
       updated_at = now()
       WHERE id=$1::uuid`, [participantId, form.age, form.city, form.occupation, form.education, form.familyStatus]);
     let created = false;

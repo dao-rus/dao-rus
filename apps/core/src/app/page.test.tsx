@@ -6,11 +6,13 @@ const mocks = vi.hoisted(() => ({
   readInterfaceTexts: vi.fn(),
   getOnboardingQuests: vi.fn(),
   countUnreadNotifications: vi.fn(),
+  unreadCodeComments: vi.fn(),
 }));
 
 vi.mock("@/lib/session", () => ({ getCurrentParticipant: mocks.getCurrentParticipant }));
 vi.mock("@/lib/interface-texts", () => ({ readInterfaceTexts: mocks.readInterfaceTexts }));
 vi.mock("@/lib/onboarding-quests", () => ({ getOnboardingQuests: mocks.getOnboardingQuests }));
+vi.mock("../lib/code-comment-reads", () => ({ unreadCodeComments: mocks.unreadCodeComments }));
 vi.mock("../lib/notifications", () => ({ countUnreadNotifications: mocks.countUnreadNotifications }));
 vi.mock("@/lib/config", () => ({
   isTelegramConfigured: () => true,
@@ -59,6 +61,7 @@ describe("home interface texts", () => {
   beforeEach(() => {
     vi.clearAllMocks();
     mocks.countUnreadNotifications.mockResolvedValue(0);
+    mocks.unreadCodeComments.mockResolvedValue(null);
     mocks.getOnboardingQuests.mockResolvedValue([{ sourceType: "interest_first_added", textKey: "onboarding.interest", href: "/profile#profile-interests", amount: "0.100000" }]);
     mocks.readInterfaceTexts.mockResolvedValue({ values: {
       "home.eyebrow": "Своя надпись",
@@ -68,6 +71,7 @@ describe("home interface texts", () => {
       "home.profile_button": "Профиль",
       "home.code_link": "Открыть наш Кодекс",
       "home.code_title": "Кодекс руси",
+      "home.code_unread": "Новые комментарии к Кодексу",
       "onboarding.interest": "Добавьте интерес, чтобы найти единомышленников",
       "participants.title": "Моя сеть",
       "nearby.title": "Рядом",
@@ -114,6 +118,15 @@ describe("home interface texts", () => {
       textContent(page).indexOf("Добавьте интерес, чтобы найти единомышленников"),
     );
     expect(textContent(page)).toContain("0,1");
+  });
+
+  it("links the unread count to the first unread discussion", async () => {
+    mocks.getCurrentParticipant.mockResolvedValue({ id: "participant" });
+    mocks.unreadCodeComments.mockResolvedValue({ count: 2, section: "dao-code-2", id: "comment-id" });
+    const page = await Home({ searchParams: Promise.resolve({}) });
+    expect(textContent(page)).toContain("Новые комментарии к Кодексу");
+    expect(links(page)).toContain("/code?section=dao-code-2#comment-comment-id");
+    expect(mocks.unreadCodeComments).toHaveBeenCalledWith("participant");
   });
 
   it("marks the final personal messages button when notifications are unread", async () => {

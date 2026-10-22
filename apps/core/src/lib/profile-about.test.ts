@@ -42,14 +42,15 @@ describe("profile-about validation", () => {
     expect(normalizeProfileBio("   ")).toBe("");
   });
 
-  it("allows an omitted residence and normalizes a complete one", () => {
+  it("allows an omitted residence, preserves free text and normalizes a complete one", () => {
     expect(normalizeResidence({ name: " ", type: "", country: " " })).toBeNull();
     expect(normalizeResidence({ name: "", type: "город", country: "Россия" })).toBeNull();
+    expect(normalizeResidence({ name: "Киров Калужская область", type: "", country: "" })).toBeNull();
     expect(normalizeResidence({ name: " Москва ", type: "город", country: "Россия" }))
       .toEqual({ name: "Москва", type: "город", country: "Россия" });
     expect(normalizeResidence({ name: "  Нижний   Новгород  ", type: " город ", country: " Россия " }))
       .toEqual({ name: "Нижний Новгород", type: "город", country: "Россия" });
-    expect(() => normalizeResidence({ name: "Казань", type: "", country: "Россия" }))
+    expect(() => normalizeResidence({ name: "x".repeat(201), type: "", country: "" }))
       .toThrow(ProfileAboutValidationError);
     expect(residenceLabel({ name: "Москва", type: "город", country: "Россия" })).toBe("Москва, Россия");
   });
@@ -264,8 +265,8 @@ describe("profile residence reads", () => {
     const database = { async query(text: string) {
       queries.push(text);
       if (text.includes("FROM participants")) return { rowCount: 1, rows: [{
-        profile_bio: "", profile_bio_visibility: "members",
-        residence_name: "Казань", residence_type: "город", residence_country: "Россия",
+        profile_bio: "", profile_bio_visibility: "members", city: "Казань", profile_occupation: "Юрист",
+        residence_type: "город", residence_country: "Россия",
       }] };
       return { rowCount: 0, rows: [] };
     } };
@@ -273,7 +274,9 @@ describe("profile residence reads", () => {
       .toEqual({ name: "Казань", type: "город", country: "Россия" });
     expect((await getVisibleProfileAboutWithDatabase(database, "owner", "viewer"))?.residence)
       .toEqual({ name: "Казань", type: "город", country: "Россия" });
-    expect(queries.some((text) => text.includes("residence_name, residence_type, residence_country"))).toBe(true);
+    expect((await getVisibleProfileAboutWithDatabase(database, "owner", "viewer"))?.city).toBe("Казань");
+    expect((await getVisibleProfileAboutWithDatabase(database, "owner", "viewer"))?.occupation).toBe("Юрист");
+    expect(queries.some((text) => text.includes("residence_name AS city, residence_type, residence_country"))).toBe(true);
   });
 });
 
