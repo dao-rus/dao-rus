@@ -31,7 +31,7 @@ describe("participants directory", () => {
     }, "  @alice  ");
 
     expect(queries).toHaveLength(1);
-    expect(queries[0].values).toEqual(["alice", "", null, "", "", ""]);
+    expect(queries[0].values).toEqual(["alice", "", null, ""]);
     expect(queries[0].text).toContain("WITH RECURSIVE verified");
     expect(queries[0].text).toContain("JOIN verified verifier");
     expect(queries[0].text).toContain("incoming.revoked_at IS NULL");
@@ -132,14 +132,14 @@ describe("participants directory", () => {
       },
     }, "", { interest: "  История  ", viewerParticipantId });
 
-    expect(queries[0].values).toEqual(["", "история", viewerParticipantId, "", "", ""]);
+    expect(queries[0].values).toEqual(["", "история", viewerParticipantId, ""]);
     expect(queries[0].text).toContain("interest.normalized_label = $2");
     expect(queries[0].text).toContain("interest.visibility IN ('public', 'members')");
     expect(queries[0].text).toContain("interest.participant_id = $3::uuid");
     expect(queries[0].text).toContain("login.event_type = 'participant.logged_in'");
   });
 
-  it("aggregates a complete residence for visible profiles", async () => {
+  it("uses the supplied place name for visible profiles, ignoring legacy metadata", async () => {
     const queries: Array<{ text: string; values?: unknown[] }> = [];
     const residence = { name: "Казань", type: "город", country: "Россия" };
     const entries = await listParticipantsDirectoryWithDatabase({
@@ -153,12 +153,12 @@ describe("participants directory", () => {
         }] };
       },
     }, "", { residence });
-    expect(queries[0].values).toEqual(["", "", null, "казань", "город", "россия"]);
-    expect(queries[0].text).toContain("lower(participant.residence_name) = $4");
-    expect(queries[0].text).toContain("lower(participant.residence_type) = $5");
-    expect(queries[0].text).toContain("lower(participant.residence_country) = $6");
+    expect(queries[0].values).toEqual(["", "", null, "казань"]);
+    expect(queries[0].text).toContain("lower(btrim(participant.residence_name)) = $4");
+    expect(queries[0].text).not.toContain("participant.residence_type");
+    expect(queries[0].text).not.toContain("participant.residence_country");
     expect(queries[0].text).toContain("login.event_type = 'participant.logged_in'");
-    expect(entries[0].residence).toEqual(residence);
+    expect(entries[0].residence).toEqual({ name: "Казань" });
   });
 
   it("orders verification and reputation leaders with a stable name tie-break", async () => {
@@ -204,7 +204,9 @@ describe("participants directory", () => {
 it("filters incomplete and absent residences without changing catalogue visibility", async () => {
   let sql = "";
   await listParticipantsDirectoryWithDatabase({ async query(text) { sql = text; return { rows: [] }; } }, "", { withoutResidence: true });
-  for (const field of ["name", "type", "country"]) expect(sql).toContain(`NULLIF(btrim(participant.residence_${field}), '') IS NULL`);
+  expect(sql).toContain("NULLIF(btrim(participant.residence_name), '') IS NULL");
+  expect(sql).not.toContain("participant.residence_type");
+  expect(sql).not.toContain("participant.residence_country");
   expect(sql).toContain("forum.forum_status = 'joined'");
   expect(sql).toContain("login.event_type = 'participant.logged_in'");
 });

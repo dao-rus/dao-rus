@@ -3,6 +3,7 @@ import { pool } from "./db";
 import { findOrCreateParticipantByTelegramId, TelegramParticipantIdentityConflictError } from "./telegram-participant";
 import type { TelegramIdentityProfile } from "./identity";
 import { receptionTelegramName, receptionTelegramUsername } from "./reception-telegram-profile";
+import { receptionDraftCorrectionFields } from "./reception-profile-apply";
 
 export class ReceptionApplicationError extends Error {
   constructor(public readonly code: "invalid_form" | "not_found" | "rate_limit" | "identity_conflict") {
@@ -77,14 +78,18 @@ export async function saveReceptionApplication(
       if (error instanceof TelegramParticipantIdentityConflictError) throw new ReceptionApplicationError("identity_conflict");
       throw error;
     }
+    if (existing?.participant_id && existing.participant_id !== participantId) throw new ReceptionApplicationError("identity_conflict");
+    const corrections = existing?.status === "draft"
+      ? await receptionDraftCorrectionFields(client, participantId, existing.id) : [];
     await client.query(`UPDATE participants SET
       profile_age = COALESCE($2, profile_age),
-      residence_name = CASE WHEN NULLIF(btrim(residence_name), '') IS NULL THEN $3 ELSE residence_name END,
-      profile_occupation = CASE WHEN NULLIF(btrim(profile_occupation), '') IS NULL THEN $4 ELSE profile_occupation END,
+      residence_name = CASE WHEN NULLIF(btrim(residence_name), '') IS NULL OR $7 THEN $3 ELSE residence_name END,
+      profile_occupation = CASE WHEN NULLIF(btrim(profile_occupation), '') IS NULL OR $8 THEN $4 ELSE profile_occupation END,
       profile_education = COALESCE(profile_education, $5),
       profile_family_status = COALESCE(profile_family_status, $6),
       updated_at = now()
-      WHERE id=$1::uuid`, [participantId, form.age, form.city, form.occupation, form.education, form.familyStatus]);
+      WHERE id=$1::uuid`, [participantId, form.age, form.city, form.occupation, form.education, form.familyStatus,
+        corrections.includes("residence_name"), corrections.includes("profile_occupation")]);
     let created = false;
     const name = telegramProfile ? receptionTelegramName(telegramProfile.firstName, telegramProfile.lastName) : existing?.telegram_name ?? null;
     const username = telegramProfile ? receptionTelegramUsername(telegramProfile.username) : existing?.telegram_username ?? null;

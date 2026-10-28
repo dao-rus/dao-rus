@@ -83,14 +83,14 @@ describe("profile-about validation", () => {
   it("allows an omitted residence, preserves free text and normalizes a complete one", () => {
     expect(normalizeResidence({ name: " ", type: "", country: " " })).toBeNull();
     expect(normalizeResidence({ name: "", type: "город", country: "Россия" })).toBeNull();
-    expect(normalizeResidence({ name: "Киров Калужская область", type: "", country: "" })).toBeNull();
+    expect(normalizeResidence({ name: "Киров Калужская область", type: "", country: "" })).toEqual({ name: "Киров Калужская область" });
     expect(normalizeResidence({ name: " Москва ", type: "город", country: "Россия" }))
-      .toEqual({ name: "Москва", type: "город", country: "Россия" });
+      .toEqual({ name: "Москва" });
     expect(normalizeResidence({ name: "  Нижний   Новгород  ", type: " город ", country: " Россия " }))
-      .toEqual({ name: "Нижний Новгород", type: "город", country: "Россия" });
+      .toEqual({ name: "Нижний Новгород" });
     expect(() => normalizeResidence({ name: "x".repeat(201), type: "", country: "" }))
       .toThrow(ProfileAboutValidationError);
-    expect(residenceLabel({ name: "Москва", type: "город", country: "Россия" })).toBe("Москва, Россия");
+    expect(residenceLabel({ name: "Москва", type: "город", country: "Россия" })).toBe("Москва");
   });
 });
 
@@ -220,7 +220,7 @@ describe("saveProfileWithDatabase", () => {
       expect.stringContaining("FOR UPDATE"),
     ]);
     const update = client.queries.find(({ text }) => text.includes("SET display_name = $2"));
-    expect(update?.values).toEqual([participantId, "Новое имя", "О себе", "public", true, null, null, null]);
+    expect(update?.values).toEqual([participantId, "Новое имя", "О себе", "public", true, null]);
     expect(update?.text).toContain("display_name_chosen_in_core = true");
     expect(client.queries.filter(({ text }) => text.includes("INSERT INTO events"))
       .map(({ values }) => values?.[0])).toEqual(["participant.profile_updated", "participant.about_updated"]);
@@ -256,7 +256,7 @@ describe("saveProfileWithDatabase", () => {
     await expect(saveProfileWithDatabase(database, participantId, "Анна", "О себе", "bad"))
       .rejects.toBeInstanceOf(ProfileAboutValidationError);
     await expect(saveProfileWithDatabase(database, participantId, "Анна", "", "members", {
-      name: "Казань", type: "", country: "Россия",
+      name: "я".repeat(201),
     })).rejects.toBeInstanceOf(ProfileAboutValidationError);
     expect(connected).toBe(false);
   });
@@ -268,7 +268,7 @@ describe("saveProfileWithDatabase", () => {
     expect(await saveProfileWithDatabase(profileDatabase(client), participantId, "Анна", "", "members", residence))
       .toEqual({ changed: true });
     expect(client.queries.find(({ text }) => text.includes("SET display_name = $2"))?.values)
-      .toEqual([participantId, "Анна", "", "members", true, "Казань", "город", "Россия"]);
+      .toEqual([participantId, "Анна", "", "members", true, "Казань"]);
     const events = client.queries.filter(({ text }) => text.includes("INSERT INTO events"));
     expect(events.map(({ values }) => values?.[0])).toEqual(["participant.about_updated"]);
     expect(events[0].values?.[2]).toBe(JSON.stringify({ field: "residence" }));
@@ -285,7 +285,7 @@ describe("saveProfileWithDatabase", () => {
       name: "", type: "", country: "",
     })).toEqual({ changed: true });
     expect(clearClient.queries.find(({ text }) => text.includes("SET display_name = $2"))?.values?.slice(5))
-      .toEqual([null, null, null]);
+      .toEqual([null]);
     expect(clearClient.queries.some(({ text }) => text.includes("INSERT INTO darus_ledger"))).toBe(false);
 
     const defaultClient = new ProfileClient(current);
@@ -293,7 +293,7 @@ describe("saveProfileWithDatabase", () => {
       name: "", type: "город", country: "Россия",
     })).toEqual({ changed: false });
     expect(defaultClient.queries.find(({ text }) => text.includes("SET display_name = $2"))?.values?.slice(5))
-      .toEqual([null, null, null]);
+      .toEqual([null]);
   });
 });
 
@@ -309,17 +309,17 @@ describe("profile residence reads", () => {
       return { rowCount: 0, rows: [] };
     } };
     expect((await getProfileAboutWithDatabase(database, "owner"))?.residence)
-      .toEqual({ name: "Казань", type: "город", country: "Россия" });
+      .toEqual({ name: "Казань" });
     expect((await getVisibleProfileAboutWithDatabase(database, "owner", "viewer"))?.residence)
-      .toEqual({ name: "Казань", type: "город", country: "Россия" });
+      .toEqual({ name: "Казань" });
     expect((await getVisibleProfileAboutWithDatabase(database, "owner", "viewer"))?.city).toBe("Казань");
     expect((await getVisibleProfileAboutWithDatabase(database, "owner", "viewer"))?.occupation).toBe("Юрист");
-    expect(queries.some((text) => text.includes("residence_name AS city, residence_type, residence_country"))).toBe(true);
+    expect(queries.some((text) => text.includes("residence_name AS city"))).toBe(true);
   });
 });
 
 describe("profile visibility reads", () => {
-  it.each([null, "", "   "])("does not invent a community when the residence type is %j", async type => {
+  it.each([null, "", "   "])("preserves the supplied place regardless of legacy residence type %j", async type => {
     const database = { async query(text: string) {
       return text.includes("FROM participants")
         ? { rowCount: 1, rows: [{ city: "Киров Калужская область", residence_type: type, residence_country: "Россия" }] }
@@ -327,7 +327,7 @@ describe("profile visibility reads", () => {
     } };
     const about = await getVisibleProfileAboutWithDatabase(database, "owner", "viewer", false);
     expect(about?.city).toBe("Киров Калужская область");
-    expect(about?.residence).toBeNull();
+    expect(about?.residence).toEqual({ name: "Киров Калужская область" });
   });
   const modes = ["public", "members", "private", "circle", "match_only"] as const;
 

@@ -24,11 +24,11 @@ function database(member: boolean) {
 }
 
 describe("community publication", () => {
-  it("normalizes each community identity and keeps the complete residence tuple", () => {
+  it("uses only the supplied place name as geographical identity", () => {
     expect(communityFromParams({ interest: " История " })).toEqual(interest);
     expect(communityKey(interest)).toBe("история");
-    expect(communityKey(residence)).toBe('["россия","город","москва"]');
-    expect(communityFromParams({ residence_name: "Москва" })).toBeNull();
+    expect(communityKey(residence)).toBe("москва");
+    expect(communityFromParams({ residence_name: "Москва" })).toEqual({ type: "residence", residence: { name: "Москва" } });
   });
 
   it("creates a post and its separate target atomically only for a member", async () => {
@@ -80,13 +80,13 @@ describe("residence community index", () => {
       return { rowCount: 1, rows: [{ residence_name: "Москва", residence_type: "город",
         residence_country: "Россия", participant_count: "12" }] };
     } });
-    expect(communities).toEqual([{ residence: { name: "Москва", type: "город", country: "Россия" }, participantCount: 12 }]);
+    expect(communities).toEqual([{ residence: { name: "Москва" }, participantCount: 12 }]);
     expect(sql).toContain("count(*)::integer AS participant_count");
-    expect(sql).toContain("GROUP BY participant.residence_name, participant.residence_type, participant.residence_country");
-    expect(sql).toContain("ORDER BY participant_count DESC, lower(participant.residence_name)");
+    expect(sql).toContain("GROUP BY lower(btrim(participant.residence_name))");
+    expect(sql).toContain("ORDER BY participant_count DESC, lower(btrim(participant.residence_name))");
     expect(sql).toContain("participant.residence_name IS NOT NULL AND btrim(participant.residence_name) <> ''");
-    expect(sql).toContain("participant.residence_type IS NOT NULL AND btrim(participant.residence_type) <> ''");
-    expect(sql).toContain("participant.residence_country IS NOT NULL AND btrim(participant.residence_country) <> ''");
+    expect(sql).not.toContain("participant.residence_type");
+    expect(sql).not.toContain("participant.residence_country");
     expect(sql).toContain("forum.forum_status = 'joined'");
     expect(sql).toContain("login.event_type = 'participant.logged_in'");
   });

@@ -45,8 +45,11 @@ describe.skipIf(!databaseUrl)("Reception applications on isolated PostgreSQL", (
     await db.query("BEGIN;" + readFileSync(new URL("054_reception_invitations.sql", directory), "utf8") + ";COMMIT;");
     await db.query("BEGIN;" + readFileSync(new URL("055_reception_profile_draft.sql", directory), "utf8") + ";COMMIT;");
     await db.query("BEGIN;" + readFileSync(new URL("056_reception_profile_age.sql", directory), "utf8") + ";COMMIT;");
-    expect((await db.query("SELECT * FROM participants WHERE id=$1", [participant.id])).rows[0]).toEqual(participant);
-  }, 30000);
+    for (const name of readdirSync(directory).filter(name => name.endsWith(".sql") && name > "056_reception_profile_age.sql").sort()) {
+      await db.query("BEGIN;" + readFileSync(new URL(name, directory), "utf8") + ";COMMIT;");
+    }
+    expect((await db.query("SELECT * FROM participants WHERE id=$1", [participant.id])).rows[0]).toMatchObject(participant);
+  }, 60000);
   beforeEach(async () => {
     await db.query("TRUNCATE reception_applications CASCADE");
     await db.query("DELETE FROM external_identities WHERE external_user_id = '42' OR provider_subject IN ('miniapp:42', 'roster:42')");
@@ -135,11 +138,12 @@ describe.skipIf(!databaseUrl)("Reception applications on isolated PostgreSQL", (
     const e = (await db.query("INSERT INTO external_identities(participant_id,provider,provider_subject,external_user_id) VALUES($1,'telegram','miniapp:42','42') RETURNING id", [p.id])).rows[0];
     await PUT(request("PUT"));
     expect((await db.query("SELECT participant_id FROM reception_applications")).rows[0].participant_id).toBe(p.id);
+    const beforeConflict = await application(await GET(request("GET")));
     await db.query("UPDATE external_identities SET external_user_id='99' WHERE id=$1", [e.id]);
     const other = (await db.query("INSERT INTO participants(display_name) VALUES ('Other') RETURNING id")).rows[0];
     const otherE = (await db.query("INSERT INTO external_identities(participant_id,provider,provider_subject,external_user_id) VALUES($1,'telegram','oidc:other','42') RETURNING id", [other.id])).rows[0];
     expect((await PUT(request("PUT", { ...form, city: "Changed" }))).status).toBe(409);
-    expect(await application(await GET(request("GET")))).toMatchObject({ city: form.city, revision: 1 });
+    expect(await application(await GET(request("GET")))).toEqual(beforeConflict);
     await db.query("DELETE FROM external_identities WHERE id=ANY($1::uuid[])", [[e.id, otherE.id]]);
   });
   it("reuses the imported roster Participant and records the verified identity", async () => {
@@ -169,6 +173,7 @@ describe.skipIf(!databaseUrl)("Reception applications on isolated PostgreSQL", (
   });
   it("guards database form constraints and delivered state", async () => {
     await POST(request("POST"));
+    await db.query("INSERT INTO reception_application_deliveries(application_id,kind) SELECT id,'publication' FROM reception_applications");
     await expect(db.query("UPDATE reception_applications SET age=0")).rejects.toMatchObject({ code: "23514" });
     await expect(db.query("UPDATE reception_applications SET age=null,publish_age=true")).rejects.toMatchObject({ code: "23514" });
     await expect(db.query("UPDATE reception_application_deliveries SET status='delivered'")).rejects.toMatchObject({ code: "23514" });

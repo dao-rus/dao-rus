@@ -28,7 +28,7 @@ export const receptionTexts = [
   { section: "Приёмная", key: "reception.apply.age", label: "Поле возраста", defaultValue: "Возраст (необязательно)", multiline: false },
   { section: "Приёмная", key: "reception.apply.preview_age", label: "Возраст в предпросмотре", defaultValue: "Возраст", multiline: false },
   { section: "Приёмная", key: "reception.apply.consent", label: "Согласие на публикацию возраста", defaultValue: "Согласен на публикацию моего возраста в теме «Приёмная» Telegram-форума", multiline: true },
-  { section: "Приёмная", key: "reception.apply.privacy", label: "Пояснение сохранения профиля", defaultValue: "Сведения сохраняются в вашем профиле после подтверждения. Первоначальное представление уже передано в тему «Приёмная».", multiline: true },
+  { section: "Приёмная", key: "reception.apply.privacy", label: "Пояснение сохранения профиля", defaultValue: "После вступления в форум распознанные город и занятие появляются в вашем профиле. Здесь можно проверить и исправить анкету. Остальные сведения сохраняются в профиле после подтверждения. Первоначальное представление уже передано в тему «Приёмная».", multiline: true },
   { section: "Приёмная", key: "reception.apply.preview", label: "Заголовок предпросмотра", defaultValue: "Предпросмотр профиля", multiline: false },
   { section: "Приёмная", key: "reception.apply.submit", label: "Отправить анкету", defaultValue: "Отправить заявку", multiline: false },
   { section: "Приёмная", key: "reception.apply.update", label: "Сохранить правки", defaultValue: "Сохранить изменения", multiline: false },

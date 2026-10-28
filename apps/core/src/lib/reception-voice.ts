@@ -102,7 +102,8 @@ export async function onReceptionRelayed(privateChatId: string, text: string | n
   try {
     const context = await production();
     if (context) {
-      await acknowledgeIntroduction(context, privateChatId);
+      try { await acknowledgeIntroduction(context, privateChatId); }
+      catch { console.error("Reception acknowledgement failed"); }
       if (text && updateId !== null) {
         const [{ createReceptionProfileDraft }, { pool }] = await Promise.all([
           import("./reception-profile-draft"), import("./db"),

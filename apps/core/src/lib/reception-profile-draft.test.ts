@@ -6,13 +6,14 @@ vi.mock("./config", () => ({ telegramReceptionConfig: () => ({ token: "synthetic
 vi.mock("./interface-texts", () => ({ readInterfaceTexts: async () => ({ values: texts }) }));
 vi.mock("./reception-voice", () => ({ receptionApplicationButton: () => ({ text: texts["reception.apply.button"], web_app: { url: "https://core.example/reception/apply" } }) }));
 
-function database(existing: { source_message_update_id: number; sent?: boolean; error?: string | null; fields?: Partial<{ age: number; city: string; occupation: string; education: string; family_status: string }> } | null) {
+function database(existing: { source_message_update_id: number | string; sent?: boolean; error?: string | null; fields?: Partial<{ age: number; city: string; occupation: string; education: string; family_status: string }> } | null) {
   const row = existing && { id: "draft-1", status: "draft", source_message_update_id: existing.source_message_update_id,
     draft_prompt_sent_at: existing.sent ? new Date() : null, age: existing.fields?.age ?? null, city: existing.fields?.city ?? null,
     occupation: existing.fields?.occupation ?? null, education: existing.fields?.education ?? null, family_status: existing.fields?.family_status ?? null };
   const client = { query: vi.fn(async (sql: string) => {
     if (sql.startsWith("INSERT")) return { rowCount: existing ? 0 : 1, rows: [] };
-    if (sql.startsWith("SELECT id")) return { rowCount: row ? 1 : 0, rows: row ? [row] : [] };
+    if (sql.startsWith("SELECT id, status")) return { rowCount: row ? 1 : 0, rows: row ? [row] : [] };
+    if (sql.includes("FROM reception_applications")) return { rowCount: 0, rows: [] };
     return { rowCount: 1, rows: [] };
   }), release: vi.fn() };
   return { pool: { connect: vi.fn(async () => client) } as never, client };
@@ -46,8 +47,8 @@ describe("reception profile draft prompt", () => {
     expect(db.client.query).toHaveBeenCalledWith(expect.stringContaining("draft_prompt_sent_at=now()"), ["draft-1"]);
   });
 
-  it("does not retry the same webhook update or an already delivered draft", async () => {
-    const same = database({ source_message_update_id: 10 });
+  it.each([10, "10"])("does not retry the same webhook update or an already delivered draft (bigint %j)", async source => {
+    const same = database({ source_message_update_id: source });
     const fetchMock = vi.fn();
     vi.stubGlobal("fetch", fetchMock);
     await createReceptionProfileDraft("42", "Мне 51 год, живу в Пензе", 10, same.pool);

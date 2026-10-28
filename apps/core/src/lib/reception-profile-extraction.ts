@@ -1,3 +1,10 @@
+export function receptionProfileText(value: unknown, max: number): string | null {
+  if (typeof value !== "string") return null;
+  const text = value.trim();
+  return text && text.length <= max && !/[\u0000-\u001f\u007f]/u.test(text)
+    && !/(?:^|\s)(?:или|либо)(?:\s|$)/iu.test(text) ? text : null;
+}
+
 export type ReceptionProfileDraft = {
   age: number | null;
   city: string | null;
@@ -9,7 +16,7 @@ export type ReceptionProfileDraft = {
 function one(text: string, patterns: RegExp[]): string | null {
   const values = patterns.flatMap((pattern) => [...text.matchAll(pattern)].map((match) => match[1]?.trim()).filter(Boolean));
   const unique = [...new Set(values.map((value) => value!.replace(/\s+/gu, " ")))];
-  return unique.length === 1 ? unique[0] : null;
+  return unique.length === 1 && !/(?:^|\s)(?:или|либо)(?:\s|$)/iu.test(unique[0]!) ? unique[0] : null;
 }
 
 function age(text: string): number | null {
@@ -37,14 +44,20 @@ function positional(text: string): ReceptionProfileDraft | null {
 export function extractReceptionProfile(text: string): ReceptionProfileDraft | null {
   if (typeof text !== "string" || !text.trim()) return null;
   const positionalResult = positional(text.trim());
-  if (positionalResult) return positionalResult;
   const result: ReceptionProfileDraft = {
     age: age(text),
-    city: one(text, [/(?:живу|проживаю)\s+в\s+([^,.;!?\n]+)/giu, /(?:родом)\s+из\s+([^,.;!?\n]+)/giu, /город\s*[:—-]\s*([^,.;!?\n]+)/giu]),
+    city: one(text, [/(?:живу|проживаю)\s+в\s+([^,.;!?\n]+)/giu, /город\s*[:—-]\s*([^,.;!?\n]+)/giu]),
     occupation: one(text, [/(?:работаю|занимаюсь)\s+([^,.;!?\n]+)/giu, /(?:род\s+занятий|профессия)\s*[:—-]\s*([^,.;!?\n]+)/giu]),
     education: one(text, [/образование\s*[:—-]\s*([^.;!?\n]+)/giu]),
     familyStatus: one(text, [/семейное\s+положение\s*[:—-]\s*([^.;!?\n]+)/giu,
       /(женат|замужем|холост|холоста|разведён|разведена|вдовец|вдова)/giu]),
   };
+  if (positionalResult) Object.assign(result, positionalResult);
+  // Validate independently before inserting the draft: one invalid value must
+  // not make the database reject all the other extracted fields.
+  result.city = receptionProfileText(result.city, 200);
+  result.occupation = receptionProfileText(result.occupation, 1000);
+  result.education = receptionProfileText(result.education, 500);
+  result.familyStatus = receptionProfileText(result.familyStatus, 120);
   return Object.values(result).some((value) => value !== null) ? result : null;
 }

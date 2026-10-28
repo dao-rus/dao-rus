@@ -4,6 +4,7 @@ import { appBaseUrl, telegramReceptionConfig } from "./config";
 import { readInterfaceTexts } from "./interface-texts";
 import { receptionApplicationButton } from "./reception-voice";
 import { extractReceptionProfile } from "./reception-profile-extraction";
+import { applyReceptionDraftWithClient } from "./reception-profile-apply";
 
 type ReceptionDraftFields = {
   age: number | null;
@@ -42,11 +43,12 @@ export async function createReceptionProfileDraft(
       VALUES ($1,$2,$3,$4,false,$5,$6,'draft',$7)
       ON CONFLICT (telegram_user_id) DO NOTHING RETURNING id`,
       [telegramUserId, extracted.city, extracted.occupation, extracted.age, extracted.education, extracted.familyStatus, updateId]);
-    const current = await c.query<{ id: string; status: string; source_message_update_id: number | null; draft_prompt_sent_at: Date | null; age: number | null; city: string | null; occupation: string | null; education: string | null; family_status: string | null }>(
+    const current = await c.query<{ id: string; status: string; source_message_update_id: number | string | null; draft_prompt_sent_at: Date | null; age: number | null; city: string | null; occupation: string | null; education: string | null; family_status: string | null }>(
       "SELECT id, status, source_message_update_id, draft_prompt_sent_at, age, city, occupation, education, family_status FROM reception_applications WHERE telegram_user_id=$1 FOR UPDATE",
       [telegramUserId]);
     const draft = current.rows[0];
-    if (!draft || draft.status !== "draft" || draft.draft_prompt_sent_at || (!inserted.rowCount && draft.source_message_update_id === updateId)) {
+    await applyReceptionDraftWithClient(c, telegramUserId);
+    if (!draft || draft.status !== "draft" || draft.draft_prompt_sent_at || (!inserted.rowCount && String(draft.source_message_update_id) === String(updateId))) {
       await c.query("COMMIT");
       return true;
     }

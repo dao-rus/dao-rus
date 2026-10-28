@@ -66,6 +66,15 @@ export async function inspectTelegramParticipantById(
   return (await resolveTelegramParticipantById(client, telegramUserId, false)).participantId;
 }
 
+// Existing identity only, under the same locks as identity creation. Never creates a Participant.
+export async function lockExistingTelegramParticipantById(
+  client: TelegramParticipantClient,
+  telegramUserId: string,
+): Promise<string | null> {
+  await client.query("SELECT pg_advisory_xact_lock(42006, hashtext($1::text))", [telegramUserId]);
+  return (await resolveTelegramParticipantById(client, telegramUserId, true)).participantId;
+}
+
 // Call inside the caller's transaction so identity creation and forum observation
 // either both commit or both roll back.
 export async function findOrCreateParticipantByTelegramIdWithResult(

@@ -1,6 +1,7 @@
 import { pool } from "./db";
 import { telegramReceptionConfig } from "./config";
 import { findOrCreateParticipantByTelegramId } from "./telegram-participant";
+import { applyReceptionDraftWithClient } from "./reception-profile-apply";
 
 type QueryResult = { rowCount: number | null; rows: Array<Record<string, unknown>> };
 export type ForumDatabase = {
@@ -88,6 +89,7 @@ export async function observeForumMembership(
   const client = await database.connect();
   try {
     await client.query("BEGIN");
+    await client.query("SELECT pg_advisory_xact_lock(hashtextextended($1,0))", [`reception-application:${userId}`]);
     let participantId: string;
     if (createMissingParticipant) {
       participantId = await findOrCreateParticipantByTelegramId(client, userId);
@@ -169,6 +171,18 @@ export async function observeForumMembership(
           WHERE participant_id = $1`,
         [participantId],
       );
+    }
+    if (status === "joined") {
+      // Profile extraction must not prevent membership observation or welcome.
+      // Backfill calls the strict function directly and rolls back on any conflict.
+      await client.query("SAVEPOINT reception_profile_apply");
+      try {
+        await applyReceptionDraftWithClient(client, userId);
+      } catch {
+        await client.query("ROLLBACK TO SAVEPOINT reception_profile_apply");
+        console.error("Reception profile application failed; membership observation preserved");
+      }
+      await client.query("RELEASE SAVEPOINT reception_profile_apply");
     }
     await client.query("COMMIT");
     return { participantId, changed, shouldInvite };
