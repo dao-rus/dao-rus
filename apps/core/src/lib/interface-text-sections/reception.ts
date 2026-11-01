@@ -1,5 +1,10 @@
+import { DAO_CODE_CLAUSES } from "../dao-code";
+
 // Раздел «Приёмная» реестра надписей интерфейса.
+const hubAdmissionMessage = `${DAO_CODE_CLAUSES.map((clause) => `${clause.number}. ${clause.text}`).join("\n\n")}\n\nПринятие правил означает согласие соблюдать их в этом хабе. Это не вступление в ДАО Русь и не создаёт членства в ДАО.\n\nВы принимаете эти правила?\n\nЕсли сообщение не открылось, перейдите в личный диалог с @Daorus_bot и отправьте /start hub.`;
+
 export const receptionTexts = [
+  { section: "Приёмная", key: "reception.hub.admission_message", label: "Сообщение при заявке на вступление в хаб", defaultValue: hubAdmissionMessage, multiline: true, pageLabel: "Telegram-хабы" },
   { section: "Приёмная", key: "reception.apply.title", label: "Заголовок анкеты", defaultValue: "Анкета кандидата", multiline: false, pageHref: "/reception/apply", pageLabel: "Анкета" },
   { section: "Приёмная", key: "reception.admin.title", label: "Журнал заявок", defaultValue: "Заявки", multiline: false, pageHref: "/admin/reception", pageLabel: "Заявки" },
   { section: "Приёмная", key: "reception.invitation.title", label: "Раздел приглашения", defaultValue: "Приглашение", multiline: false, pageHref: "/admin/reception", pageLabel: "Заявки" },
