@@ -7,7 +7,7 @@ type VoteOutcome = "open" | "passed" | "rejected" | "cancelled";
 /**
  * Creates an exclusion vote with a frozen electorate, including the target
  * if the target is a registered hub member. No Telegram action is taken.
- * Caller must separately verify that three mutes occurred within 30 days.
+ * Requires three recorded mutes in the last 30 days before opening.
  */
 export async function openHubExclusionVote(hub: string, target: string): Promise<string> {
   if (!hubId(hub) || !userId(target)) throw new Error("Invalid hub or target");
@@ -22,6 +22,17 @@ export async function openHubExclusionVote(hub: string, target: string): Promise
       await client.query("COMMIT");
       return String(existing.rows[0].id);
     }
+    const eligibility = await client.query(
+      `SELECT COUNT(*)::int AS mutes FROM telegram_hub_moderation_events
+       WHERE hub_id=$1 AND target_user_id=$2 AND kind='mute'
+         AND created_at >= now() - interval '30 days'`, [hub,target]);
+    if (Number(eligibility.rows[0]?.mutes ?? 0) < 3) {
+      throw new Error("Three mutes within 30 days are required");
+    }
+    const targetMembership = await client.query(
+      `SELECT 1 FROM telegram_hub_memberships
+       WHERE hub_id=$1 AND telegram_user_id=$2`, [hub,target]);
+    if (!targetMembership.rowCount) throw new Error("Target is not a hub member");
     const electorate = await client.query(
       `SELECT m.telegram_user_id FROM telegram_hub_memberships m
        JOIN telegram_hubs h ON h.id=m.hub_id AND h.enabled
