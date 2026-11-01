@@ -49,12 +49,17 @@ export async function openHubExclusionVote(hub: string, target: string): Promise
        VALUES ($1,$2,now()+interval '7 days',$3) RETURNING id`,
       [hub,target,electorate.rowCount]);
     const voteId = String(inserted.rows[0].id);
-    await client.query(
+    const frozen = await client.query(
       `INSERT INTO telegram_hub_exclusion_electorate(vote_id,telegram_user_id)
        SELECT $1::uuid, m.telegram_user_id
        FROM telegram_hub_memberships m
        JOIN telegram_hubs h ON h.id=m.hub_id AND h.enabled
        WHERE m.hub_id=$2`, [voteId,hub]);
+    // Membership may change between the count and insertion. Never store
+    // a majority threshold that differs from the actual frozen electorate.
+    if (frozen.rowCount !== electorate.rowCount) {
+      throw new Error("Hub membership changed while opening the vote; retry");
+    }
     await client.query("COMMIT");
     return voteId;
   } catch (error) {
