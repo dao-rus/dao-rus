@@ -271,7 +271,7 @@ describe("public subject profile name", () => {
     expect(findProps(page, props => props.action === "/api/communication-reputation")).toBeNull();
   });
 
-  it("shows an unrated communication reputation and offers only the available actions", async () => {
+  it("shows an unrated communication reputation as read-only", async () => {
     const page = await SubjectProfilePage({
       params: Promise.resolve({ participantId: rosterProfile.subjectId }), searchParams: Promise.resolve({}),
     });
@@ -282,27 +282,28 @@ describe("public subject profile name", () => {
     expect(text).toContain("Репутация общения:");
     expect(text).toContain("Пока не оценён");
     expect(text).toContain("Оценивается соблюдение норм общения, а не общительность или согласие с мнением человека");
-    expect(text).toContain("Положительно");
-    expect(text).toContain("Отрицательно");
+    expect(text).toContain("Показатель формируется автоматически из 👍 и 👎 в Telegram-хабе.");
+    expect(text).not.toContain("Положительно");
+    expect(text).not.toContain("Отрицательно");
     expect(text).not.toContain("Отозвать оценку");
-    expect(findProps(page, props => props.action === "/api/communication-reputation")).not.toBeNull();
+    expect(findProps(page, props => props.action === "/api/communication-reputation")).toBeNull();
   });
 
-  it("shows the clamped public score, only the viewer's own rating, and clear action feedback", async () => {
+  it("shows only the clamped public score, without rating actions or hidden balance details", async () => {
     mocks.getCommunicationSummary.mockResolvedValue({ score: 0, hasRatings: true, viewerSignal: "negative" });
     const page = await SubjectProfilePage({
       params: Promise.resolve({ participantId: rosterProfile.subjectId }),
-      searchParams: Promise.resolve({ communication_action: "changed" }),
+      searchParams: Promise.resolve({}),
     });
     const text = textContent(page);
     expect(text).toMatch(/Репутация общения:\s+0/);
-    expect(text).toMatch(/Ваша текущая оценка:\s+Отрицательно/);
-    expect(text).toContain("Ваша оценка общения изменена.");
-    expect(text).toContain("Положительно");
-    expect(text).toContain("Отозвать оценку");
+    expect(text).toContain("Показатель формируется автоматически из 👍 и 👎 в Telegram-хабе.");
+    expect(text).not.toContain("Ваша текущая оценка");
+    expect(text).not.toContain("Отрицательно");
+    expect(text).not.toContain("Отозвать оценку");
     expect(text).not.toContain("внутренний баланс");
     expect(text).not.toContain("автор отрицательной оценки");
-    expect(findProps(page, props => props.action === "/api/communication-reputation")).not.toBeNull();
+    expect(findProps(page, props => props.action === "/api/communication-reputation")).toBeNull();
   });
 
   it("shows the actual ledger reward after a new attestation", async () => {

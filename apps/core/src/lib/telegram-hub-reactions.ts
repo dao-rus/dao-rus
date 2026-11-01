@@ -102,18 +102,51 @@ export async function observeHubReaction(update: unknown): Promise<void> {
           `, [hub, String(actor.id), target.rows[0].telegram_user_id]);
           if (identities.rowCount && identities.rows[0].actor_id !== identities.rows[0].subject_id) {
             const { actor_id: actorId, subject_id: subjectId } = identities.rows[0];
-            // Serialize all hubs/messages of this directed pair before reading/updating balance.
-            await client.query("SELECT pg_advisory_xact_lock(hashtextextended($1, 0))",
-              [`communication:${actorId}:${subjectId}`]);
+            // Keep a durable, globally ordered transition ledger. Applying a
+            // saturating +/-1 directly here would make the result depend on
+            // webhook lock acquisition order across messages and hubs.
             const delta = value === "👍" ? 1 : -1;
-            await client.query(`
-              INSERT INTO communication_reaction_balances
-                (actor_participant_id,subject_participant_id,balance)
-              VALUES ($1::uuid,$2::uuid,$3)
-              ON CONFLICT (actor_participant_id,subject_participant_id)
-              DO UPDATE SET balance=GREATEST(-1,LEAST(1,communication_reaction_balances.balance+$3)),
-                            updated_at=clock_timestamp()
-            `, [actorId, subjectId, delta]);
+            const recorded = await client.query(`
+              INSERT INTO communication_reaction_events
+                (telegram_update_id,hub_id,message_id,actor_participant_id,subject_participant_id,delta)
+              VALUES ($1,$2,$3,$4::uuid,$5::uuid,$6)
+              ON CONFLICT (telegram_update_id) DO NOTHING
+              RETURNING telegram_update_id
+            `, [root.update_id, hub, reaction.message_id, actorId, subjectId, delta]);
+            if (recorded.rowCount) {
+              await client.query("SELECT pg_advisory_xact_lock(hashtextextended($1, 0))",
+                [`communication:${actorId}:${subjectId}`]);
+              const balanceRow = await client.query(`
+                SELECT balance,last_telegram_update_id FROM communication_reaction_balances
+                WHERE actor_participant_id=$1::uuid AND subject_participant_id=$2::uuid
+                FOR UPDATE
+              `, [actorId, subjectId]);
+              let balance: number;
+              let lastUpdateId = root.update_id;
+              if (!balanceRow.rowCount || root.update_id > Number(balanceRow.rows[0].last_telegram_update_id)) {
+                balance = Math.max(-1, Math.min(1, Number(balanceRow.rows[0]?.balance ?? 0) + delta));
+              } else {
+                // A lower update_id committed late. Re-fold this pair in Telegram
+                // order because saturating addition is not commutative.
+                const transitions = await client.query(`
+                  SELECT telegram_update_id,delta FROM communication_reaction_events
+                  WHERE actor_participant_id=$1::uuid AND subject_participant_id=$2::uuid
+                  ORDER BY telegram_update_id
+                `, [actorId, subjectId]);
+                balance = transitions.rows.reduce((current, row) =>
+                  Math.max(-1, Math.min(1, current + Number(row.delta))), 0);
+                lastUpdateId = Math.max(...transitions.rows.map((row) => Number(row.telegram_update_id)));
+              }
+              await client.query(`
+                INSERT INTO communication_reaction_balances
+                  (actor_participant_id,subject_participant_id,balance,last_telegram_update_id)
+                VALUES ($1::uuid,$2::uuid,$3,$4)
+                ON CONFLICT (actor_participant_id,subject_participant_id)
+                DO UPDATE SET balance=EXCLUDED.balance,
+                              last_telegram_update_id=EXCLUDED.last_telegram_update_id,
+                              updated_at=clock_timestamp()
+              `, [actorId, subjectId, balance, lastUpdateId]);
+            }
           }
         }
       }

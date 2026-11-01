@@ -28,7 +28,7 @@ export const metadata: Metadata = { title: "Профиль участника" }
 
 type SubjectProfilePageProps = {
   params: Promise<{ participantId: string }>;
-  searchParams: Promise<{ verification_action?: string; verification_reward?: string; verification_root?: string; reputation_action?: string; reputation_signal?: string; communication_action?: string }>;
+  searchParams: Promise<{ verification_action?: string; verification_reward?: string; verification_root?: string; reputation_action?: string; reputation_signal?: string }>;
 };
 
 const actionMessages: Record<string, string> = {
