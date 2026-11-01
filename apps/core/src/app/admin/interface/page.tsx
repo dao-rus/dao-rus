@@ -21,6 +21,7 @@ const updateMessages: Record<string, string> = {
 };
 
 const sections = [...new Set(interfaceTextFields.map((field) => field.section))];
+const sectionAnchor = (index: number) => `interface-section-${index + 1}`;
 
 export default async function InterfacePage({ searchParams }: InterfacePageProps) {
   const participant = await getCurrentParticipant();
@@ -53,9 +54,18 @@ export default async function InterfacePage({ searchParams }: InterfacePageProps
           </p>
         ) : null}
 
+        <nav aria-label="Разделы текстов интерфейса" style={{ marginBottom: "1.5rem" }}>
+          <p className="muted">Перейти к разделу:</p>
+          <div style={{ display: "flex", flexWrap: "wrap", gap: "0.5rem 1rem" }}>
+            {sections.map((section, index) => (
+              <a key={section} href={`#${sectionAnchor(index)}`}>{section}</a>
+            ))}
+          </div>
+        </nav>
+
         <form className="interfaceForm" action="/api/admin/interface" method="post">
-          {sections.map((section) => (
-            <section className="interfaceSection" key={section}>
+          {sections.map((section, index) => (
+            <section className="interfaceSection" id={sectionAnchor(index)} key={section} style={{ scrollMarginTop: "1rem" }}>
               <h2>{section}</h2>
               {interfaceTextFields.filter((field) => field.section === section).map((field) => (
                 <div className="interfaceField" key={field.key}>
