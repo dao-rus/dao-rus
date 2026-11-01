@@ -18,11 +18,11 @@ export async function observeHubMessage(update: unknown): Promise<boolean> {
   // A configured hub is a hub even when the sender is not in the admission registry.
   // Never route its messages to the private reception relay.
   const hub = await pool.query(
-    `SELECT id FROM telegram_hubs WHERE chat_id=$1 AND enabled`,
+    `SELECT id,enabled FROM telegram_hubs WHERE chat_id=$1`,
     [String(chat.id)],
   );
   if (!hub.rowCount) return false;
-  if (id(message?.message_id) && id(author?.id) && author?.is_bot !== true) {
+  if (hub.rows[0].enabled && id(message?.message_id) && id(author?.id) && author?.is_bot !== true) {
     await pool.query(`
       INSERT INTO telegram_hub_message_authors(hub_id,message_id,telegram_user_id)
       VALUES ($1,$2,$3) ON CONFLICT DO NOTHING
