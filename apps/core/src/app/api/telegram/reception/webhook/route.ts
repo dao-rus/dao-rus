@@ -68,7 +68,9 @@ export async function POST(request: NextRequest) {
       typeof from?.id === "number" && Number.isSafeInteger(from.id) && chat.id === from.id &&
       await handleHubStart(String(from.id))) return NextResponse.json({ ok: true, status: "hub_admission" });
   if (message) {
-    await observeHubMessage(update);
+    if (await observeHubMessage(update)) {
+      return NextResponse.json({ ok: true, status: "hub_message" });
+    }
     // Keep the update queued at Telegram if the relay was not configured yet.
     if (!token || !topicId) return new NextResponse("Reception relay is not configured", { status: 503 });
     const status = await relayReceptionUpdate(update);
