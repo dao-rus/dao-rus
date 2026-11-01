@@ -14,21 +14,21 @@ export async function observeHubMessage(update: unknown): Promise<boolean> {
   const message = object(object(update)?.message);
   const chat = object(message?.chat);
   const author = object(message?.from);
-  if (!chatId(chat?.id) || !id(message?.message_id) || !id(author?.id) || author?.is_bot === true) return false;
-  const result = await pool.query(`
-    INSERT INTO telegram_hub_message_authors(hub_id, message_id, telegram_user_id)
-    SELECT h.id, $2, $3 FROM telegram_hubs h
-    JOIN telegram_hub_memberships m ON m.hub_id=h.id AND m.telegram_user_id=$3
-    WHERE h.chat_id=$1 AND h.enabled
-    ON CONFLICT DO NOTHING
-    RETURNING hub_id
-  `, [String(chat.id), message.message_id, String(author.id)]);
-  if (result.rowCount) return true;
-  const existing = await pool.query(`SELECT 1 FROM telegram_hub_message_authors a
-    JOIN telegram_hubs h ON h.id=a.hub_id
-    WHERE h.chat_id=$1 AND a.message_id=$2 AND a.telegram_user_id=$3`,
-    [String(chat.id), message.message_id, String(author.id)]);
-  return Boolean(existing.rowCount);
+  if (!chatId(chat?.id)) return false;
+  // A configured hub is a hub even when the sender is not in the admission registry.
+  // Never route its messages to the private reception relay.
+  const hub = await pool.query(
+    `SELECT id FROM telegram_hubs WHERE chat_id=$1 AND enabled`,
+    [String(chat.id)],
+  );
+  if (!hub.rowCount) return false;
+  if (id(message?.message_id) && id(author?.id) && author?.is_bot !== true) {
+    await pool.query(`
+      INSERT INTO telegram_hub_message_authors(hub_id,message_id,telegram_user_id)
+      VALUES ($1,$2,$3) ON CONFLICT DO NOTHING
+    `, [hub.rows[0].id, message.message_id, String(author.id)]);
+  }
+  return true;
 }
 
 /**
