@@ -37,7 +37,9 @@ export async function setCommunicationSignalWithDatabase(
       return "unchanged";
     }
     if (previous) {
-      await client.query("UPDATE reputation_signals SET revoked_at=now() WHERE id=$1::uuid", [previous.id]);
+      // now() is fixed at transaction start and may predate a signal created
+      // while this transaction waited on the actor row lock.
+      await client.query("UPDATE reputation_signals SET revoked_at=GREATEST(clock_timestamp(),created_at) WHERE id=$1::uuid", [previous.id]);
     }
     const inserted = action === "revoke" ? null : await client.query(`
       INSERT INTO reputation_signals(actor_participant_id,subject_participant_id,dimension,signal_type)
