@@ -9,6 +9,7 @@ const mocks = vi.hoisted(() => ({
   getVerificationProfile: vi.fn(),
   getVisibleProfileAbout: vi.fn(),
   getReputationSummary: vi.fn(),
+  getCommunicationSummary: vi.fn(),
   getVerificationRewardForFeedback: vi.fn(),
   hasPrototypeAdminAccess: vi.fn(),
   redirect: vi.fn(),
@@ -28,6 +29,7 @@ vi.mock("@/lib/profile-about", () => ({
   residenceDirectoryHref: () => "/participants?residence_name=Kazan",
 }));
 vi.mock("@/lib/reputation", () => ({ getReputationSummary: mocks.getReputationSummary }));
+vi.mock("@/lib/communication-reputation", () => ({ getCommunicationSummary: mocks.getCommunicationSummary }));
 vi.mock("@/lib/tokenization", () => ({
   getVerificationRewardForFeedback: mocks.getVerificationRewardForFeedback,
   formatDarusAmount: (amount: string) => amount === "0.100000" ? "0,1" : amount,
@@ -93,6 +95,18 @@ function ids(node: ReactNode): string[] {
   return [...(props.id ? [props.id] : []), ...ids(props.children)];
 }
 
+function findProps(node: ReactNode, matches: (props: Record<string, unknown>) => boolean): Record<string, unknown> | null {
+  if (Array.isArray(node)) {
+    for (const child of node) {
+      const found = findProps(child, matches);
+      if (found) return found;
+    }
+  }
+  if (!isValidElement(node)) return null;
+  const props = node.props as Record<string, unknown>;
+  return matches(props) ? props : findProps(props.children as ReactNode, matches);
+}
+
 function hasCelebration(node: ReactNode): boolean {
   if (Array.isArray(node)) return node.some(hasCelebration);
   if (!isValidElement(node)) return false;
@@ -123,6 +137,7 @@ describe("public subject profile name", () => {
       signals: [],
     });
     mocks.getReputationSummary.mockResolvedValue({ positiveCount: 2, viewerSignal: null });
+    mocks.getCommunicationSummary.mockResolvedValue({ score: 0, hasRatings: false, viewerSignal: null });
     mocks.getProfileTimeline.mockResolvedValue({ joinedAt: null, leftForumAt: null, leftDaoAt: null });
   });
 
@@ -252,6 +267,43 @@ describe("public subject profile name", () => {
       searchParams: Promise.resolve({}),
     });
     expect(textContent(page)).not.toContain("Опыт взаимодействия");
+    expect(textContent(page)).toContain("Репутация общения");
+    expect(findProps(page, props => props.action === "/api/communication-reputation")).toBeNull();
+  });
+
+  it("shows an unrated communication reputation as read-only", async () => {
+    const page = await SubjectProfilePage({
+      params: Promise.resolve({ participantId: rosterProfile.subjectId }), searchParams: Promise.resolve({}),
+    });
+    const text = textContent(page);
+    expect(mocks.getCommunicationSummary).toHaveBeenCalledWith(
+      rosterProfile.subjectId, "10000000-0000-4000-8000-000000000001",
+    );
+    expect(text).toContain("Репутация общения:");
+    expect(text).toContain("Пока не оценён");
+    expect(text).toContain("Оценивается соблюдение норм общения, а не общительность или согласие с мнением человека");
+    expect(text).toContain("Показатель формируется автоматически из 👍 и 👎 в Telegram-хабе.");
+    expect(text).not.toContain("Положительно");
+    expect(text).not.toContain("Отрицательно");
+    expect(text).not.toContain("Отозвать оценку");
+    expect(findProps(page, props => props.action === "/api/communication-reputation")).toBeNull();
+  });
+
+  it("shows only the clamped public score, without rating actions or hidden balance details", async () => {
+    mocks.getCommunicationSummary.mockResolvedValue({ score: 0, hasRatings: true, viewerSignal: "negative" });
+    const page = await SubjectProfilePage({
+      params: Promise.resolve({ participantId: rosterProfile.subjectId }),
+      searchParams: Promise.resolve({}),
+    });
+    const text = textContent(page);
+    expect(text).toMatch(/Репутация общения:\s+0/);
+    expect(text).toContain("Показатель формируется автоматически из 👍 и 👎 в Telegram-хабе.");
+    expect(text).not.toContain("Ваша текущая оценка");
+    expect(text).not.toContain("Отрицательно");
+    expect(text).not.toContain("Отозвать оценку");
+    expect(text).not.toContain("внутренний баланс");
+    expect(text).not.toContain("автор отрицательной оценки");
+    expect(findProps(page, props => props.action === "/api/communication-reputation")).toBeNull();
   });
 
   it("shows the actual ledger reward after a new attestation", async () => {

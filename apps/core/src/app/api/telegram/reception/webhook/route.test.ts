@@ -4,6 +4,8 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 const mocks = vi.hoisted(() => ({
   checkForumAndInvite: vi.fn(),
   observeForumMemberUpdate: vi.fn(),
+  observeHubMessage: vi.fn(),
+  observeHubReaction: vi.fn(),
   relayReceptionUpdate: vi.fn(),
   start: vi.fn(), relayed: vi.fn(), joined: vi.fn(), announce: vi.fn(),
 }));
@@ -20,6 +22,10 @@ vi.mock("@/lib/config", () => ({
 vi.mock("@/lib/telegram-forum-onboarding", () => ({
   checkForumAndInvite: mocks.checkForumAndInvite,
   observeForumMemberUpdate: mocks.observeForumMemberUpdate,
+}));
+vi.mock("@/lib/telegram-hub-reactions", () => ({
+  observeHubMessage: mocks.observeHubMessage,
+  observeHubReaction: mocks.observeHubReaction,
 }));
 vi.mock("@/lib/telegram-reception-relay", () => ({ relayReceptionUpdate: mocks.relayReceptionUpdate }));
 

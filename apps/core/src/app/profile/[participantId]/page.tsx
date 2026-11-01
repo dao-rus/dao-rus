@@ -11,6 +11,7 @@ import { ParticipantName } from "../../../components/participant-name";
 import { getVisibleProfileAbout, residenceDirectoryHref, residenceLabel } from "@/lib/profile-about";
 import { communityHref } from "../../../lib/communities";
 import { getReputationSummary } from "@/lib/reputation";
+import { getCommunicationSummary } from "@/lib/communication-reputation";
 import { getCurrentParticipant } from "@/lib/session";
 import { formatDarusAmount, getVerificationRewardForFeedback } from "@/lib/tokenization";
 import { getVerificationProfile, verificationConfirmationLabel } from "@/lib/verification";
@@ -68,6 +69,7 @@ export default async function SubjectProfilePage({ params, searchParams }: Subje
       : Promise.resolve(null),
     getProfileTimeline(profile.subjectId).catch(() => ({ joinedAt: null, leftForumAt: null, leftDaoAt: null })),
   ]);
+  const communicationReputation = await getCommunicationSummary(profile.subjectId, viewer.id);
 
   const awardBadges = await getAwardBadges([profile.subjectId]);
   const ownProfile = viewer.id === profile.subjectId;
@@ -203,6 +205,14 @@ export default async function SubjectProfilePage({ params, searchParams }: Subje
               {reputationMessage ? <p className="formNotice" role="status">{reputationMessage}</p> : null}
             </div>
           ) : null}
+
+          <div className="publicTrustPart communicationReputation" aria-labelledby="communication-reputation">
+            <p className="publicTrustRow"><span id="communication-reputation">Репутация общения:</span>{" "}
+              <strong>{communicationReputation.hasRatings ? communicationReputation.score : "Пока не оценён"}</strong>
+            </p>
+            <p className="muted">Оценивается соблюдение норм общения, а не общительность или согласие с мнением человека.</p>
+            <p className="muted">Показатель формируется автоматически из 👍 и 👎 в Telegram-хабе.</p>
+          </div>
 
           <div className="publicTrustPart">
             <p className="publicTrustRow">

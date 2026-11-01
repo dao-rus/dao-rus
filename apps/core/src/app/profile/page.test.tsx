@@ -12,6 +12,7 @@ const mocks = vi.hoisted(() => ({
   readInterfaceTexts: vi.fn(),
   getDarusBalance: vi.fn(),
   getReputationSummary: vi.fn(),
+  getCommunicationSummary: vi.fn(),
 }));
 
 vi.mock("@/lib/session", () => ({ getCurrentParticipant: mocks.getCurrentParticipant }));
@@ -30,13 +31,17 @@ vi.mock("@/lib/profile-about", () => ({
   residenceLabel: ({ name, country }: { name: string; country: string }) => `${name}, ${country}`,
   residenceDirectoryHref: () => "/participants?residence_name=Kazan",
 }));
-vi.mock("@/lib/interface-texts", () => ({ readInterfaceTexts: mocks.readInterfaceTexts }));
+vi.mock("@/lib/interface-texts", async (importOriginal) => ({
+  ...await importOriginal<typeof import("@/lib/interface-texts")>(),
+  readInterfaceTexts: mocks.readInterfaceTexts,
+}));
 vi.mock("@/lib/tokenization", () => ({
   getDarusBalance: mocks.getDarusBalance,
   formatDarusAmount: (amount: string) => amount,
 }));
 vi.mock("@/lib/forum-join-history", () => ({ getForumJoinDate: async () => null }));
 vi.mock("@/lib/reputation", () => ({ getReputationSummary: mocks.getReputationSummary }));
+vi.mock("@/lib/communication-reputation", () => ({ getCommunicationSummary: mocks.getCommunicationSummary }));
 vi.mock("@/lib/config", () => ({ hasPrototypeAdminAccess: () => false, isParticipantsDirectoryEnabled: () => false, telegramReceptionConfig: () => ({
   token: "token", webhookSecret: "secret", forumChatId: "-100", forumInviteUrl: "https://t.me/c/1", botUsername: "Daorus_bot",
 }) }));
@@ -101,6 +106,7 @@ describe("/profile copy", () => {
     } });
     mocks.getDarusBalance.mockResolvedValue("0.100000");
     mocks.getReputationSummary.mockResolvedValue({ positiveCount: 2, viewerSignal: null });
+    mocks.getCommunicationSummary.mockResolvedValue({ score: 0, hasRatings: false, viewerSignal: null });
 
     const page = await ProfilePage({ searchParams: Promise.resolve({}) });
     const text = textContent(page);
@@ -129,6 +135,9 @@ describe("/profile copy", () => {
     expect(text).toContain("0.100000");
     expect(text).toContain("История начислений");
     expect(text).toMatch(/Положительных сигналов:\s+2/);
+    expect(text).toContain("Репутация общения");
+    expect(text).toContain("Пока не оценён");
+    expect(text).toContain("Оценивается соблюдение норм общения, а не общительность или согласие с мнением человека");
     expect(text).toContain("Сохранить профиль");
     expect(text).not.toContain("Открыть Приёмную ДАО Русь");
     expect(findProps(page, (props) => props.href === "https://t.me/Daorus_bot?start=core")).toBeNull();
