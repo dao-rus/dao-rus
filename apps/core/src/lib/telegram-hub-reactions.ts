@@ -68,18 +68,55 @@ export async function observeHubReaction(update: unknown): Promise<void> {
     if (target.rowCount && target.rows[0].telegram_user_id !== String(actor.id)) {
       const hub = target.rows[0].hub_id as string;
       // Persist removals as tombstones. Ignore older events even if delivered later.
-      await client.query(`
-        INSERT INTO telegram_hub_reactions
-          (hub_id,message_id,message_author_id,reactor_id,reaction,event_date,telegram_update_id)
-        VALUES ($1,$2,$3,$4,$5,$6,$7)
-        ON CONFLICT (hub_id,message_id,reactor_id)
-        DO UPDATE SET reaction=EXCLUDED.reaction,
-                      event_date=EXCLUDED.event_date,
-                      telegram_update_id=EXCLUDED.telegram_update_id,
-                      updated_at=now()
-        WHERE telegram_hub_reactions.telegram_update_id < EXCLUDED.telegram_update_id
-      `, [hub, reaction.message_id, target.rows[0].telegram_user_id,
-          String(actor.id), value, reaction.date, root.update_id]);
+      // Snapshot the previous state while holding the message/actor advisory lock.
+      // A repeated delivery or a new update with unchanged reaction is not a new vote.
+      const previous = await client.query(`
+        SELECT reaction, telegram_update_id FROM telegram_hub_reactions
+        WHERE hub_id=$1 AND message_id=$2 AND reactor_id=$3
+      `, [hub, reaction.message_id, String(actor.id)]);
+      const oldState = previous.rows[0];
+      const fresh = !oldState || Number(oldState.telegram_update_id) < root.update_id;
+      if (fresh) {
+        await client.query(`
+          INSERT INTO telegram_hub_reactions
+            (hub_id,message_id,message_author_id,reactor_id,reaction,event_date,telegram_update_id)
+          VALUES ($1,$2,$3,$4,$5,$6,$7)
+          ON CONFLICT (hub_id,message_id,reactor_id)
+          DO UPDATE SET reaction=EXCLUDED.reaction,
+                        event_date=EXCLUDED.event_date,
+                        telegram_update_id=EXCLUDED.telegram_update_id,
+                        updated_at=now()
+          WHERE telegram_hub_reactions.telegram_update_id < EXCLUDED.telegram_update_id
+        `, [hub, reaction.message_id, target.rows[0].telegram_user_id,
+            String(actor.id), value, reaction.date, root.update_id]);
+
+        // Explicit opt-in: no historical backfill and no automatic activation on deploy.
+        if (process.env.TELEGRAM_COMMUNICATION_REPUTATION_ENABLED === "true" &&
+            value !== null && oldState?.reaction !== value) {
+          const identities = await client.query(`
+            SELECT reactor.participant_id AS actor_id, author.participant_id AS subject_id
+            FROM telegram_hub_memberships reactor
+            JOIN telegram_hub_memberships author ON author.hub_id=reactor.hub_id
+              AND author.telegram_user_id=$3
+            WHERE reactor.hub_id=$1 AND reactor.telegram_user_id=$2
+          `, [hub, String(actor.id), target.rows[0].telegram_user_id]);
+          if (identities.rowCount && identities.rows[0].actor_id !== identities.rows[0].subject_id) {
+            const { actor_id: actorId, subject_id: subjectId } = identities.rows[0];
+            // Serialize all hubs/messages of this directed pair before reading/updating balance.
+            await client.query("SELECT pg_advisory_xact_lock(hashtextextended($1, 0))",
+              [`communication:${actorId}:${subjectId}`]);
+            const delta = value === "👍" ? 1 : -1;
+            await client.query(`
+              INSERT INTO communication_reaction_balances
+                (actor_participant_id,subject_participant_id,balance)
+              VALUES ($1::uuid,$2::uuid,$3)
+              ON CONFLICT (actor_participant_id,subject_participant_id)
+              DO UPDATE SET balance=GREATEST(-1,LEAST(1,communication_reaction_balances.balance+$3)),
+                            updated_at=clock_timestamp()
+            `, [actorId, subjectId, delta]);
+          }
+        }
+      }
     }
     await client.query("COMMIT");
   } catch (error) {
