@@ -25,7 +25,12 @@ export async function openHubExclusionVote(hub: string, target: string): Promise
     const eligibility = await client.query(
       `SELECT COUNT(*)::int AS mutes FROM telegram_hub_moderation_events
        WHERE hub_id=$1 AND target_user_id=$2 AND kind='mute'
-         AND created_at >= now() - interval '30 days'`, [hub,target]);
+         AND created_at >= now() - interval '30 days'
+         AND created_at > COALESCE(
+           (SELECT MAX(opened_at) FROM telegram_hub_exclusion_votes
+            WHERE hub_id=$1 AND target_user_id=$2),
+           '-infinity'::timestamptz
+         )`, [hub,target]);
     if (Number(eligibility.rows[0]?.mutes ?? 0) < 3) {
       throw new Error("Three mutes within 30 days are required");
     }
