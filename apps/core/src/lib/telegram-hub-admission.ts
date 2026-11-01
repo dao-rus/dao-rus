@@ -1,7 +1,8 @@
 import { pool } from "./db";
 import { telegramReceptionConfig } from "./config";
 import { findOrCreateParticipantByTelegramId } from "./telegram-participant";
-import { DAO_CODE_CLAUSES, DAO_CODE_VERSION } from "./dao-code";
+import { DAO_CODE_VERSION } from "./dao-code";
+import { readInterfaceTextsWithDatabase } from "./interface-texts";
 
 type Row = Record<string, unknown>;
 type Result = { rowCount: number | null; rows: Row[] };
@@ -34,8 +35,9 @@ function validTelegramId(value: unknown): value is number {
   return typeof value === "number" && Number.isSafeInteger(value) && value > 0;
 }
 
-function admissionText(): string {
-  return `${DAO_CODE_CLAUSES.map((clause) => `${clause.number}. ${clause.text}`).join("\n\n")}\n\nПринятие правил означает согласие соблюдать их в этом хабе. Это не вступление в ДАО Русь и не создаёт членства в ДАО.\n\nВы принимаете эти правила?`;
+async function admissionText(database: HubAdmissionDatabase): Promise<string> {
+  const { values } = await readInterfaceTextsWithDatabase(database);
+  return values["reception.hub.admission_message"];
 }
 
 export async function receiveHubJoinRequest(
@@ -69,11 +71,9 @@ export async function receiveHubJoinRequest(
   if (!requestRow) return "duplicate";
   if (requestRow.telegram_user_id !== undefined && requestRow.telegram_user_id !== String(userId)) return "duplicate";
   const id = String(requestRow.id);
-  const { botUsername } = telegramReceptionConfig();
-  const fallback = botUsername ? `\n\nЕсли сообщение не открылось, перейдите в личный диалог с @${botUsername} и отправьте /start hub.` : "";
   const params = {
     chat_id: userChatId,
-    text: admissionText() + fallback,
+    text: await admissionText(database),
     reply_markup: { inline_keyboard: [[
       { text: "Принимаю", callback_data: `ha:yes:${id}` },
       { text: "Не принимаю", callback_data: `ha:no:${id}` },
@@ -192,7 +192,7 @@ export async function handleHubStart(
   );
   if (!pending.rowCount) return false;
   const id = String(pending.rows[0].id);
-  await bot("sendMessage", { chat_id: Number(telegramUserId), text: admissionText(), reply_markup: { inline_keyboard: [[
+  await bot("sendMessage", { chat_id: Number(telegramUserId), text: await admissionText(database), reply_markup: { inline_keyboard: [[
     { text: "Принимаю", callback_data: `ha:yes:${id}` },
     { text: "Не принимаю", callback_data: `ha:no:${id}` },
   ]] } });
