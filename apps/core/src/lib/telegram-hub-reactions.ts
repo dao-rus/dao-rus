@@ -37,12 +37,14 @@ export async function observeHubMessage(update: unknown): Promise<boolean> {
  * This stage only persists reactions; it does not apply moderation sanctions.
  */
 export async function observeHubReaction(update: unknown): Promise<void> {
-  const reaction = object(object(update)?.message_reaction);
+  const root = object(update);
+  const reaction = object(root?.message_reaction);
   const chat = object(reaction?.chat);
   const actor = object(reaction?.user);
   if (!chatId(chat?.id) || !id(reaction?.message_id) || !id(actor?.id) || actor?.is_bot === true ||
       !Array.isArray(reaction?.new_reaction) || typeof reaction?.date !== "number" ||
-      !Number.isSafeInteger(reaction.date) || reaction.date <= 0) return;
+      !Number.isSafeInteger(reaction.date) || reaction.date <= 0 ||
+      typeof root?.update_id !== "number" || !Number.isSafeInteger(root.update_id) || root.update_id < 0) return;
   const selected = reaction.new_reaction
     .map((item: unknown) => object(item))
     .filter((item: Obj | null) => item?.type === "emoji")
@@ -68,15 +70,16 @@ export async function observeHubReaction(update: unknown): Promise<void> {
       // Persist removals as tombstones. Ignore older events even if delivered later.
       await client.query(`
         INSERT INTO telegram_hub_reactions
-          (hub_id,message_id,message_author_id,reactor_id,reaction,event_date)
-        VALUES ($1,$2,$3,$4,$5,$6)
+          (hub_id,message_id,message_author_id,reactor_id,reaction,event_date,telegram_update_id)
+        VALUES ($1,$2,$3,$4,$5,$6,$7)
         ON CONFLICT (hub_id,message_id,reactor_id)
         DO UPDATE SET reaction=EXCLUDED.reaction,
                       event_date=EXCLUDED.event_date,
+                      telegram_update_id=EXCLUDED.telegram_update_id,
                       updated_at=now()
-        WHERE telegram_hub_reactions.event_date < EXCLUDED.event_date
+        WHERE telegram_hub_reactions.telegram_update_id < EXCLUDED.telegram_update_id
       `, [hub, reaction.message_id, target.rows[0].telegram_user_id,
-          String(actor.id), value, reaction.date]);
+          String(actor.id), value, reaction.date, root.update_id]);
     }
     await client.query("COMMIT");
   } catch (error) {
