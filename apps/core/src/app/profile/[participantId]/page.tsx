@@ -90,14 +90,6 @@ export default async function SubjectProfilePage({ params, searchParams }: Subje
     self: "Нельзя оценивать себя.",
     invalid: "Не удалось сохранить оценку.",
   } as Record<string, string>)[query.reputation_action] : null;
-  const communicationMessage = query.communication_action ? ({
-    created: "Ваша оценка общения сохранена.",
-    changed: "Ваша оценка общения изменена.",
-    revoked: "Ваша оценка общения отозвана.",
-    unchanged: "Оценка общения не изменилась.",
-    self: "Нельзя оценивать себя.",
-    invalid: "Не удалось сохранить оценку общения.",
-  } as Record<string, string>)[query.communication_action] : null;
 
   // Before their own login a person is shown by the name they gave themselves in Telegram;
   // a roster name may be the exporter's contact label and never appears here. A profile restored
@@ -219,36 +211,7 @@ export default async function SubjectProfilePage({ params, searchParams }: Subje
               <strong>{communicationReputation.hasRatings ? communicationReputation.score : "Пока не оценён"}</strong>
             </p>
             <p className="muted">Оценивается соблюдение норм общения, а не общительность или согласие с мнением человека.</p>
-            {!ownProfile ? (
-              <>
-                <p className="muted">Ваша текущая оценка: {communicationReputation.viewerSignal === "positive"
-                  ? "Положительно" : communicationReputation.viewerSignal === "negative" ? "Отрицательно" : "Вы ещё не оценивали."}</p>
-                <div className="actions">
-                  {communicationReputation.viewerSignal !== "positive" ? (
-                    <form action="/api/communication-reputation" method="post">
-                      <input type="hidden" name="subject_id" value={profile.subjectId} />
-                      <input type="hidden" name="action" value="positive" />
-                      <button className="button secondary" type="submit">Положительно</button>
-                    </form>
-                  ) : null}
-                  {communicationReputation.viewerSignal !== "negative" ? (
-                    <form action="/api/communication-reputation" method="post">
-                      <input type="hidden" name="subject_id" value={profile.subjectId} />
-                      <input type="hidden" name="action" value="negative" />
-                      <button className="button secondary" type="submit">Отрицательно</button>
-                    </form>
-                  ) : null}
-                  {communicationReputation.viewerSignal ? (
-                    <form action="/api/communication-reputation" method="post">
-                      <input type="hidden" name="subject_id" value={profile.subjectId} />
-                      <input type="hidden" name="action" value="revoke" />
-                      <button className="button secondary" type="submit">Отозвать оценку</button>
-                    </form>
-                  ) : null}
-                </div>
-                {communicationMessage ? <p className="formNotice" role="status">{communicationMessage}</p> : null}
-              </>
-            ) : null}
+            <p className="muted">Показатель формируется автоматически из 👍 и 👎 в Telegram-хабе.</p>
           </div>
 
           <div className="publicTrustPart">
