@@ -49,11 +49,12 @@ export async function openHubExclusionVote(hub: string, target: string): Promise
        VALUES ($1,$2,now()+interval '7 days',$3) RETURNING id`,
       [hub,target,electorate.rowCount]);
     const voteId = String(inserted.rows[0].id);
-    for (const member of electorate.rows) {
-      await client.query(
-        `INSERT INTO telegram_hub_exclusion_electorate(vote_id,telegram_user_id)
-         VALUES ($1,$2)`, [voteId,member.telegram_user_id]);
-    }
+    await client.query(
+      `INSERT INTO telegram_hub_exclusion_electorate(vote_id,telegram_user_id)
+       SELECT $1::uuid, m.telegram_user_id
+       FROM telegram_hub_memberships m
+       JOIN telegram_hubs h ON h.id=m.hub_id AND h.enabled
+       WHERE m.hub_id=$2`, [voteId,hub]);
     await client.query("COMMIT");
     return voteId;
   } catch (error) {
