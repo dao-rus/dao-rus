@@ -11,6 +11,7 @@ import { ParticipantName } from "../../../components/participant-name";
 import { getVisibleProfileAbout, residenceDirectoryHref, residenceLabel } from "@/lib/profile-about";
 import { communityHref } from "../../../lib/communities";
 import { getReputationSummary } from "@/lib/reputation";
+import { getCommunicationSummary } from "@/lib/communication-reputation";
 import { getCurrentParticipant } from "@/lib/session";
 import { formatDarusAmount, getVerificationRewardForFeedback } from "@/lib/tokenization";
 import { getVerificationProfile, verificationConfirmationLabel } from "@/lib/verification";
@@ -27,7 +28,7 @@ export const metadata: Metadata = { title: "Профиль участника" }
 
 type SubjectProfilePageProps = {
   params: Promise<{ participantId: string }>;
-  searchParams: Promise<{ verification_action?: string; verification_reward?: string; verification_root?: string; reputation_action?: string; reputation_signal?: string }>;
+  searchParams: Promise<{ verification_action?: string; verification_reward?: string; verification_root?: string; reputation_action?: string; reputation_signal?: string; communication_action?: string }>;
 };
 
 const actionMessages: Record<string, string> = {
@@ -68,6 +69,7 @@ export default async function SubjectProfilePage({ params, searchParams }: Subje
       : Promise.resolve(null),
     getProfileTimeline(profile.subjectId).catch(() => ({ joinedAt: null, leftForumAt: null, leftDaoAt: null })),
   ]);
+  const communicationReputation = await getCommunicationSummary(profile.subjectId, viewer.id);
 
   const awardBadges = await getAwardBadges([profile.subjectId]);
   const ownProfile = viewer.id === profile.subjectId;
@@ -88,6 +90,14 @@ export default async function SubjectProfilePage({ params, searchParams }: Subje
     self: "Нельзя оценивать себя.",
     invalid: "Не удалось сохранить оценку.",
   } as Record<string, string>)[query.reputation_action] : null;
+  const communicationMessage = query.communication_action ? ({
+    created: "Ваша оценка общения сохранена.",
+    changed: "Ваша оценка общения изменена.",
+    revoked: "Ваша оценка общения отозвана.",
+    unchanged: "Оценка общения не изменилась.",
+    self: "Нельзя оценивать себя.",
+    invalid: "Не удалось сохранить оценку общения.",
+  } as Record<string, string>)[query.communication_action] : null;
 
   // Before their own login a person is shown by the name they gave themselves in Telegram;
   // a roster name may be the exporter's contact label and never appears here. A profile restored
@@ -203,6 +213,43 @@ export default async function SubjectProfilePage({ params, searchParams }: Subje
               {reputationMessage ? <p className="formNotice" role="status">{reputationMessage}</p> : null}
             </div>
           ) : null}
+
+          <div className="publicTrustPart communicationReputation" aria-labelledby="communication-reputation">
+            <p className="publicTrustRow"><span id="communication-reputation">Репутация общения:</span>{" "}
+              <strong>{communicationReputation.hasRatings ? communicationReputation.score : "Пока не оценён"}</strong>
+            </p>
+            <p className="muted">Оценивается соблюдение норм общения, а не общительность или согласие с мнением человека.</p>
+            {!ownProfile ? (
+              <>
+                <p className="muted">Ваша текущая оценка: {communicationReputation.viewerSignal === "positive"
+                  ? "Положительно" : communicationReputation.viewerSignal === "negative" ? "Отрицательно" : "Вы ещё не оценивали."}</p>
+                <div className="actions">
+                  {communicationReputation.viewerSignal !== "positive" ? (
+                    <form action="/api/communication-reputation" method="post">
+                      <input type="hidden" name="subject_id" value={profile.subjectId} />
+                      <input type="hidden" name="action" value="positive" />
+                      <button className="button secondary" type="submit">Положительно</button>
+                    </form>
+                  ) : null}
+                  {communicationReputation.viewerSignal !== "negative" ? (
+                    <form action="/api/communication-reputation" method="post">
+                      <input type="hidden" name="subject_id" value={profile.subjectId} />
+                      <input type="hidden" name="action" value="negative" />
+                      <button className="button secondary" type="submit">Отрицательно</button>
+                    </form>
+                  ) : null}
+                  {communicationReputation.viewerSignal ? (
+                    <form action="/api/communication-reputation" method="post">
+                      <input type="hidden" name="subject_id" value={profile.subjectId} />
+                      <input type="hidden" name="action" value="revoke" />
+                      <button className="button secondary" type="submit">Отозвать оценку</button>
+                    </form>
+                  ) : null}
+                </div>
+                {communicationMessage ? <p className="formNotice" role="status">{communicationMessage}</p> : null}
+              </>
+            ) : null}
+          </div>
 
           <div className="publicTrustPart">
             <p className="publicTrustRow">

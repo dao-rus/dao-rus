@@ -17,6 +17,7 @@ import {
 import { getProfileAbout, residenceDirectoryHref, residenceLabel } from "@/lib/profile-about";
 import { communityHref } from "../../lib/communities";
 import { getReputationSummary } from "@/lib/reputation";
+import { getCommunicationSummary } from "@/lib/communication-reputation";
 import { getCurrentParticipant } from "@/lib/session";
 import { getForumJoinDate } from "@/lib/forum-join-history";
 import { formatDarusAmount, getDarusBalance } from "@/lib/tokenization";
@@ -73,7 +74,7 @@ export default async function ProfilePage({ searchParams }: ProfilePageProps) {
 
   const params = await searchParams;
   const onboardingReward = await getOnboardingRewardFeedback(participant.id, params.onboarding_reward);
-  const [activity, membershipHistory, verification, about, { values: texts }, darusBalance, reputation, signals, signalTypes, forumJoinedAt] = await Promise.all([
+  const [activity, membershipHistory, verification, about, { values: texts }, darusBalance, reputation, communicationReputation, signals, signalTypes, forumJoinedAt] = await Promise.all([
     getActivitySummary(participant.id),
     getMembershipHistory(participant.id),
     getVerificationProfile(participant.id, participant.id),
@@ -81,6 +82,7 @@ export default async function ProfilePage({ searchParams }: ProfilePageProps) {
     readInterfaceTexts(),
     getDarusBalance(participant.id),
     getReputationSummary(participant.id, participant.id),
+    getCommunicationSummary(participant.id, participant.id),
     listParticipantSignals(participant.id, participant.id),
     listSignalTypes(),
     getForumJoinDate(participant.id).catch(() => null),
@@ -298,6 +300,11 @@ export default async function ProfilePage({ searchParams }: ProfilePageProps) {
             <span>Карма</span>
             <strong>Положительных сигналов: {reputation.positiveCount}</strong>
             <Link className="metricLink" href="/profile/reputation">Подробнее →</Link>
+          </article>
+          <article>
+            <span>Репутация общения</span>
+            <strong>{communicationReputation.hasRatings ? communicationReputation.score : "Пока не оценён"}</strong>
+            <small>Оценивается соблюдение норм общения, а не общительность или согласие с мнением человека.</small>
           </article>
           <article>
             <span>DARUS</span>
