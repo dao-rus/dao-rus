@@ -1,4 +1,5 @@
 import { timingSafeEqual } from "node:crypto";
+import { observeHubMessage, observeHubReaction } from "@/lib/telegram-hub-reactions";
 import { NextRequest, NextResponse } from "next/server";
 import { telegramReceptionConfig } from "@/lib/config";
 import { checkForumAndInvite, observeForumMemberUpdate } from "@/lib/telegram-forum-onboarding";
@@ -37,6 +38,10 @@ export async function POST(request: NextRequest) {
   }
   if (!update || typeof update !== "object" || Array.isArray(update)) return ignored();
   const root = update as Record<string, unknown>;
+  if (root.message_reaction) {
+    await observeHubReaction(update);
+    return NextResponse.json({ ok: true, status: "hub_reaction" });
+  }
   if (root.chat_join_request) {
     const status = await receiveHubJoinRequest(update);
     return NextResponse.json({ ok: true, status });
@@ -63,6 +68,7 @@ export async function POST(request: NextRequest) {
       typeof from?.id === "number" && Number.isSafeInteger(from.id) && chat.id === from.id &&
       await handleHubStart(String(from.id))) return NextResponse.json({ ok: true, status: "hub_admission" });
   if (message) {
+    await observeHubMessage(update);
     // Keep the update queued at Telegram if the relay was not configured yet.
     if (!token || !topicId) return new NextResponse("Reception relay is not configured", { status: 503 });
     const status = await relayReceptionUpdate(update);
