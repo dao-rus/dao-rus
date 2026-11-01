@@ -7,6 +7,7 @@ import { telegramNotificationsEnabled } from "../src/lib/config";
 import { expireStaleDeliveries, processNextNotificationDelivery } from "../src/lib/notification-delivery";
 import { expireReceptionPublicationClaims, processNextReceptionPublication, processNextReceptionInvitation } from "../src/lib/reception-publication";
 import { telegramReceptionConfig } from "../src/lib/config";
+import { processHubAdmissionDecisions } from "../src/lib/telegram-hub-admission";
 
 const POLL_INTERVAL_MS = 5000;
 let stopping = false;
@@ -43,6 +44,7 @@ async function main() {
         await expireReceptionPublicationClaims(pool, "invitation");
         await processNextReceptionInvitation(pool);
       }
+      await processHubAdmissionDecisions(pool);
       for (const id of await expireStaleDeliveries(pool)) {
         console.log(JSON.stringify({ deliveryId: id, status: "unknown", errorCode: "claim_expired" }));
       }

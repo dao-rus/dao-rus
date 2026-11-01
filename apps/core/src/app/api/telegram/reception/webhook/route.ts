@@ -3,6 +3,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { telegramReceptionConfig } from "@/lib/config";
 import { checkForumAndInvite, observeForumMemberUpdate } from "@/lib/telegram-forum-onboarding";
 import { relayReceptionUpdate } from "@/lib/telegram-reception-relay";
+import { handleHubAdmissionCallback, handleHubStart, receiveHubJoinRequest } from "../../../../../lib/telegram-hub-admission";
 
 export const runtime = "nodejs";
 
@@ -35,6 +36,15 @@ export async function POST(request: NextRequest) {
     return ignored();
   }
   if (!update || typeof update !== "object" || Array.isArray(update)) return ignored();
+  const root = update as Record<string, unknown>;
+  if (root.chat_join_request) {
+    const status = await receiveHubJoinRequest(update);
+    return NextResponse.json({ ok: true, status });
+  }
+  if (root.callback_query) {
+    const status = await handleHubAdmissionCallback(update);
+    if (status === "handled") return NextResponse.json({ ok: true, status });
+  }
   const message = "message" in update && update.message && typeof update.message === "object"
     ? update.message as Record<string, unknown> : null;
   const chat = message?.chat && typeof message.chat === "object"
@@ -49,6 +59,9 @@ export async function POST(request: NextRequest) {
     if (message.text === "/start") await (await import("../../../../../lib/reception-voice")).onReceptionStart(String(from.id));
     return NextResponse.json({ ok: true });
   }
+  if (chat?.type === "private" && message?.text === "/start hub" &&
+      typeof from?.id === "number" && Number.isSafeInteger(from.id) && chat.id === from.id &&
+      await handleHubStart(String(from.id))) return NextResponse.json({ ok: true, status: "hub_admission" });
   if (message) {
     // Keep the update queued at Telegram if the relay was not configured yet.
     if (!token || !topicId) return new NextResponse("Reception relay is not configured", { status: 503 });
