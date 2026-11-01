@@ -7,6 +7,7 @@ import { saveReceptionApplication } from "./reception-applications";
 import { listReceptionApplications, requestReceptionInvitation, reviewReceptionDelivery } from "./reception-admin";
 import { checkForumAndInvite, type ForumBot } from "./telegram-forum-onboarding";
 import { telegramReceptionConfig } from "./config";
+import { ensureTestPgcrypto } from "./test-postgres-extensions";
 
 const url = process.env.RECEPTION_TEST_DATABASE_URL;
 const schema = `reception_invitation_test_${randomUUID().replaceAll("-", "")}`;
@@ -32,6 +33,7 @@ describe.skipIf(!url)("Guardian invitations on isolated PostgreSQL", () => {
     const parsed = new URL(url!);
     if (parsed.hostname !== "127.0.0.1" || parsed.pathname !== "/reception_tests") throw new Error("Use isolated local reception_tests");
     await db.query(`CREATE SCHEMA ${schema}`); created = true;
+    await ensureTestPgcrypto(db);
     const dir = new URL("../../migrations/", import.meta.url);
     for (const name of readdirSync(dir).filter(n => n.endsWith(".sql")).sort()) await db.query(readFileSync(new URL(name, dir), "utf8"));
     actor = (await db.query("INSERT INTO participants(display_name) VALUES ('Guardian') RETURNING id")).rows[0].id;
@@ -39,7 +41,7 @@ describe.skipIf(!url)("Guardian invitations on isolated PostgreSQL", () => {
     vi.stubEnv("TELEGRAM_FORUM_CHAT_ID", "-100123"); vi.stubEnv("TELEGRAM_FORUM_INVITE_URL", "https://t.me/+example");
     vi.stubEnv("TELEGRAM_GUARDIAN_INVITES_ENABLED", "true");
   }, 60000);
-  beforeEach(async () => { await db.query("TRUNCATE reception_applications CASCADE"); await db.query("DELETE FROM events"); await db.query("DELETE FROM ui_text_overrides"); await db.query("DELETE FROM telegram_roster_entries"); await db.query("DELETE FROM participants WHERE id<>$1", [actor]); });
+  beforeEach(async () => { await db.query("TRUNCATE reception_applications CASCADE"); await db.query("DELETE FROM events"); await db.query("DELETE FROM ui_text_overrides"); await db.query("DELETE FROM telegram_roster_entries"); await db.query("TRUNCATE darus_ledger, onboarding_quest_completions CASCADE"); await db.query("DELETE FROM participants WHERE id<>$1", [actor]); });
   afterAll(async () => { vi.unstubAllEnvs(); if (created) await db.query(`DROP SCHEMA ${schema} CASCADE`); await db.end(); });
   it("requires explicit admin authority before creating a decision", async () => {
     const a = await save(); await expect(requestReceptionInvitation(randomUUID(), a.id, db)).rejects.toThrow("forbidden");
@@ -74,10 +76,11 @@ describe.skipIf(!url)("Guardian invitations on isolated PostgreSQL", () => {
   });
   it("skips an already joined person without assigning DAO membership", async () => {
     const a = await save(); await requestReceptionInvitation(actor, a.id, db); const send = transport("member");
+    const participantCount = (await db.query("SELECT count(*)::int AS count FROM participants")).rows[0].count;
     expect(await processInvite(send)).toMatchObject({ status: "already_joined" });
     expect(await row()).toMatchObject({ status: "failed", error_code: "already_joined", telegram_message_id: null, attempts: 0 });
     expect(send).toHaveBeenCalledOnce(); expect((await listReceptionApplications(actor, db))[0].invitation_error_code).toBe("already_joined");
-    expect((await db.query("SELECT count(*)::int AS count FROM participants")).rows[0].count).toBe(1);
+    expect((await db.query("SELECT count(*)::int AS count FROM participants")).rows[0].count).toBe(participantCount);
   });
   it("uses the existing text registry as plain text and always appends the configured forum link", async () => {
     const a = await save(); await requestReceptionInvitation(actor, a.id, db);

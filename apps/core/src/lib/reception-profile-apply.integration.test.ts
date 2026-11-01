@@ -7,6 +7,7 @@ import { createReceptionProfileDraft } from "./reception-profile-draft";
 import { observeForumMembership } from "./telegram-forum-onboarding";
 import { saveReceptionApplication } from "./reception-applications";
 import { saveProfileWithDatabase, getVisibleProfileAboutWithDatabase } from "./profile-about";
+import { ensureTestPgcrypto } from "./test-postgres-extensions";
 
 vi.mock("./config", () => ({ telegramReceptionConfig: () => ({ miniAppEnabled: false }), appBaseUrl: () => "https://core.test" }));
 vi.mock("./interface-texts", () => ({ readInterfaceTexts: async () => ({ values: {} }) }));
@@ -50,6 +51,7 @@ describe.skipIf(!databaseUrl)("Reception draft projection on PostgreSQL", () => 
     const url = new URL(databaseUrl!);
     if (url.hostname !== "127.0.0.1" || url.pathname !== "/reception_tests") throw new Error("Use isolated local reception_tests");
     await db.query(`CREATE SCHEMA ${schema}`); created = true;
+    await ensureTestPgcrypto(db);
     const dir = new URL("../../migrations/", import.meta.url);
     for (const name of readdirSync(dir).filter(name => name.endsWith(".sql")).sort()) {
       await db.query("BEGIN;" + readFileSync(new URL(name, dir), "utf8") + ";COMMIT;");

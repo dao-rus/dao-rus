@@ -3,6 +3,7 @@ import { readFileSync, readdirSync } from "node:fs";
 import { Pool } from "pg";
 import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
 import { GET, POST, PUT } from "../app/api/reception/application/route";
+import { ensureTestPgcrypto } from "./test-postgres-extensions";
 
 const token = "123456:synthetic_reception_token";
 vi.mock("./config", () => ({ telegramReceptionConfig: () => ({ token }) }));
@@ -35,6 +36,7 @@ describe.skipIf(!databaseUrl)("Reception applications on isolated PostgreSQL", (
     const url = new URL(databaseUrl!);
     if (url.hostname !== "127.0.0.1" || url.pathname !== "/reception_tests") throw new Error("Use isolated local reception_tests");
     await db.query(`CREATE SCHEMA ${schema}`); created = true;
+    await ensureTestPgcrypto(db);
     const directory = new URL("../../migrations/", import.meta.url);
     for (const name of readdirSync(directory).filter(name => name.endsWith(".sql") && name < "052_").sort()) {
       await db.query("BEGIN;" + readFileSync(new URL(name, directory), "utf8") + ";COMMIT;");

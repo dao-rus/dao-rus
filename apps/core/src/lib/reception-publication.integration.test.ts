@@ -6,6 +6,7 @@ import { processNextReceptionPublication, expireReceptionPublicationClaims } fro
 import { saveReceptionApplication } from "./reception-applications";
 import { listReceptionApplications, reviewReceptionDelivery } from "./reception-admin";
 import { telegramReceptionConfig } from "./config";
+import { ensureTestPgcrypto } from "./test-postgres-extensions";
 
 const url = process.env.RECEPTION_TEST_DATABASE_URL;
 const schema = `reception_publication_test_${randomUUID().replaceAll("-", "")}`;
@@ -18,13 +19,20 @@ let created = false;
 const delivered = (id = 12) => new Response(JSON.stringify({ ok: true, result: { message_id: id, chat: { id: -100123 } } }));
 const transport = () => vi.fn<typeof fetch>().mockImplementation(async () => delivered());
 const delivery = async () => (await db.query("SELECT * FROM reception_application_deliveries")).rows[0];
-const save = (value = form) => saveReceptionApplication("84", value, false, db, profile);
+const save = async (value = form) => {
+  const result = await saveReceptionApplication("84", value, false, db, profile);
+  await queuePublication(result.application.id);
+  return result;
+};
+const queuePublication = (applicationId: string) => db.query(`INSERT INTO reception_application_deliveries(application_id,kind)
+  VALUES ($1,'publication') ON CONFLICT (application_id,kind) DO NOTHING`, [applicationId]);
 
 describe.skipIf(!url)("Reception publication on isolated PostgreSQL", () => {
   beforeAll(async () => {
     const parsed = new URL(url!);
     if (parsed.hostname !== "127.0.0.1" || parsed.pathname !== "/reception_tests") throw new Error("Use isolated local reception_tests");
     await db.query(`CREATE SCHEMA ${schema}`); created = true;
+    await ensureTestPgcrypto(db);
     const dir = new URL("../../migrations/", import.meta.url);
     for (const name of readdirSync(dir).filter(n => n.endsWith(".sql")).sort()) await db.query(readFileSync(new URL(name, dir), "utf8"));
     actor = (await db.query("INSERT INTO participants(display_name) VALUES ('Test admin') RETURNING id")).rows[0].id;
@@ -129,7 +137,8 @@ describe.skipIf(!url)("Reception publication on isolated PostgreSQL", () => {
     expect(String(send.mock.calls[0][0])).toContain("editMessageText"); expect((await delivery()).telegram_message_id).toBe("12");
   });
   it("resolves legacy names only from matching private getChat", async () => {
-    await saveReceptionApplication("84", form, false, db);
+    const { application } = await saveReceptionApplication("84", form, false, db);
+    await queuePublication(application.id);
     const send = vi.fn<typeof fetch>().mockResolvedValueOnce(new Response(JSON.stringify({ ok: true, result: { id: 43, type: "private", first_name: "Wrong" } })));
     await processNextReceptionPublication(db, config, send);
     expect(await delivery()).toMatchObject({ status: "pending", error_code: "profile_unavailable", attempts: 0 });
@@ -183,7 +192,8 @@ describe.skipIf(!url)("Reception publication on isolated PostgreSQL", () => {
     expect(await delivery()).toMatchObject({ status: "needs_review", error_code: "target_changed" }); expect(send).not.toHaveBeenCalled();
   });
   it("obtains legacy display names from Telegram without overwriting Core profiles", async () => {
-    await saveReceptionApplication("84", form, false, db);
+    const { application } = await saveReceptionApplication("84", form, false, db);
+    await queuePublication(application.id);
     const send = vi.fn<typeof fetch>()
       .mockResolvedValueOnce(new Response(JSON.stringify({ ok: true, result: { id: 84, type: "private", first_name: "Trusted", username: "trusted" } })))
       .mockImplementationOnce(async () => delivered());

@@ -4,6 +4,7 @@ import {Pool} from "pg";
 import {afterAll,beforeAll,beforeEach,describe,it,expect,vi} from "vitest";
 import {recoverReceptionDelivery,type RecoveryRow} from "./reception-recovery";
 import type {ReceptionRelayBot} from "./telegram-reception-relay";
+import {ensureTestPgcrypto} from "./test-postgres-extensions";
 vi.mock('./config',()=>({telegramReceptionConfig:()=>({token:'synthetic',forumChatId:'-100123',topicId:'1'})}));
 const databaseUrl=process.env.RECEPTION_TEST_DATABASE_URL,schema='reception_test_'+randomUUID().replaceAll('-','');
 const db=new Pool({connectionString:databaseUrl,options:`-c search_path=${schema},public`,max:6});let created=false;
@@ -14,7 +15,7 @@ async function entry(id:number,code='telegram_400',direction='private_to_forum',
  return (await db.query('SELECT *,updated_at::text AS recovery_version FROM reception_relay_updates WHERE update_id=$1',[id])).rows[0] as RecoveryRow;
 }
 describe.skipIf(!databaseUrl)('Reception recovery on isolated PostgreSQL',()=>{
- beforeAll(async()=>{const u=new URL(databaseUrl!);if(u.hostname!=='127.0.0.1'||u.pathname!=='/reception_tests')throw new Error('Use isolated local reception_tests');await db.query(`CREATE SCHEMA ${schema}`);created=true;
+ beforeAll(async()=>{const u=new URL(databaseUrl!);if(u.hostname!=='127.0.0.1'||u.pathname!=='/reception_tests')throw new Error('Use isolated local reception_tests');await db.query(`CREATE SCHEMA ${schema}`);created=true;await ensureTestPgcrypto(db);
  for(const file of ['025_reception_relay.sql','040_reception_heading.sql'])await db.query(readFileSync(new URL('../../migrations/'+file,import.meta.url),'utf8'));});
  beforeEach(async()=>{await db.query('TRUNCATE reception_relay_updates');});
  afterAll(async()=>{if(created)await db.query(`DROP SCHEMA ${schema} CASCADE`);await db.end();});
