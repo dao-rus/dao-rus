@@ -171,7 +171,7 @@ final class Hub
         $result = $this->bot->call('sendMessage', [
             'chat_id' => $r['offer_target'],
             'text' => $this->config['title'] . "\n\n" . self::CODE .
-                "\n\nЭто правила общения в хабе. Согласие не означает вступления в ДАО Русь, верификации или получения дополнительных прав.\nОтветьте до " . gmdate('d.m.Y H:i', (int)$r['expires_at']) . ' UTC.',
+                "\n\nЭто правила общения в хабе. Согласие не означает вступления в ДАО Русь.\n\nВы принимаете эти правила?\n\nЖдем ответа до " . gmdate('d.m.Y H:i', (int)$r['expires_at']) . ' UTC.',
             'reply_markup' => ['inline_keyboard' => [[
                 ['text' => 'Принимаю', 'callback_data' => 'trh:a:' . $id],
                 ['text' => 'Не принимаю', 'callback_data' => 'trh:r:' . $id],
