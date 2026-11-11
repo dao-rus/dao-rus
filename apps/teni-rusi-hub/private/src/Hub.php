@@ -62,17 +62,48 @@ final class Hub
             is_int($update['update_id'] ?? null) && $update['update_id'] >= 0 &&
             is_int($m['date'] ?? null) && $m['date'] > 0 && $m['date'] <= $this->now() + 60 &&
             in_array($m['text'] ?? '', ['/start', '/start hub', '/start hub_teni_rusi'], true)) {
-            $id = $this->locked((string)$m['from']['id'], function (array $slot) use ($m, $update) {
+            $start = $this->locked((string)$m['from']['id'], function (array $slot) use ($m, $update) {
+                // A stale or repeated /start is dropped silently: it must not be answered twice.
                 if ($m['date'] < (int)$slot['last_start_date'] || ($m['date'] === (int)$slot['last_start_date'] &&
                     $slot['last_start_update'] !== null && $update['update_id'] <= (int)$slot['last_start_update'])) return null;
                 $this->query('UPDATE trh_slots SET last_start_date=?,last_start_update=? WHERE hub_id=? AND telegram_user_id=?',
                     [$m['date'], $update['update_id'], $this->config['hub_id'], (string)$m['from']['id']]);
-                return $slot['current_request_id'];
+                return ['id' => $slot['current_request_id']];
             });
-            if ($id) $this->offer($id, true);
+            if ($start !== null) $this->startReply((string)$m['chat']['id'], $start['id']);
             return 'start';
         }
         return 'ignored';
+    }
+
+    /**
+     * Answers /start in every state so the applicant is never left without a reply.
+     * A still-open request gets the rules again; any other state gets one status line.
+     */
+    private function startReply(string $chatId, ?string $id): void
+    {
+        $r = $id ? $this->row($id) : null;
+        if ($r && $r['status'] === 'pending') {
+            // Resends the rules, or marks an expired request for decline.
+            $this->offer($id, true);
+            $r = $this->row($id);
+            if ($r && $r['status'] === 'pending') return;
+        }
+        $this->bot->call('sendMessage', ['chat_id' => $chatId, 'text' => self::startStatusText($r)]);
+    }
+
+    public static function startStatusText(?array $r): string
+    {
+        return match ($r['status'] ?? null) {
+            'approval_pending' => 'Согласие сохранено. Ждём подтверждения допуска от Telegram — это может занять несколько минут.',
+            'decline_pending' => ($r['decision_reason'] ?? null) === 'expired'
+                ? 'Срок ответа истёк, заявка будет отклонена. Вы можете подать новую заявку на вступление в группу.'
+                : 'Отказ сохранён, заявка будет отклонена. Если передумаете, подайте новую заявку на вступление в группу.',
+            'approved' => 'Заявка принята: вы допущены в группу.',
+            'declined' => 'Заявка отклонена. Вы можете подать новую заявку на вступление в группу.',
+            'needs_review' => 'Заявка требует ручной проверки.',
+            default => 'Активной заявки в хаб не найдено. Подайте заявку на вступление в группу заново.',
+        };
     }
 
     private function join(array $update, array $r): string
