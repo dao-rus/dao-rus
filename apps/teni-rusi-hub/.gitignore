@@ -1,0 +1,9 @@
+# Private runtime data and credentials must never enter Git.
+private/config.php
+**/config.php
+.env
+.env.*
+*.dump
+*.sql.dump
+*.bak
+*.log
