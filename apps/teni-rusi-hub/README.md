@@ -23,6 +23,7 @@
 - private/bin/worker.php: CLI worker, рекомендуется cron раз в минуту.
 - private/bin/export-consents.php: экспорт согласий, содержащий персональные данные.
 - private/bin/telegram-setup.php: исторический одноразовый скрипт переключения webhook; НЕ выполнять без нового плана.
+- private/bin/pull-updates.php (+ private/src/Drain.php): ручное восстановление, когда Telegram не может достучаться до webhook. `--check` только читает: состояние webhook и сводку заявок за 7 дней. `--drain` снимает webhook без сброса очереди, забирает накопленные обновления через getUpdates, обрабатывает их тем же Hub::receive и возвращает тот же webhook (до трёх попыток, с проверкой). `--restore` возвращает webhook, если прерванный `--drain` оставил его пустым; чужой webhook не заменяет. Обработка идемпотентна: повторно доставленное обновление безвредно.
 
 Нужны PHP 8.2+, CLI, расширения pdo_mysql, curl, json, openssl, MySQL/MariaDB с InnoDB, HTTPS и права бота can_invite_users.
 
