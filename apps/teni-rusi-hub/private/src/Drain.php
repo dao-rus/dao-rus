@@ -20,12 +20,113 @@ final class Drain
     private $receive;
     /** @var callable(): float */
     private $clock;
+    /** @var callable(int): void */
+    private $sleep;
 
-    public function __construct(callable $api, private array $config, callable $receive, ?callable $clock = null)
+    /** An update that fails this many runs in a row is skipped so it cannot block the queue. */
+    public const MAX_FAILURES = 3;
+
+    public function __construct(callable $api, private array $config, callable $receive, ?callable $clock = null, ?callable $sleep = null)
     {
         $this->api = $api;
         $this->receive = $receive;
         $this->clock = $clock ?? static fn(): float => microtime(true);
+        $this->sleep = $sleep ?? static function (int $s): void { sleep($s); };
+    }
+
+    private static function type(array $update): string
+    {
+        foreach (self::ALLOWED_UPDATES as $t) if (isset($update[$t])) return $t;
+        return 'other';
+    }
+
+    /**
+     * Switches the bot from webhook delivery to polling. Pending updates are kept.
+     * Only removes the hub's own webhook; reversed by restore()/restoreIfEmpty().
+     */
+    public function usePolling(): string
+    {
+        $s = $this->status();
+        if ($s === null) return 'telegram_unreachable_no_changes';
+        if ($s['url_empty']) return 'already_polling';
+        if (!$s['url_matches']) return 'webhook_not_ours_no_changes';
+        $this->call('deleteWebhook', ['drop_pending_updates' => false]);
+        $after = $this->status();
+        return $after !== null && $after['url_empty'] ? 'switched_to_polling' : 'switch_unconfirmed';
+    }
+
+    /**
+     * One cron run of polling (cron every minute, under flock). Long-polls until the
+     * time budget is spent. While a webhook is active Telegram answers getUpdates with
+     * 409, and the run idles without changing anything.
+     * $failureFile keeps only the ID and failure count of the update that last failed.
+     */
+    public function poll(int $seconds = 50, ?string $failureFile = null): array
+    {
+        $report = ['outcome' => 'polled', 'processed' => 0, 'skipped' => 0, 'results' => [],
+            'stopped' => null, 'api_failures' => 0, 'reached' => false, 'acknowledged' => null];
+        $deadline = ($this->clock)() + $seconds;
+        $offset = null;
+        while (true) {
+            $left = (int)floor($deadline - ($this->clock)());
+            if ($left < 5) { $report['stopped'] ??= 'time_limit'; break; }
+            $wait = max(0, min(20, $left - 5));
+            $params = ['limit' => 100, 'timeout' => $wait, 'allowed_updates' => self::ALLOWED_UPDATES];
+            if ($offset !== null) $params['offset'] = $offset;
+            $batch = $this->call('getUpdates', $params, $wait + 10);
+            if ((int)($batch['error_code'] ?? 0) === 409) { $report['outcome'] = 'webhook_active_idle'; break; }
+            if (empty($batch['ok']) || !is_array($batch['result'] ?? null)) {
+                $report['api_failures']++;
+                ($this->sleep)(2);
+                continue;
+            }
+            $report['reached'] = true;
+            foreach ($batch['result'] as $update) {
+                if (!is_array($update) || !is_int($update['update_id'] ?? null) || $update['update_id'] < 0) {
+                    $report['stopped'] = 'malformed_update'; break 2;
+                }
+                $id = $update['update_id'];
+                try {
+                    $result = (string)($this->receive)($update);
+                    $report['processed']++;
+                    self::clearFailure($failureFile, $id);
+                } catch (\Throwable $e) {
+                    if (self::noteFailure($failureFile, $id) < self::MAX_FAILURES) {
+                        // Not acknowledged: the next run tries it again.
+                        $report['stopped'] = 'processing_failed'; break 2;
+                    }
+                    self::clearFailure($failureFile, $id);
+                    $result = 'skipped_after_failures';
+                    $report['skipped']++;
+                }
+                $offset = $id + 1;
+                $key = self::type($update) . ':' . $result;
+                $report['results'][$key] = ($report['results'][$key] ?? 0) + 1;
+            }
+        }
+        if ($offset !== null) {
+            $ack = $this->call('getUpdates', ['offset' => $offset, 'limit' => 1, 'timeout' => 0,
+                'allowed_updates' => self::ALLOWED_UPDATES], 20);
+            $report['acknowledged'] = !empty($ack['ok']);
+        }
+        return $report;
+    }
+
+    /** Returns how many runs in a row this update has failed, including this one. */
+    private static function noteFailure(?string $file, int $id): int
+    {
+        if ($file === null) return 1;
+        $state = is_file($file) ? json_decode((string)file_get_contents($file), true) : null;
+        $count = is_array($state) && ($state['update_id'] ?? null) === $id ? (int)($state['failures'] ?? 0) + 1 : 1;
+        file_put_contents($file, json_encode(['update_id' => $id, 'failures' => $count]), LOCK_EX);
+        return $count;
+    }
+
+    private static function clearFailure(?string $file, int $id): void
+    {
+        if ($file === null || !is_file($file)) return;
+        $state = json_decode((string)file_get_contents($file), true);
+        if (is_array($state) && ($state['update_id'] ?? null) === $id) unlink($file);
     }
 
     private function call(string $method, array $params = [], int $timeout = 15): ?array
@@ -82,6 +183,7 @@ final class Drain
         $before = $this->status();
         if ($before === null) return ['outcome' => 'telegram_unreachable_no_changes'] + $report;
         $report['pending_before'] = $before['pending'];
+        if ($before['url_empty']) return ['outcome' => 'polling_mode_no_changes'] + $report;
         if (!$before['url_matches']) return ['outcome' => 'webhook_not_ours_no_changes'] + $report;
         if ($before['pending'] === 0) return ['outcome' => 'queue_empty_no_changes'] + $report;
 
@@ -113,9 +215,7 @@ final class Drain
                     }
                     $offset = $update['update_id'] + 1;
                     $report['processed']++;
-                    $type = 'other';
-                    foreach (self::ALLOWED_UPDATES as $t) if (isset($update[$t])) { $type = $t; break; }
-                    $key = $type . ':' . $result;
+                    $key = self::type($update) . ':' . $result;
                     $report['results'][$key] = ($report['results'][$key] ?? 0) + 1;
                 }
             }

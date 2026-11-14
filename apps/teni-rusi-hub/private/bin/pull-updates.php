@@ -1,9 +1,11 @@
 <?php
 declare(strict_types=1);
-// Manual recovery for updates stuck behind failing webhook delivery.
-//   --check    read-only: webhook state and a 7-day summary of requests (default)
-//   --drain    take queued updates directly (getUpdates), process them, restore the webhook
-//   --restore  re-register the webhook if an interrupted drain left it empty
+// Telegram delivery control for the hub.
+//   --check        read-only: webhook/polling state, last poll, 7-day summary of requests (default)
+//   --drain        one-off: take queued updates directly (getUpdates), process them, restore the webhook
+//   --use-polling  switch from webhook to polling (pending updates kept); undo with --restore
+//   --poll         one polling run for cron every minute (under flock); idles while a webhook is active
+//   --restore      re-register the webhook if it is empty; never replaces a foreign webhook
 // CLI only. Never prints tokens, secrets, webhook URLs, user IDs or message texts.
 if (PHP_SAPI !== 'cli') { http_response_code(404); exit; }
 require dirname(__DIR__) . '/src/Bootstrap.php';
@@ -20,10 +22,13 @@ function line(array $data): void
 }
 
 $mode = $argv[1] ?? '--check';
-if (!in_array($mode, ['--check', '--drain', '--restore'], true)) {
-    fwrite(STDERR, "Usage: pull-updates.php [--check|--drain|--restore]\n");
+if (!in_array($mode, ['--check', '--drain', '--use-polling', '--poll', '--restore'], true)) {
+    fwrite(STDERR, "Usage: pull-updates.php [--check|--drain|--use-polling|--poll|--restore]\n");
     exit(1);
 }
+$private = dirname(__DIR__);
+$heartbeat = $private . '/poll-heartbeat';
+$failureFile = $private . '/poll-failure.json';
 
 try {
     $c = \TeniRusi\configuration();
@@ -53,8 +58,14 @@ try {
     if ($mode === '--check') {
         $s = $drain->status();
         line(['webhook' => $s === null ? 'telegram_unreachable' : [
+            'mode' => $s['url_matches'] ? 'webhook' : ($s['url_empty'] ? 'polling' : 'foreign_webhook'),
             'set_to_hub' => $s['url_matches'], 'empty' => $s['url_empty'], 'pending' => $s['pending'],
             'last_error' => msk($s['last_error_date']), 'last_error_message' => $s['last_error_message'],
+        ]]);
+        clearstatcache();
+        line(['polling' => [
+            'last_successful_poll' => is_file($heartbeat) ? msk((int)filemtime($heartbeat)) : null,
+            'update_failing_now' => is_file($failureFile),
         ]]);
         $rows = $db->prepare('SELECT status, offer_state, error_code, COUNT(*) AS n, MIN(created_at) AS oldest, MAX(created_at) AS newest
             FROM trh_requests WHERE hub_id=? AND created_at>=? GROUP BY status, offer_state, error_code ORDER BY newest DESC');
@@ -63,6 +74,21 @@ try {
             line(['requests_7d' => ['status' => $r['status'], 'offer_state' => $r['offer_state'], 'error_code' => $r['error_code'],
                 'count' => (int)$r['n'], 'oldest' => msk((int)$r['oldest']), 'newest' => msk((int)$r['newest'])]]);
         }
+        exit(0);
+    }
+    if ($mode === '--use-polling') {
+        $outcome = $drain->usePolling();
+        line(['use_polling' => $outcome]);
+        exit(in_array($outcome, ['switched_to_polling', 'already_polling'], true) ? 0 : 2);
+    }
+    if ($mode === '--poll') {
+        $report = $drain->poll(50, $failureFile);
+        if ($report['reached']) touch($heartbeat);
+        line(['poll' => $report]);
+        // stderr goes to the cron error log: only events that need a human.
+        if ($report['skipped'] > 0) fwrite(STDERR, gmdate('Y-m-d H:i:s') . " UTC: skipped {$report['skipped']} update(s) after repeated processing failures\n");
+        if ($report['stopped'] === 'processing_failed') fwrite(STDERR, gmdate('Y-m-d H:i:s') . " UTC: processing failed; will retry next run\n");
+        if ($report['stopped'] === 'malformed_update') fwrite(STDERR, gmdate('Y-m-d H:i:s') . " UTC: malformed update from Telegram; polling blocked\n");
         exit(0);
     }
     if ($mode === '--restore') {
