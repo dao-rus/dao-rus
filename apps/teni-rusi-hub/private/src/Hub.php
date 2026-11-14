@@ -259,8 +259,18 @@ final class Hub
         ];
     }
 
-    /** Reminders repeat every REMIND_EVERY seconds until the applicant answers or the request expires. */
+    /**
+     * Reminders repeat until the applicant answers, blocks the bot or the request expires:
+     * every REMIND_EVERY seconds during the first day after the request, then daily.
+     */
     public const REMIND_EVERY = 14400;
+    public const REMIND_DAILY_AFTER = 86400;
+    public const REMIND_EVERY_LATER = 86400;
+
+    public static function remindInterval(int $eventDate, int $now): int
+    {
+        return $now - $eventDate < self::REMIND_DAILY_AFTER ? self::REMIND_EVERY : self::REMIND_EVERY_LATER;
+    }
 
     /** No reminders at night, Moscow time: hours [23:00, 09:00). */
     public function quietHours(): bool
@@ -282,11 +292,20 @@ final class Hub
             $r = $this->row($id);
             if (!$r || $slot['current_request_id'] !== $id || $r['status'] !== 'pending' || $r['offer_state'] !== 'sent') return null;
             if ((int)$r['expires_at'] <= $this->now()) { $this->expire($id); return null; }
-            if ((int)$r['offer_due_at'] + self::REMIND_EVERY > $this->now()) return null;
+            if ((int)$r['offer_due_at'] + self::remindInterval((int)$r['event_date'], $this->now()) > $this->now()) return null;
             $this->query('UPDATE trh_requests SET offer_due_at=? WHERE id=?', [$this->now(), $id]);
             return $r;
         });
-        if ($r) $this->bot->call('sendMessage', $this->offerMessage($r, "Напоминание: вы подали заявку в хаб, ответа пока нет.\n\n"));
+        if (!$r) return;
+        $result = $this->bot->call('sendMessage', $this->offerMessage($r, "Напоминание: вы подали заявку в хаб, ответа пока нет.\n\n"));
+        if (empty($result['ok']) && (int)($result['error_code'] ?? 0) === 403) {
+            // The applicant blocked the bot or deleted the chat: stop reminding. /start resends the rules.
+            $this->locked($r['telegram_user_id'], function (array $slot) use ($id) {
+                $current = $this->row($id);
+                if ($slot['current_request_id'] !== $id || !$current || $current['status'] !== 'pending' || $current['offer_state'] !== 'sent') return;
+                $this->query("UPDATE trh_requests SET offer_state='awaiting_start',error_code='remind_403' WHERE id=?", [$id]);
+            });
+        }
     }
 
     private function delay(int $attempts, array $result): int
@@ -339,8 +358,10 @@ final class Hub
             [$this->config['hub_id'], $this->now(), $this->now(), $this->now()])->fetchAll();
         foreach ($rows as $r) { $this->decision($r['id']); $this->offer($r['id']); }
         if ($this->quietHours()) return;
-        $due = $this->query("SELECT id FROM trh_requests WHERE hub_id=? AND offer_state='sent' AND offer_due_at<=? AND status='pending' AND expires_at>? ORDER BY created_at LIMIT " . max(1, min(50, $limit)),
-            [$this->config['hub_id'], $this->now() - self::REMIND_EVERY, $this->now()])->fetchAll();
+        // Same rule as remindInterval(): frequent during the first day, daily afterwards.
+        $due = $this->query("SELECT id FROM trh_requests WHERE hub_id=? AND offer_state='sent' AND status='pending' AND expires_at>? AND ((offer_due_at<=? AND event_date>?) OR offer_due_at<=?) ORDER BY offer_due_at LIMIT " . max(1, min(50, $limit)),
+            [$this->config['hub_id'], $this->now(), $this->now() - self::REMIND_EVERY, $this->now() - self::REMIND_DAILY_AFTER,
+                $this->now() - self::REMIND_EVERY_LATER])->fetchAll();
         foreach ($due as $r) $this->remind($r['id']);
     }
 }
