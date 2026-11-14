@@ -226,15 +226,7 @@ final class Hub
             return $r;
         });
         if (!$r) return;
-        $result = $this->bot->call('sendMessage', [
-            'chat_id' => $r['offer_target'],
-            'text' => $this->config['title'] . "\n\n" . self::CODE .
-                "\n\nЭто правила общения в хабе. Согласие не означает вступления в ДАО Русь.\n\nВы принимаете эти правила?\n\nЖдем ответа до " . gmdate('d.m.Y H:i', (int)$r['expires_at']) . ' UTC. Если кнопка не отвечает, подождите несколько минут: возможны задержки из-за перебоев в доступе к Telegram',
-            'reply_markup' => ['inline_keyboard' => [[
-                ['text' => 'Принимаю', 'callback_data' => 'trh:a:' . $id],
-                ['text' => 'Не принимаю', 'callback_data' => 'trh:r:' . $id],
-            ]]],
-        ]);
+        $result = $this->bot->call('sendMessage', $this->offerMessage($r));
         $this->locked($r['telegram_user_id'], function (array $slot) use ($id, $r, $result) {
             $current = $this->row($id);
             if ($slot['current_request_id'] !== $id || !$current || $current['status'] !== 'pending' ||
@@ -252,6 +244,49 @@ final class Hub
             $this->query('UPDATE trh_requests SET offer_state=?,offer_due_at=?,offer_target=?,error_code=? WHERE id=?',
                 [$state, $due, $target, empty($result['ok']) ? 'send_' . $error : null, $id]);
         });
+    }
+
+    private function offerMessage(array $r, string $prefix = ''): array
+    {
+        return [
+            'chat_id' => $r['offer_target'],
+            'text' => $prefix . $this->config['title'] . "\n\n" . self::CODE .
+                "\n\nЭто правила общения в хабе. Согласие не означает вступления в ДАО Русь.\n\nВы принимаете эти правила?\n\nЖдем ответа до " . gmdate('d.m.Y H:i', (int)$r['expires_at']) . ' UTC. Если кнопка не отвечает, подождите несколько минут: возможны задержки из-за перебоев в доступе к Telegram',
+            'reply_markup' => ['inline_keyboard' => [[
+                ['text' => 'Принимаю', 'callback_data' => 'trh:a:' . $r['id']],
+                ['text' => 'Не принимаю', 'callback_data' => 'trh:r:' . $r['id']],
+            ]]],
+        ];
+    }
+
+    /** Reminders repeat every REMIND_EVERY seconds until the applicant answers or the request expires. */
+    public const REMIND_EVERY = 14400;
+
+    /** No reminders at night, Moscow time: hours [23:00, 09:00). */
+    public function quietHours(): bool
+    {
+        $hour = (int)gmdate('G', $this->now() + 10800);
+        return $hour >= 23 || $hour < 9;
+    }
+
+    /**
+     * Resends the rules with a reminder header to an applicant who has not answered.
+     * The time of the last message is kept in offer_due_at (unused once an offer is sent);
+     * it is claimed before sending, so a crash or timeout never produces a burst.
+     */
+    public function remind(string $id): void
+    {
+        $initial = $this->row($id);
+        if (!$initial) return;
+        $r = $this->locked($initial['telegram_user_id'], function (array $slot) use ($id) {
+            $r = $this->row($id);
+            if (!$r || $slot['current_request_id'] !== $id || $r['status'] !== 'pending' || $r['offer_state'] !== 'sent') return null;
+            if ((int)$r['expires_at'] <= $this->now()) { $this->expire($id); return null; }
+            if ((int)$r['offer_due_at'] + self::REMIND_EVERY > $this->now()) return null;
+            $this->query('UPDATE trh_requests SET offer_due_at=? WHERE id=?', [$this->now(), $id]);
+            return $r;
+        });
+        if ($r) $this->bot->call('sendMessage', $this->offerMessage($r, "Напоминание: вы подали заявку в хаб, ответа пока нет.\n\n"));
     }
 
     private function delay(int $attempts, array $result): int
@@ -303,5 +338,9 @@ final class Hub
         $rows = $this->query("SELECT id FROM trh_requests WHERE hub_id=? AND ((status='pending' AND (expires_at<=? OR (offer_state='queued' AND offer_due_at<=?))) OR (status IN ('approval_pending','decline_pending') AND retry_at<=?)) ORDER BY created_at LIMIT " . max(1, min(50, $limit)),
             [$this->config['hub_id'], $this->now(), $this->now(), $this->now()])->fetchAll();
         foreach ($rows as $r) { $this->decision($r['id']); $this->offer($r['id']); }
+        if ($this->quietHours()) return;
+        $due = $this->query("SELECT id FROM trh_requests WHERE hub_id=? AND offer_state='sent' AND offer_due_at<=? AND status='pending' AND expires_at>? ORDER BY created_at LIMIT " . max(1, min(50, $limit)),
+            [$this->config['hub_id'], $this->now() - self::REMIND_EVERY, $this->now()])->fetchAll();
+        foreach ($due as $r) $this->remind($r['id']);
     }
 }
