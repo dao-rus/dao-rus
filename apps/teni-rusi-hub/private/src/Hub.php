@@ -73,7 +73,34 @@ final class Hub
             if ($start !== null) $this->startReply((string)$m['chat']['id'], $start['id']);
             return 'start';
         }
+        if (is_array($m) && ($m['chat']['type'] ?? null) === 'private' &&
+            self::userId($m['from']['id'] ?? null) && ($m['from']['is_bot'] ?? false) !== true &&
+            ($m['chat']['id'] ?? null) === $m['from']['id'] && is_int($m['message_id'] ?? null)) {
+            return $this->relay($m);
+        }
         return 'ignored';
+    }
+
+    /**
+     * Any other private message to the bot goes to the operator, so nothing written to
+     * the bot is silently lost. The sender is told it was passed on.
+     * A failed forward throws: the update is retried (webhook 500 or the next poll run).
+     */
+    private function relay(array $m): string
+    {
+        $operator = $this->config['operator_chat_id'] ?? null;
+        if (!self::userId($operator) || $m['from']['id'] === $operator) return 'ignored';
+        $name = trim(($m['from']['first_name'] ?? '') . ' ' . ($m['from']['last_name'] ?? ''));
+        $who = ($name !== '' ? $name : 'без имени') .
+            (isset($m['from']['username']) && is_string($m['from']['username']) ? ' (@' . $m['from']['username'] . ')' : '');
+        $this->bot->call('sendMessage', ['chat_id' => $operator, 'text' => 'Сообщение боту от: ' . $who]);
+        $forward = $this->bot->call('forwardMessage', [
+            'chat_id' => $operator, 'from_chat_id' => $m['chat']['id'], 'message_id' => $m['message_id'],
+        ]);
+        if (empty($forward['ok'])) throw new \RuntimeException('Relay to operator failed');
+        $this->bot->call('sendMessage', ['chat_id' => $m['chat']['id'],
+            'text' => 'Ваше сообщение передано организаторам хаба.']);
+        return 'relayed';
     }
 
     /**

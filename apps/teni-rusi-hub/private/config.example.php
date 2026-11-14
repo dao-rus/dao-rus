@@ -20,4 +20,7 @@ return [
     'chat_id' => '-1003969604796',
     'title' => 'Хаб Тени Руси — ДАО Русь',
     'response_seconds' => 86400,
+    // Telegram user ID (integer) who receives every other private message sent to the bot.
+    // That person must have pressed Start in the bot. Set with bin/set-operator.php.
+    'operator_chat_id' => null,
 ];
