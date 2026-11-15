@@ -11,11 +11,13 @@ final class Hub
     public const CODE = "1. Не нападай первым.\n2. Стой за свою свободу, уважай чужую. Границы свобод определяют договор и вече.\n3. Власть принадлежит народу.";
     private $clock;
     private Community $community;
+    private Network $network;
 
     public function __construct(private PDO $db, private Bot $bot, private array $config, ?callable $clock = null)
     {
         $this->clock = $clock ?? static fn(): int => time();
         $this->community = new Community($db, $bot, $config, $this->clock);
+        $this->network = new Network($db, $bot, $config, $this->clock, $this->community);
     }
 
     private function now(): int { return ($this->clock)(); }
@@ -61,7 +63,7 @@ final class Hub
         $cb = $update['callback_query'] ?? null;
         if (is_array($cb)) {
             $data = is_string($cb['data'] ?? null) ? $cb['data'] : '';
-            if (str_starts_with($data, 'trh:x:')) return $this->community->callback($cb);
+            if (str_starts_with($data, 'trh:x:') || str_starts_with($data, 'trh:n:')) return $this->network->callback($cb);
             if (str_starts_with($data, 'trh:o:')) return $this->operatorDecision($cb);
             return $this->callback($cb);
         }
@@ -81,7 +83,7 @@ final class Hub
                 return ['id' => $slot['current_request_id']];
             });
             if ($start !== null) {
-                $this->community->clearDialog((string)$m['from']['id']);
+                $this->network->clearDialog((string)$m['from']['id']);
                 $this->startReply((string)$m['chat']['id'], $start['id']);
             }
             return 'start';
@@ -95,7 +97,7 @@ final class Hub
             }
             // A Telegram "Reply" is an answer to a relayed message, never an Exchange record.
             if (!isset($m['reply_to_message'])) {
-                $dialog = $this->community->dialogInput($m);
+                $dialog = $this->network->dialogInput($m);
                 if ($dialog !== null) return $dialog;
             }
             return $this->relay($m);
@@ -217,9 +219,10 @@ final class Hub
     private function startReply(string $chatId, ?string $id): void
     {
         $r = $id ? $this->row($id) : null;
-        // Members (accepted the rules, no exclusion mark) get the Exchange menu.
-        if ((!$r || in_array($r['status'], ['approved', 'superseded', 'declined'], true)) && $this->community->isMember($chatId)) {
-            $this->community->menu($chatId);
+        $settled = !$r || in_array($r['status'], ['approved', 'superseded', 'declined'], true);
+        // People in the network (hub members or those who accepted the Code in the bot) get its menu.
+        if ($settled && $this->network->canUse($chatId)) {
+            $this->network->menu($chatId);
             return;
         }
         if ($r && $r['status'] === 'pending') {
@@ -227,6 +230,12 @@ final class Hub
             $this->offer($id, true);
             $r = $this->row($id);
             if ($r && $r['status'] === 'pending') return;
+            $settled = in_array($r['status'] ?? '', ['approved', 'superseded', 'declined'], true);
+        }
+        // Anyone else is invited into the network by accepting the Code; no group needed.
+        if ($settled && !($r && $r['status'] === 'decline_pending')) {
+            $this->network->welcome($chatId);
+            return;
         }
         $this->bot->call('sendMessage', ['chat_id' => $chatId, 'text' => self::startStatusText($r)]);
     }
@@ -520,5 +529,6 @@ final class Hub
                 $now - self::REMIND_EVERY_LATER, $now - self::REMIND_WEEKLY_AFTER,
                 $now - self::REMIND_EVERY_WEEKLY])->fetchAll();
         foreach ($due as $r) $this->remind($r['id']);
+        $this->network->tick(false);
     }
 }
