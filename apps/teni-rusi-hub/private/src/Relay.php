@@ -9,7 +9,13 @@ namespace TeniRusi;
  */
 final class Relay
 {
-    public const RUN_SECONDS = 40;   // + up to 20 s of the last waiting pull
+    /**
+     * A run covers the whole minute: long pulls (the relay holds each up to 20 s) while one still fits,
+     * then short pulls every 2 s until second ~56, so a call never waits for the next cron start.
+     * Assistants give up after a few seconds and then look for a login (OAuth) that we do not have.
+     */
+    public const RUN_SECONDS = 55;
+    private const LONG_PULL = 21;
 
     public function __construct(private Api $api, private Mcp $mcp, private string $url, private string $secret) {}
 
@@ -39,24 +45,31 @@ final class Relay
     }
 
     /** Runs until the deadline; returns the number of calls answered. */
-    public function run(callable $post, int $seconds = self::RUN_SECONDS): int
+    public function run(callable $post, int $seconds = self::RUN_SECONDS, ?callable $sleep = null): int
     {
-        $deadline = time() + $seconds;
+        $sleep ??= static function (int $s): void { sleep($s); };
+        $end = time() + $seconds;
         $replies = [];
         $served = 0;
         $errors = 0;
         while (true) {
-            $last = time() >= $deadline;
-            $res = $post($this->url . '/_pull' . ($last ? '?wait=0' : ''), $this->secret, ['replies' => $replies]);
+            $left = $end - time();
+            $long = $left >= self::LONG_PULL;
+            $res = $post($this->url . '/_pull' . ($long ? '' : '?wait=0'), $this->secret, ['replies' => $replies]);
             $replies = [];
             if (!is_array($res) || ($res['ok'] ?? false) !== true) {
-                if (++$errors >= 3 || $last) break;
-                sleep(5);
+                if (++$errors >= 3 || $left <= 0) break;
+                $sleep(5);
                 continue;
             }
             $errors = 0;
-            foreach ($res['requests'] ?? [] as $r) if (is_array($r)) { $replies[] = $this->dispatch($r); $served++; }
-            if ($last && !$replies) break;
+            $got = 0;
+            foreach ($res['requests'] ?? [] as $r) if (is_array($r)) { $replies[] = $this->dispatch($r); $got++; }
+            $served += $got;
+            if (!$long && $got === 0) {   // answers, if any, went with this pull
+                if ($left <= 0) break;
+                $sleep(2);
+            }
         }
         return $served;
     }
