@@ -1,0 +1,13 @@
+# Relay of the switchboard (Cloudflare Workers, free plan). Deploy: npx wrangler@3 deploy (see README.md).
+name = "hub"
+main = "worker.js"
+compatibility_date = "2025-09-01"
+workers_dev = true
+
+[[durable_objects.bindings]]
+name = "BOX"
+class_name = "Mailbox"
+
+[[migrations]]
+tag = "v1"
+new_sqlite_classes = ["Mailbox"]

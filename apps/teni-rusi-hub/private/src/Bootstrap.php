@@ -7,6 +7,8 @@ require_once __DIR__ . '/Community.php';
 require_once __DIR__ . '/Network.php';
 require_once __DIR__ . '/Hub.php';
 require_once __DIR__ . '/Api.php';
+require_once __DIR__ . '/Mcp.php';
+require_once __DIR__ . '/Relay.php';
 require_once __DIR__ . '/Webhook.php';
 
 function configuration(): array

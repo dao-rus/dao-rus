@@ -73,6 +73,12 @@
 - **Ответ** — то, что бот сказал бы этому человеку: `messages[].text`, следующие возможные действия `messages[].actions` и, после согласия обоих, `messages[].contacts` (имя и `tg://user?id=…`). Сообщения другим людям (просьбы, совпадения) по-прежнему идут через бот. Правила, лимиты и уровни доверия — те же, что в боте; сверху — не больше 600 запросов в день на человека.
 - **Хостинг.** Перед сайтом HostiMan стоит проверка браузера («Checking your browser», `bad_remote` для зарубежных адресов): программы и ИИ-ассистенты с зарубежных серверов её не пройдут. Для `/api.php` (и будущего `/mcp`) её нужно отключить.
 
+## Коммутатор, шаг 3: коннектор для ИИ-ассистентов (private/src/Mcp.php) и переходник (relay/, private/src/Relay.php)
+
+- **MCP-сервер** (Streamable HTTP, без сессий, ответы JSON): `initialize`, `tools/list`, `tools/call`, `ping`. Инструменты: `find_people`, `add_record`, `who_is_here`, `latest_records`, `my_records`, `about_me`, `menu`, `do_action`. Каждый вызов — запрос к API от имени человека: те же правила, согласие обоих, лимиты. Ответ — текст бота и «Возможные действия» в виде `do_action(action="…")`.
+- **Адрес коннектора** `https://hub.kommutator.workers.dev/mcp/КЛЮЧ`: Claude и ChatGPT спрашивают только адрес, поэтому ключ в нём. Бот выдаёт этот адрес вместе с ключом (`/key` → «Создать ключ»), когда переходник настроен.
+- **Переходник** (relay/README.md): Cloudflare Worker с одним Durable Object, ничего не хранит. Хаб забирает вызовы сам: cron раз в минуту `bin/relay-pull.php` под flock (около 40 с долгого опроса + последний опрос без ожидания). Без `relay_url`/`relay_secret` в config.php (`bin/set-relay.php URL < файл-секрета`) скрипт простаивает.
+
 Таблица: migrations/2026-11-18-keys.sql (`trh_keys`), применяется `bin/migrate.php migrations/2026-11-18-keys.sql`. check.php проверяет 14 таблиц.
 
 Таблицы: migrations/2026-11-16-switchboard.sql (расширение trh_signals и trh_dialogs, новые trh_net, trh_links, trh_reviews, trh_usage); применяется `bin/migrate-2026-11-16.php` — проверяет, чего не хватает, и делает только это. check.php проверяет все 13 таблиц. Активный бот: migrations/2026-11-17-active-bot.sql (`trh_signals.warned_at`, `trh_net.notify`, срок интересов снят, «Хочу сделать» продлены до полугода), применяется общим `bin/migrate.php migrations/2026-11-17-active-bot.sql`. Лицо бота (описание, короткое описание, меню команд) ставит `bin/bot-profile.php`.

@@ -249,7 +249,12 @@ final class Network
             [$this->hub(), $user, $this->now() - self::KEY_IDLE, $this->now() - self::KEY_IDLE])->fetchAll();
     }
 
-    private function apiUrl(): string { return preg_replace('#webhook\.php$#', 'api.php', (string)($this->config['webhook_url'] ?? 'https://dao.h1n.ru/webhook.php')); }
+    /** Through the relay when it is set up (bin/set-relay.php): the hosting does not let data-center traffic in. */
+    private function relayUrl(): ?string { $r = $this->config['relay_url'] ?? null; return is_string($r) && $r !== '' ? rtrim($r, '/') : null; }
+    private function apiUrl(): string
+    {
+        return $this->relayUrl() !== null ? $this->relayUrl() . '/api' : preg_replace('#webhook\.php$#', 'api.php', (string)($this->config['webhook_url'] ?? 'https://dao.h1n.ru/webhook.php'));
+    }
 
     private function sendKeys(string $user): void
     {
@@ -273,9 +278,18 @@ final class Network
         $this->query('INSERT INTO trh_keys(hash,hub_id,telegram_user_id,tail,created_at) VALUES (?,?,?,?,?)', [self::keyHash($key), $this->hub(), $user, substr($key, -4), $this->now()]);
         $answer('Ключ создан');
         $head = "Ваш новый ключ (нажмите, чтобы скопировать):\n\n";
-        $this->send($user, $head . $key . "\n\nАдрес для программ: " . $this->apiUrl() .
-            "\n\nНикому не показывайте ключ: с ним действуют от вашего имени. Я храню только его отпечаток, поэтому показать ещё раз не смогу. Отключить — /key.",
-            ['entities' => [['type' => 'code', 'offset' => Community::u16($head), 'length' => Community::u16($key)]]]);
+        $text = $head . $key;
+        $entities = [['type' => 'code', 'offset' => Community::u16($head), 'length' => Community::u16($key)]];
+        if ($this->relayUrl() !== null) {
+            // The connector address carries the key: Claude and ChatGPT ask only for an address.
+            $text .= "\n\nПодключить к своему ИИ (Claude, ChatGPT): добавьте коннектор с адресом\n";
+            $mcp = $this->relayUrl() . '/mcp/' . $key;
+            $entities[] = ['type' => 'code', 'offset' => Community::u16($text), 'length' => Community::u16($mcp)];
+            $text .= $mcp . "\nВ адресе уже есть ключ — им тоже ни с кем не делитесь.";
+        }
+        $text .= "\n\nАдрес для программ: " . $this->apiUrl() .
+            "\n\nНикому не показывайте ключ: с ним действуют от вашего имени. Я храню только его отпечаток, поэтому показать ещё раз не смогу. Отключить — /key.";
+        $this->send($user, $text, ['entities' => $entities]);
         return 'key_created';
     }
 
