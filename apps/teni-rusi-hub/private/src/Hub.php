@@ -155,7 +155,7 @@ final class Hub
             $id = bin2hex(random_bytes(16));
             $this->query('INSERT INTO trh_requests(id,hub_id,telegram_user_id,telegram_update_id,user_chat_id,event_date,expires_at,code_version,offer_due_at,created_at) VALUES (?,?,?,?,?,?,?,?,?,?)',
                 [$id, $this->config['hub_id'], (string)$r['from']['id'], $update['update_id'],
-                    (string)$r['user_chat_id'], $r['date'], $r['date'] + $this->config['response_seconds'],
+                    (string)$r['user_chat_id'], $r['date'], self::expiresAt($r['date'], $this->config['response_seconds']),
                     self::CODE_VERSION, $this->now(), $this->now()]);
             $this->query('UPDATE trh_slots SET current_request_id=?,latest_date=?,latest_update=? WHERE hub_id=? AND telegram_user_id=?',
                 [$id, $r['date'], $update['update_id'], $this->config['hub_id'], (string)$r['from']['id']]);
@@ -251,7 +251,7 @@ final class Hub
         return [
             'chat_id' => $r['offer_target'],
             'text' => $prefix . $this->config['title'] . "\n\n" . self::CODE .
-                "\n\nЭто правила общения в хабе. Согласие не означает вступления в ДАО Русь.\n\nВы принимаете эти правила?\n\nЖдем ответа до " . gmdate('d.m.Y H:i', (int)$r['expires_at']) . ' UTC. Если кнопка не отвечает, подождите несколько минут: возможны задержки из-за перебоев в доступе к Telegram',
+                "\n\nЭто правила общения в хабе. Согласие не означает вступления в ДАО Русь.\n\nВы принимаете эти правила?\n\nЕсли кнопка не отвечает, подождите несколько минут: возможны задержки из-за перебоев в доступе к Telegram",
             'reply_markup' => ['inline_keyboard' => [[
                 ['text' => 'Принимаю', 'callback_data' => 'trh:a:' . $r['id']],
                 ['text' => 'Не принимаю', 'callback_data' => 'trh:r:' . $r['id']],
@@ -259,17 +259,30 @@ final class Hub
         ];
     }
 
+    /** Stored as expires_at when response_seconds is 0: the request never expires. 2100-01-01 UTC. */
+    public const NO_EXPIRY = 4102444800;
+
+    public static function expiresAt(int $eventDate, int $responseSeconds): int
+    {
+        return $responseSeconds === 0 ? self::NO_EXPIRY : $eventDate + $responseSeconds;
+    }
+
     /**
      * Reminders repeat until the applicant answers, blocks the bot or the request expires:
-     * every REMIND_EVERY seconds during the first day after the request, then twice a day.
+     * every REMIND_EVERY seconds during the first day after the request, every
+     * REMIND_EVERY_LATER until REMIND_WEEKLY_AFTER, then every REMIND_EVERY_WEEKLY.
      */
     public const REMIND_EVERY = 14400;
     public const REMIND_DAILY_AFTER = 86400;
     public const REMIND_EVERY_LATER = 43200;
+    public const REMIND_WEEKLY_AFTER = 2592000;
+    public const REMIND_EVERY_WEEKLY = 604800;
 
     public static function remindInterval(int $eventDate, int $now): int
     {
-        return $now - $eventDate < self::REMIND_DAILY_AFTER ? self::REMIND_EVERY : self::REMIND_EVERY_LATER;
+        $age = $now - $eventDate;
+        if ($age < self::REMIND_DAILY_AFTER) return self::REMIND_EVERY;
+        return $age < self::REMIND_WEEKLY_AFTER ? self::REMIND_EVERY_LATER : self::REMIND_EVERY_WEEKLY;
     }
 
     /** No reminders at night, Moscow time: hours [23:00, 09:00). */
@@ -297,7 +310,7 @@ final class Hub
             return $r;
         });
         if (!$r) return;
-        $result = $this->bot->call('sendMessage', $this->offerMessage($r, "Напоминание: вы подали заявку в хаб, ответа пока нет.\n\n"));
+        $result = $this->bot->call('sendMessage', $this->offerMessage($r, "Напоминание: ваша заявка в хаб ждёт ответа. Если хотите подумать — не спешите.\n\n"));
         if (empty($result['ok']) && (int)($result['error_code'] ?? 0) === 403) {
             // The applicant blocked the bot or deleted the chat: stop reminding. /start resends the rules.
             $this->locked($r['telegram_user_id'], function (array $slot) use ($id) {
@@ -359,9 +372,12 @@ final class Hub
         foreach ($rows as $r) { $this->decision($r['id']); $this->offer($r['id']); }
         if ($this->quietHours()) return;
         // Same rule as remindInterval(): frequent during the first day, daily afterwards.
-        $due = $this->query("SELECT id FROM trh_requests WHERE hub_id=? AND offer_state='sent' AND status='pending' AND expires_at>? AND ((offer_due_at<=? AND event_date>?) OR offer_due_at<=?) ORDER BY offer_due_at LIMIT " . max(1, min(50, $limit)),
-            [$this->config['hub_id'], $this->now(), $this->now() - self::REMIND_EVERY, $this->now() - self::REMIND_DAILY_AFTER,
-                $this->now() - self::REMIND_EVERY_LATER])->fetchAll();
+        $now = $this->now();
+        $due = $this->query("SELECT id FROM trh_requests WHERE hub_id=? AND offer_state='sent' AND status='pending' AND expires_at>? AND ((offer_due_at<=? AND event_date>?) OR (offer_due_at<=? AND event_date>?) OR offer_due_at<=?) ORDER BY offer_due_at LIMIT " . max(1, min(50, $limit)),
+            [$this->config['hub_id'], $now,
+                $now - self::REMIND_EVERY, $now - self::REMIND_DAILY_AFTER,
+                $now - self::REMIND_EVERY_LATER, $now - self::REMIND_WEEKLY_AFTER,
+                $now - self::REMIND_EVERY_WEEKLY])->fetchAll();
         foreach ($due as $r) $this->remind($r['id']);
     }
 }

@@ -13,7 +13,8 @@ function configuration(): array
     $c = require $file;
     if (!is_array($c) || !preg_match('/^[a-z0-9][a-z0-9_-]{1,63}$/D', $c['hub_id'] ?? '') ||
         !preg_match('/^-[1-9][0-9]{1,15}$/D', $c['chat_id'] ?? '') ||
-        !is_int($c['response_seconds'] ?? null) || $c['response_seconds'] < 60 || $c['response_seconds'] > 2592000 ||
+        // response_seconds: 0 = no deadline (request stays open), otherwise 60 seconds .. 30 days.
+        !is_int($c['response_seconds'] ?? null) || ($c['response_seconds'] !== 0 && ($c['response_seconds'] < 60 || $c['response_seconds'] > 2592000)) ||
         !is_string($c['title'] ?? null) || $c['title'] === '' ||
         !str_starts_with($c['database']['dsn'] ?? '', 'mysql:')) throw new \RuntimeException('Invalid private configuration');
     if (PHP_INT_SIZE !== 8) throw new \RuntimeException('64-bit PHP required');

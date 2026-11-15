@@ -1,20 +1,21 @@
 <?php
 declare(strict_types=1);
 // Sets how long an applicant has to answer the rules (response_seconds in config.php).
-// Usage: set-response-days.php <days 1..30> [--extend-pending]
+// Usage: set-response-days.php <days 1..30 | forever> [--extend-pending]
+//   forever           no deadline: requests stay open until the applicant answers
 //   --extend-pending  also moves the deadline of requests still waiting for an answer
-//                     to request time + the new window (never shortens a deadline).
+//                     (never shortens a deadline).
 // Writes config atomically with mode 0600. Prints counts only.
 if (PHP_SAPI !== 'cli') { http_response_code(404); exit; }
 require dirname(__DIR__) . '/src/Bootstrap.php';
 
-$days = $argv[1] ?? '';
+$arg = $argv[1] ?? '';
 $extend = ($argv[2] ?? '') === '--extend-pending';
-if (!preg_match('/^([1-9]|[12][0-9]|30)$/D', $days) || (isset($argv[2]) && !$extend)) {
-    fwrite(STDERR, "Usage: set-response-days.php <days 1..30> [--extend-pending]\n");
+if ((!preg_match('/^([1-9]|[12][0-9]|30)$/D', $arg) && $arg !== 'forever') || (isset($argv[2]) && !$extend)) {
+    fwrite(STDERR, "Usage: set-response-days.php <days 1..30 | forever> [--extend-pending]\n");
     exit(1);
 }
-$seconds = (int)$days * 86400;
+$seconds = $arg === 'forever' ? 0 : (int)$arg * 86400;
 try {
     $file = dirname(__DIR__) . '/config.php';
     $c = \TeniRusi\configuration();
@@ -31,11 +32,17 @@ try {
     }
     $check = \TeniRusi\configuration();
     if (($check['response_seconds'] ?? null) !== $seconds) throw new RuntimeException('Verification failed');
-    echo "Response window set to {$days} day(s) for new requests. Other configuration values unchanged.\n";
+    echo ($seconds === 0 ? 'Response window set to no deadline' : "Response window set to {$arg} day(s)") .
+        " for new requests. Other configuration values unchanged.\n";
     if ($extend) {
         $db = \TeniRusi\database($check);
-        $st = $db->prepare("UPDATE trh_requests SET expires_at=event_date+? WHERE hub_id=? AND status='pending' AND expires_at>? AND event_date+?>expires_at");
-        $st->execute([$seconds, $check['hub_id'], time(), $seconds]);
+        if ($seconds === 0) {
+            $st = $db->prepare("UPDATE trh_requests SET expires_at=? WHERE hub_id=? AND status='pending' AND expires_at>? AND expires_at<?");
+            $st->execute([\TeniRusi\Hub::NO_EXPIRY, $check['hub_id'], time(), \TeniRusi\Hub::NO_EXPIRY]);
+        } else {
+            $st = $db->prepare("UPDATE trh_requests SET expires_at=event_date+? WHERE hub_id=? AND status='pending' AND expires_at>? AND event_date+?>expires_at");
+            $st->execute([$seconds, $check['hub_id'], time(), $seconds]);
+        }
         echo 'Pending requests extended: ' . $st->rowCount() . "\n";
     }
 } catch (Throwable $e) {
