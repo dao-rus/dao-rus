@@ -18,6 +18,7 @@ const COMMANDS = [
     ['command' => 'find', 'description' => 'Найти людей'],
     ['command' => 'who', 'description' => 'Кто здесь'],
     ['command' => 'me', 'description' => 'О себе и настройки'],
+    ['command' => 'key', 'description' => 'Ключ для своего ИИ и программ'],
 ];
 
 try {

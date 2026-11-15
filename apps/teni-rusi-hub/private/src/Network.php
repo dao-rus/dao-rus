@@ -31,7 +31,10 @@ final class Network
     /** The persistent keyboard (always under the input field) and commands map to the same actions. */
     public const MENU = ['Мне нужно' => 'new:need', 'У меня есть' => 'new:have', 'Хочу сделать' => 'new:do', 'Интерес' => 'new:interest',
         'Найти людей' => 'find', 'Кто здесь' => 'who', 'Обмен' => 'list', 'Мои записи' => 'mine', 'О себе' => 'me',
-        '/find' => 'find', '/who' => 'who', '/me' => 'me', '/menu' => 'menu'];
+        '/find' => 'find', '/who' => 'who', '/me' => 'me', '/menu' => 'menu', '/key' => 'key'];
+    /** Keys for programs and AI assistants (step 2 of the protocol): at most KEYS_MAX live, a key unused for KEY_IDLE goes out. */
+    public const KEYS_MAX = 5;
+    public const KEY_IDLE = 7776000;
     public const DIALOG_TTL = 3600;
     public const ABOUT_MAX = 200;
     public const NOTE_MAX = 300;
@@ -205,6 +208,77 @@ final class Network
         return $this->handle($user, 'trh:n:' . $action, static function (string $t): void {}, null);
     }
 
+    /**
+     * One action on behalf of a person, for programs (API) and AI assistants: the same actions as the
+     * buttons, named by their callback data without «trh:n:» (find, new:need, req:ID, ok:ID …).
+     * For an action that waits for text (find, new:*, about, city:ID, pt:…), $text is that text.
+     * Keys cannot be made or revoked this way: only in the bot. $beforeText runs between the two steps.
+     */
+    public function run(string $user, string $action, ?string $text, ?callable $beforeText = null): string
+    {
+        if (!preg_match('/^[a-z]+(:[a-z]+)?(:[a-f0-9]{32})?(:[unx123])?$/D', $action) || preg_match('/^(key|kd|kk|join|later)/', $action)) return 'unknown_action';
+        if (!$this->canUse($user)) { $this->welcome($user); return 'net_denied'; }
+        $this->clearDialog($user);
+        if ($action === 'menu') { $this->menu($user); return 'menu'; }
+        $result = $this->handle($user, 'trh:n:' . $action, static function (string $t): void {}, null);
+        if ($text === null || !$this->query('SELECT 1 FROM trh_dialogs WHERE hub_id=? AND telegram_user_id=?', [$this->hub(), $user])->fetch()) {
+            if ($result === 'ignored') return 'unknown_action';
+            return $result;
+        }
+        if ($beforeText) $beforeText(); // the prompt («Напишите…») is not needed when the text is already here
+        return $this->dialogInput(['from' => ['id' => $user], 'text' => $text]) ?? $result;
+    }
+
+    // ---- Keys for programs and AI assistants -----------------------------------------------
+
+    public static function keyHash(string $key): string { return hash('sha256', $key); }
+
+    /** The person a live key belongs to; marks the key used. Null for an unknown, revoked or idle key. */
+    public function keyUser(string $key): ?string
+    {
+        if (!preg_match('/^dao_[A-Za-z0-9_-]{32}$/D', $key)) return null;
+        $k = $this->query('SELECT telegram_user_id,created_at,last_used_at FROM trh_keys WHERE hash=? AND hub_id=? AND revoked_at IS NULL', [self::keyHash($key), $this->hub()])->fetch();
+        if (!$k || (int)($k['last_used_at'] ?? $k['created_at']) + self::KEY_IDLE < $this->now()) return null;
+        $this->query('UPDATE trh_keys SET last_used_at=? WHERE hash=?', [$this->now(), self::keyHash($key)]);
+        return $k['telegram_user_id'];
+    }
+
+    private function liveKeys(string $user): array
+    {
+        return $this->query('SELECT tail,created_at,last_used_at FROM trh_keys WHERE hub_id=? AND telegram_user_id=? AND revoked_at IS NULL AND (last_used_at>? OR (last_used_at IS NULL AND created_at>?)) ORDER BY created_at',
+            [$this->hub(), $user, $this->now() - self::KEY_IDLE, $this->now() - self::KEY_IDLE])->fetchAll();
+    }
+
+    private function apiUrl(): string { return preg_replace('#webhook\.php$#', 'api.php', (string)($this->config['webhook_url'] ?? 'https://dao.h1n.ru/webhook.php')); }
+
+    private function sendKeys(string $user): void
+    {
+        $keys = $this->liveKeys($user);
+        $lines = [];
+        foreach ($keys as $i => $k) $lines[] = ($i + 1) . '. …' . $k['tail'] . ' — создан ' . Community::date((int)$k['created_at']) .
+            ($k['last_used_at'] ? ', последний раз ' . Community::date((int)$k['last_used_at']) : ', ещё не использовался');
+        $rows = [];
+        if (count($keys) < self::KEYS_MAX) $rows[] = [self::b('Создать ключ', 'trh:n:keynew')];
+        if ($keys) $rows[] = [self::b('Отключить все ключи', 'trh:n:keyoff')];
+        $this->send($user, "Ключи для программ и ИИ-ассистентов: " . count($keys) . ' из ' . self::KEYS_MAX . '.' . ($lines ? "\n\n" . implode("\n", $lines) : '') .
+            "\n\nКлюч позволяет программе или вашему ИИ (Claude, ChatGPT) действовать в сети от вашего имени: искать, оставлять записи, просить о знакомстве. " .
+            'Видит она ровно то же, что вы в боте; чужие имена — только после согласия обоих. Просьбы и совпадения всё равно приходят сюда, в бот. ' .
+            'Ключ, которым не пользовались 90 дней, гаснет сам.', $rows ? self::buttons($rows) : []);
+    }
+
+    private function newKey(string $user, callable $answer): string
+    {
+        if (count($this->liveKeys($user)) >= self::KEYS_MAX) { $answer('Уже ' . self::KEYS_MAX . ' ключей'); $this->send($user, 'У вас уже ' . self::KEYS_MAX . ' ключей. Отключите их в /key и создайте новый.'); return 'key_limit'; }
+        $key = 'dao_' . rtrim(strtr(base64_encode(random_bytes(24)), '+/', '-_'), '=');
+        $this->query('INSERT INTO trh_keys(hash,hub_id,telegram_user_id,tail,created_at) VALUES (?,?,?,?,?)', [self::keyHash($key), $this->hub(), $user, substr($key, -4), $this->now()]);
+        $answer('Ключ создан');
+        $head = "Ваш новый ключ (нажмите, чтобы скопировать):\n\n";
+        $this->send($user, $head . $key . "\n\nАдрес для программ: " . $this->apiUrl() .
+            "\n\nНикому не показывайте ключ: с ним действуют от вашего имени. Я храню только его отпечаток, поэтому показать ещё раз не смогу. Отключить — /key.",
+            ['entities' => [['type' => 'code', 'offset' => Community::u16($head), 'length' => Community::u16($key)]]]);
+        return 'key_created';
+    }
+
     // ---- Callbacks ----------------------------------------------------------------------
 
     public function callback(array $cb): string
@@ -253,6 +327,14 @@ final class Network
             return 'search_prompt';
         }
         if ($data === 'trh:n:who') { $answer('Кто здесь'); $this->who($user); return 'who'; }
+        if ($data === 'trh:n:key') { $answer('Ключи'); $this->sendKeys($user); return 'keys'; }
+        if ($data === 'trh:n:keynew') return $this->newKey($user, $answer);
+        if ($data === 'trh:n:keyoff') {
+            $n = $this->query('UPDATE trh_keys SET revoked_at=? WHERE hub_id=? AND telegram_user_id=? AND revoked_at IS NULL', [$this->now(), $this->hub(), $user])->rowCount();
+            $answer('Ключи отключены');
+            $this->send($user, '✓ Все ключи отключены (' . $n . '). Программы, которые ими пользовались, больше не смогут действовать от вашего имени.');
+            return 'keys_revoked';
+        }
         if ($data === 'trh:n:list') { $answer('Обмен'); $this->sendList($user); return 'list'; }
         if ($data === 'trh:n:mine') { $answer('Мои записи'); $this->sendMine($user); return 'mine'; }
         if ($data === 'trh:n:me') { $answer('О себе'); $this->sendMe($user); return 'me'; }
@@ -761,6 +843,6 @@ final class Network
             "\n\nПохожие записи: " . ((int)($this->net($user)['notify'] ?? 1) === 1 ? 'присылаю, не больше ' . self::MATCH_NOTIFY_MAX . ' в день' : 'не присылаю') . '.';
         $notify = (int)($this->net($user)['notify'] ?? 1) === 1;
         $this->send($user, $text, self::buttons([[self::b('Изменить строку о себе', 'trh:n:about')],
-            [self::b($notify ? 'Не присылать совпадения' : 'Присылать совпадения', 'trh:n:notify')]]));
+            [self::b($notify ? 'Не присылать совпадения' : 'Присылать совпадения', 'trh:n:notify')], [self::b('Ключи для программ и ИИ', 'trh:n:key')]]));
     }
 }

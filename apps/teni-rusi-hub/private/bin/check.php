@@ -8,9 +8,9 @@ try {
     }
     $c = \TeniRusi\configuration();
     $db = \TeniRusi\database($c);
-    foreach (['trh_slots','trh_requests','trh_consents','trh_memberships','trh_relays','trh_people','trh_exclusions','trh_signals','trh_dialogs','trh_net','trh_links','trh_reviews','trh_usage'] as $t) $db->query('SELECT 1 FROM ' . $t . ' LIMIT 1');
-    $engines = $db->query("SELECT ENGINE FROM information_schema.tables WHERE TABLE_SCHEMA=DATABASE() AND TABLE_NAME IN ('trh_slots','trh_requests','trh_consents','trh_memberships','trh_relays','trh_people','trh_exclusions','trh_signals','trh_dialogs','trh_net','trh_links','trh_reviews','trh_usage')")->fetchAll(\PDO::FETCH_COLUMN);
-    if (count($engines) !== 13 || count(array_filter($engines, static fn($e) => $e === 'InnoDB')) !== 13) throw new \RuntimeException('InnoDB required');
+    foreach (['trh_slots','trh_requests','trh_consents','trh_memberships','trh_relays','trh_people','trh_exclusions','trh_signals','trh_dialogs','trh_net','trh_links','trh_reviews','trh_usage','trh_keys'] as $t) $db->query('SELECT 1 FROM ' . $t . ' LIMIT 1');
+    $engines = $db->query("SELECT ENGINE FROM information_schema.tables WHERE TABLE_SCHEMA=DATABASE() AND TABLE_NAME IN ('trh_slots','trh_requests','trh_consents','trh_memberships','trh_relays','trh_people','trh_exclusions','trh_signals','trh_dialogs','trh_net','trh_links','trh_reviews','trh_usage','trh_keys')")->fetchAll(\PDO::FETCH_COLUMN);
+    if (count($engines) !== 14 || count(array_filter($engines, static fn($e) => $e === 'InnoDB')) !== 14) throw new \RuntimeException('InnoDB required');
     echo "PHP/database/tables: OK\n";
     if (!in_array('--telegram', $argv, true)) exit(0);
     if (!$c['bot_token'] || !$c['expected_bot_id']) throw new \RuntimeException('Bot is not configured');
