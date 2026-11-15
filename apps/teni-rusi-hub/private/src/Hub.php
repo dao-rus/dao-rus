@@ -10,10 +10,12 @@ final class Hub
     public const CODE_VERSION = '0.1';
     public const CODE = "1. Не нападай первым.\n2. Стой за свою свободу, уважай чужую. Границы свобод определяют договор и вече.\n3. Власть принадлежит народу.";
     private $clock;
+    private Community $community;
 
     public function __construct(private PDO $db, private Bot $bot, private array $config, ?callable $clock = null)
     {
         $this->clock = $clock ?? static fn(): int => time();
+        $this->community = new Community($db, $bot, $config, $this->clock);
     }
 
     private function now(): int { return ($this->clock)(); }
@@ -51,10 +53,18 @@ final class Hub
 
     public function receive(array $update): string
     {
+        $this->community->remember($update);
         $r = $update['chat_join_request'] ?? null;
         if (is_array($r)) return $this->join($update, $r);
+        $cm = $update['chat_member'] ?? null;
+        if (is_array($cm)) return $this->community->chatMember($cm);
         $cb = $update['callback_query'] ?? null;
-        if (is_array($cb)) return $this->callback($cb);
+        if (is_array($cb)) {
+            $data = is_string($cb['data'] ?? null) ? $cb['data'] : '';
+            if (str_starts_with($data, 'trh:x:')) return $this->community->callback($cb);
+            if (str_starts_with($data, 'trh:o:')) return $this->operatorDecision($cb);
+            return $this->callback($cb);
+        }
         $m = $update['message'] ?? null;
         if (is_array($m) && ($m['chat']['type'] ?? null) === 'private' &&
             self::userId($m['from']['id'] ?? null) && ($m['from']['is_bot'] ?? false) !== true &&
@@ -70,15 +80,56 @@ final class Hub
                     [$m['date'], $update['update_id'], $this->config['hub_id'], (string)$m['from']['id']]);
                 return ['id' => $slot['current_request_id']];
             });
-            if ($start !== null) $this->startReply((string)$m['chat']['id'], $start['id']);
+            if ($start !== null) {
+                $this->community->clearDialog((string)$m['from']['id']);
+                $this->startReply((string)$m['chat']['id'], $start['id']);
+            }
             return 'start';
         }
         if (is_array($m) && ($m['chat']['type'] ?? null) === 'private' &&
             self::userId($m['from']['id'] ?? null) && ($m['from']['is_bot'] ?? false) !== true &&
             ($m['chat']['id'] ?? null) === $m['from']['id'] && is_int($m['message_id'] ?? null)) {
+            $operator = $this->config['operator_chat_id'] ?? null;
+            if (self::userId($operator) && $m['from']['id'] === $operator && ($m['text'] ?? null) === '/members') {
+                return $this->community->members($operator);
+            }
+            // A Telegram "Reply" is an answer to a relayed message, never an Exchange record.
+            if (!isset($m['reply_to_message'])) {
+                $dialog = $this->community->dialogInput($m);
+                if ($dialog !== null) return $dialog;
+            }
             return $this->relay($m);
         }
         return 'ignored';
+    }
+
+    /**
+     * Operator buttons for a previously excluded applicant who accepted the rules:
+     * «Допустить» approves the join request, «Отклонить» declines it.
+     */
+    private function operatorDecision(array $cb): string
+    {
+        $operator = $this->config['operator_chat_id'] ?? null;
+        if (!is_string($cb['id'] ?? null) || !self::userId($operator) || ($cb['from']['id'] ?? null) !== $operator ||
+            !preg_match('/^trh:o:(a|d):([a-f0-9]{32})$/D', (string)$cb['data'], $match)) return 'ignored';
+        $initial = $this->row($match[2]);
+        $done = $initial ? $this->locked($initial['telegram_user_id'], function (array $slot) use ($match) {
+            $r = $this->row($match[2]);
+            if (!$r || $slot['current_request_id'] !== $r['id'] || $r['status'] !== 'needs_review' || $r['outcome'] !== 'excluded_review') return null;
+            $this->query("UPDATE trh_requests SET status=?,outcome=NULL,retry_at=0 WHERE id=?",
+                [$match[1] === 'a' ? 'approval_pending' : 'decline_pending', $r['id']]);
+            return $match[1];
+        }) : null;
+        $this->bot->call('answerCallbackQuery', ['callback_query_id' => $cb['id'],
+            'text' => $done === null ? 'Заявка уже обработана или недоступна.' : ($done === 'a' ? 'Допущен' : 'Отклонён')]);
+        if ($done === null) return 'operator_decision_stale';
+        if (is_int($cb['message']['message_id'] ?? null)) {
+            $this->bot->call('editMessageText', ['chat_id' => $operator, 'message_id' => $cb['message']['message_id'],
+                'text' => (is_string($cb['message']['text'] ?? null) ? $cb['message']['text'] : 'Заявка ранее исключённого') .
+                    "\n\nРешение: " . ($done === 'a' ? 'допущен.' : 'отклонён.')]);
+        }
+        $this->decision($match[2]);
+        return 'operator_decision';
     }
 
     /** Media that carry a caption, so they can reach the operator as one message with the sender line. */
@@ -166,6 +217,11 @@ final class Hub
     private function startReply(string $chatId, ?string $id): void
     {
         $r = $id ? $this->row($id) : null;
+        // Members (accepted the rules, no exclusion mark) get the Exchange menu.
+        if ((!$r || in_array($r['status'], ['approved', 'superseded', 'declined'], true)) && $this->community->isMember($chatId)) {
+            $this->community->menu($chatId);
+            return;
+        }
         if ($r && $r['status'] === 'pending') {
             // Resends the rules, or marks an expired request for decline.
             $this->offer($id, true);
@@ -184,7 +240,9 @@ final class Hub
                 : 'Отказ сохранён, заявка будет отклонена. Если передумаете, подайте новую заявку на вступление в группу.',
             'approved' => 'Заявка принята: вы допущены в группу.',
             'declined' => 'Заявка отклонена. Вы можете подать новую заявку на вступление в группу.',
-            'needs_review' => 'Заявка требует ручной проверки.',
+            'needs_review' => ($r['outcome'] ?? null) === 'excluded_review'
+                ? 'Согласие сохранено. Ранее вы были исключены из хаба, поэтому заявку рассмотрят организаторы.'
+                : 'Заявка требует ручной проверки.',
             default => 'Активной заявки в хаб не найдено. Подайте заявку на вступление в группу заново.',
         };
     }
@@ -218,6 +276,12 @@ final class Hub
             return $id;
         });
         if (!$id) return 'duplicate_or_stale';
+        $excluded = $this->community->excludedAt((string)$r['from']['id']);
+        if ($excluded !== null) {
+            $this->community->notifyOperator('Заявка от ранее исключённого: ' .
+                Community::displayName($this->community->person((string)$r['from']['id'])) . ', исключён ' . Community::date($excluded) .
+                '. Ему отправлены правила с пометкой об исключении; если он их примет, решение будет за вами.');
+        }
         $this->offer($id);
         return 'recorded';
     }
@@ -226,7 +290,8 @@ final class Hub
     {
         if (!is_string($cb['id'] ?? null) || !self::userId($cb['from']['id'] ?? null) ||
             !is_string($cb['data'] ?? null) || !preg_match('/^trh:(a|r):([a-f0-9]{32})$/D', $cb['data'], $match)) return 'ignored';
-        $message = $this->locked((string)$cb['from']['id'], function (array $slot) use ($match) {
+        $reviewed = false;
+        $message = $this->locked((string)$cb['from']['id'], function (array $slot) use ($match, &$reviewed) {
             $r = $this->query('SELECT * FROM trh_requests WHERE id=? AND hub_id=?',
                 [$match[2], $this->config['hub_id']])->fetch();
             if (!$r || $slot['current_request_id'] !== $r['id'] || $slot['telegram_user_id'] !== $r['telegram_user_id'] ||
@@ -244,12 +309,28 @@ final class Hub
                 [$r['id'], $r['hub_id'], $r['telegram_user_id'], self::CODE_VERSION, $this->now()]);
             $this->query('INSERT INTO trh_memberships(hub_id,telegram_user_id,latest_consent_id) VALUES (?,?,?) ON DUPLICATE KEY UPDATE latest_consent_id=VALUES(latest_consent_id)',
                 [$r['hub_id'], $r['telegram_user_id'], $r['id']]);
+            if ($this->community->excludedAt($r['telegram_user_id']) !== null) {
+                // Previously excluded: consent is kept, the operator decides on admission.
+                $this->query("UPDATE trh_requests SET status='needs_review',outcome='excluded_review',decision_reason='accepted',accepted_at=?,offer_state='none' WHERE id=?", [$this->now(), $r['id']]);
+                $reviewed = true;
+                return 'Согласие сохранено. Ранее вы были исключены из хаба, поэтому заявку рассмотрят организаторы.';
+            }
             $this->query("UPDATE trh_requests SET status='approval_pending',decision_reason='accepted',accepted_at=?,offer_state='none' WHERE id=?", [$this->now(), $r['id']]);
             return 'Согласие сохранено. Допуск ожидает подтверждения Telegram.';
         });
         // Best-effort UI acknowledgement has no bearing on the durable decision.
         $this->bot->call('answerCallbackQuery', ['callback_query_id' => $cb['id'], 'text' => $message]);
         $request = $this->row($match[2]);
+        if ($reviewed && $request) {
+            $excluded = $this->community->excludedAt($request['telegram_user_id']);
+            $this->community->notifyOperator('Ранее исключённый ' . Community::displayName($this->community->person($request['telegram_user_id'])) .
+                ($excluded !== null ? ' (исключён ' . Community::date($excluded) . ')' : '') . ' принял правила хаба. Допустить в группу?',
+                ['reply_markup' => ['inline_keyboard' => [[
+                    ['text' => 'Допустить', 'callback_data' => 'trh:o:a:' . $request['id']],
+                    ['text' => 'Отклонить', 'callback_data' => 'trh:o:d:' . $request['id']],
+                ]]]]);
+            return 'handled';
+        }
         if ($request && $request['telegram_user_id'] === (string)$cb['from']['id']) $this->decision($match[2]);
         return 'handled';
     }
@@ -304,6 +385,9 @@ final class Hub
 
     private function offerMessage(array $r, string $prefix = ''): array
     {
+        if ($this->community->excludedAt($r['telegram_user_id']) !== null) {
+            $prefix .= "Ранее вы были исключены из хаба. Если вы примете правила, заявку рассмотрят организаторы.\n\n";
+        }
         return [
             'chat_id' => $r['offer_target'],
             'text' => $prefix . $this->config['title'] . "\n\n" . self::CODE .

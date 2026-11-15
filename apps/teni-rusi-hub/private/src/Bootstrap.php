@@ -3,6 +3,7 @@ declare(strict_types=1);
 namespace TeniRusi;
 
 require_once __DIR__ . '/Telegram.php';
+require_once __DIR__ . '/Community.php';
 require_once __DIR__ . '/Hub.php';
 require_once __DIR__ . '/Webhook.php';
 

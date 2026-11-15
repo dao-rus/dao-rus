@@ -12,7 +12,8 @@ namespace TeniRusi;
  */
 final class Drain
 {
-    public const ALLOWED_UPDATES = ['chat_join_request', 'callback_query', 'message'];
+    // chat_member must be requested explicitly; it carries bans in the hub group (exclusion marks).
+    public const ALLOWED_UPDATES = ['chat_join_request', 'callback_query', 'message', 'chat_member'];
 
     /** @var callable(string, array, int): ?array  Bot API call; null when no usable response. */
     private $api;
