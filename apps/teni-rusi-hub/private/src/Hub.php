@@ -73,7 +73,7 @@ final class Hub
             ($m['chat']['id'] ?? null) === $m['from']['id'] &&
             is_int($update['update_id'] ?? null) && $update['update_id'] >= 0 &&
             is_int($m['date'] ?? null) && $m['date'] > 0 && $m['date'] <= $this->now() + 60 &&
-            in_array($m['text'] ?? '', ['/start', '/start hub', '/start hub_teni_rusi'], true)) {
+            is_string($m['text'] ?? null) && ($m['text'] === '/start' || str_starts_with($m['text'], '/start '))) {
             $start = $this->locked((string)$m['from']['id'], function (array $slot) use ($m, $update) {
                 // A stale or repeated /start is dropped silently: it must not be answered twice.
                 if ($m['date'] < (int)$slot['last_start_date'] || ($m['date'] === (int)$slot['last_start_date'] &&
@@ -97,6 +97,11 @@ final class Hub
             }
             // A Telegram "Reply" is an answer to a relayed message, never an Exchange record.
             if (!isset($m['reply_to_message'])) {
+                // The persistent keyboard and /find, /who, /me, /menu: no /start needed.
+                if (is_string($m['text'] ?? null)) {
+                    $menu = $this->network->menuAction((string)$m['from']['id'], $m['text']);
+                    if ($menu !== null) return $menu;
+                }
                 $dialog = $this->network->dialogInput($m);
                 if ($dialog !== null) return $dialog;
             }

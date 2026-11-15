@@ -24,7 +24,14 @@ final class Network
     private const GROUP_KINDS = ['need', 'have'];
     public const BODY_MAX = 500;          // same limit as DAO Core records
     public const ACTIVE_MAX = 10;
-    public const ENTRY_TTL = 7776000;     // 90 days; «Продлить» renews
+    /** Life of a record by kind in seconds; null = no expiry. «Продлить» renews; a week before the end the author is asked. */
+    public const TTL = ['need' => 7776000, 'have' => 7776000, 'do' => 15552000, 'interest' => null];
+    public const WARN_BEFORE = 604800;
+    public const MATCH_NOTIFY_MAX = 2;    // «похожая запись появилась» per person per day
+    /** The persistent keyboard (always under the input field) and commands map to the same actions. */
+    public const MENU = ['Мне нужно' => 'new:need', 'У меня есть' => 'new:have', 'Хочу сделать' => 'new:do', 'Интерес' => 'new:interest',
+        'Найти людей' => 'find', 'Кто здесь' => 'who', 'Обмен' => 'list', 'Мои записи' => 'mine', 'О себе' => 'me',
+        '/find' => 'find', '/who' => 'who', '/me' => 'me', '/menu' => 'menu'];
     public const DIALOG_TTL = 3600;
     public const ABOUT_MAX = 200;
     public const NOTE_MAX = 300;
@@ -60,6 +67,20 @@ final class Network
         return $this->bot->call('sendMessage', ['chat_id' => $chat, 'text' => $text] + $extra);
     }
     private static function buttons(array $rows): array { return ['reply_markup' => ['inline_keyboard' => $rows]]; }
+    private static function keyboard(): array
+    {
+        $k = fn(string ...$labels) => array_map(fn($l) => ['text' => $l], $labels);
+        return ['reply_markup' => ['keyboard' => [$k('Мне нужно', 'У меня есть'), $k('Хочу сделать', 'Интерес'), $k('Найти людей', 'Кто здесь'),
+            $k('Обмен', 'Мои записи', 'О себе')], 'resize_keyboard' => true, 'is_persistent' => true, 'input_field_placeholder' => 'Выберите кнопку меню']];
+    }
+    private static function expiresAt(string $kind, int $now): ?int { $t = self::TTL[$kind] ?? null; return $t === null ? null : $now + $t; }
+    private static function lifeText(string $kind): string
+    {
+        $t = self::TTL[$kind] ?? null;
+        return $t === null ? 'Запись живёт без срока, пока вы её не снимете.' : 'Запись живёт ' . ($t >= 15552000 ? 'полгода' : '90 дней') . '; за неделю до конца я напомню.';
+    }
+    /** Night in Moscow (23:00–09:00): no unsolicited messages. */
+    private function quiet(): bool { $h = (int)gmdate('G', $this->now() + 10800); return $h >= 23 || $h < 9; }
     private static function b(string $text, string $data): array { return ['text' => $text, 'callback_data' => $data]; }
     private function operator(): ?int
     {
@@ -169,14 +190,19 @@ final class Network
     {
         if (!$this->canUse($chat)) { $this->welcome($chat); return; }
         $this->ensureNet($chat);
-        $this->send($chat, "Сеть ДАО Русь.\n\nОставьте запись — и вас найдут те, кому это близко. Или найдите людей сами. Имена раскрываются только по согласию обоих.",
-            self::buttons([
-                [self::b('Мне нужно', 'trh:n:new:need'), self::b('У меня есть', 'trh:n:new:have')],
-                [self::b('Хочу сделать', 'trh:n:new:do'), self::b('Интерес', 'trh:n:new:interest')],
-                [self::b('Найти людей', 'trh:n:find'), self::b('Кто здесь', 'trh:n:who')],
-                [self::b('Обмен', 'trh:n:list'), self::b('Мои записи', 'trh:n:mine')],
-                [self::b('О себе', 'trh:n:me')],
-            ]));
+        $this->send($chat, "Сеть ДАО Русь. Меню — внизу экрана, команды набирать не нужно.\n\nОставьте запись — и вас найдут те, кому это близко. Или найдите людей сами. Имена раскрываются только по согласию обоих.",
+            self::keyboard());
+    }
+
+    /** A press on the persistent keyboard (or /find, /who, /me, /menu). Null when the text is not a menu item. */
+    public function menuAction(string $user, string $text): ?string
+    {
+        $action = self::MENU[trim($text)] ?? null;
+        if ($action === null) return null;
+        if (!$this->canUse($user)) { $this->welcome($user); return 'welcome'; }
+        $this->clearDialog($user);
+        if ($action === 'menu') { $this->menu($user); return 'menu'; }
+        return $this->handle($user, 'trh:n:' . $action, static function (string $t): void {}, null);
     }
 
     // ---- Callbacks ----------------------------------------------------------------------
@@ -190,24 +216,32 @@ final class Network
         $data = preg_replace('/^trh:x:(list|mine|del:[a-f0-9]{32})$/', 'trh:n:$1', $data);
         $user = (string)$cb['from']['id'];
         $answer = fn(string $t) => $this->bot->call('answerCallbackQuery', ['callback_query_id' => $cb['id'], 'text' => $t]);
+        return $this->handle($user, $data, $answer, $cb);
+    }
+
+    private function handle(string $user, string $data, callable $answer, ?array $cb): string
+    {
         $id = '([a-f0-9]{32})';
         if ($data === 'trh:n:join') {
             if ($this->community->excludedAt($user) !== null && !$this->community->isMember($user)) { $answer('Недоступно'); return 'net_denied'; }
             $this->ensureNet($user);
             $answer('Добро пожаловать');
             $this->menu($user);
+            // First value within seconds: one question, saved as an interest, answered with similar people.
+            $this->setDialog($user, 'entry:interest');
+            $this->send($user, 'Что вас сейчас занимает? Напишите одной фразой — сохраню как ваш интерес и сразу покажу, кто думает о похожем. Не хотите — нажмите любую кнопку внизу.');
             return 'net_joined';
         }
         if ($data === 'trh:n:later') { $answer('Хорошо'); return 'net_later'; }
-        if (preg_match("/^trh:n:kd:$id$/D", $data, $m) || preg_match("/^trh:n:kk:$id$/D", $data, $m)) return $this->operatorDecision($cb, $m[1], str_starts_with($data, 'trh:n:kd:'));
-        if (!$this->canUse($user)) { $answer('Сначала войдите в сеть: /start'); return 'net_denied'; }
+        if ($cb !== null && (preg_match("/^trh:n:kd:$id$/D", $data, $m) || preg_match("/^trh:n:kk:$id$/D", $data, $m))) return $this->operatorDecision($cb, $m[1], str_starts_with($data, 'trh:n:kd:'));
+        if (!$this->canUse($user)) { $answer('Сначала войдите в сеть — нажмите /start'); return 'net_denied'; }
 
         if (preg_match('/^trh:n:new:(need|have|do|interest)$/D', $data, $m)) {
             $active = (int)$this->query("SELECT COUNT(*) FROM trh_signals WHERE hub_id=? AND telegram_user_id=? AND status='active'", [$this->hub(), $user])->fetchColumn();
             if ($active >= self::ACTIVE_MAX) { $answer('Слишком много записей'); $this->send($user, 'У вас уже ' . self::ACTIVE_MAX . ' записей. Снимите старые в «Мои записи» и добавьте новую.'); return 'entry_limit'; }
             $this->setDialog($user, 'entry:' . $m[1]);
             $answer('Жду ваш текст');
-            $this->send($user, self::PROMPTS[$m[1]] . ' (до ' . self::BODY_MAX . ' символов). Передумали — напишите /start.');
+            $this->send($user, self::PROMPTS[$m[1]] . ' (до ' . self::BODY_MAX . ' символов). Передумали — нажмите любую кнопку внизу.');
             return 'entry_prompt';
         }
         if ($data === 'trh:n:find') {
@@ -229,10 +263,28 @@ final class Network
             return 'about_prompt';
         }
         if ($data === 'trh:n:renew') {
-            $n = $this->query("UPDATE trh_signals SET expires_at=? WHERE hub_id=? AND telegram_user_id=? AND status='active'", [$this->now() + self::ENTRY_TTL, $this->hub(), $user])->rowCount();
+            $rows = $this->query("SELECT id,kind FROM trh_signals WHERE hub_id=? AND telegram_user_id=? AND status='active'", [$this->hub(), $user])->fetchAll();
+            foreach ($rows as $r) $this->query('UPDATE trh_signals SET expires_at=?,warned_at=NULL WHERE id=?', [self::expiresAt($r['kind'], $this->now()), $r['id']]);
             $answer('Продлено');
-            $this->send($user, 'Записи продлены на 90 дней: ' . $n . '.');
+            $this->send($user, 'Записи продлены: ' . count($rows) . '. «Нужно» и «Есть» — на 90 дней, «Хочу сделать» — на полгода, интересы живут без срока.');
             return 'renewed';
+        }
+        if (preg_match("/^trh:n:ren:$id$/D", $data, $m)) {
+            $s = $this->ownEntry($user, $m[1]);
+            if (!$s) { $answer('Запись уже снята'); return 'entry_gone'; }
+            $until = self::expiresAt($s['kind'], $this->now());
+            $this->query('UPDATE trh_signals SET expires_at=?,warned_at=NULL WHERE id=?', [$until, $s['id']]);
+            $answer('Продлено');
+            $this->send($user, '✓ Запись продлена' . ($until ? ' до ' . Community::date($until) : '') . '.');
+            return 'renewed_one';
+        }
+        if ($data === 'trh:n:notify') {
+            $this->ensureNet($user);
+            $on = (int)($this->net($user)['notify'] ?? 1) === 1;
+            $this->query('UPDATE trh_net SET notify=? WHERE hub_id=? AND telegram_user_id=?', [$on ? 0 : 1, $this->hub(), $user]);
+            $answer($on ? 'Совпадения больше не присылаю' : 'Буду присылать совпадения');
+            $this->send($user, $on ? 'Хорошо, не буду присылать похожие записи. Включить снова — «О себе».' : '✓ Буду присылать похожие записи, не больше ' . self::MATCH_NOTIFY_MAX . ' в день.');
+            return $on ? 'notify_off' : 'notify_on';
         }
         if (preg_match("/^trh:n:del:$id$/D", $data, $m)) return $this->archive($user, $m[1], $answer);
         if (preg_match("/^trh:n:vis:$id$/D", $data, $m)) return $this->hide($user, $m[1], $answer);
@@ -315,13 +367,45 @@ final class Network
         }
         $id = bin2hex(random_bytes(16));
         $this->query("INSERT INTO trh_signals(id,hub_id,telegram_user_id,kind,body,status,visibility,created_at,expires_at) VALUES (?,?,?,?,?,'active','open',?,?)",
-            [$id, $this->hub(), $user, $kind, $text, $this->now(), $this->now() + self::ENTRY_TTL]);
+            [$id, $this->hub(), $user, $kind, $text, $this->now(), self::expiresAt($kind, $this->now())]);
         $this->clearDialog($user);
         $posted = in_array($kind, self::GROUP_KINDS, true) && $this->community->isMember($user) && $this->postToGroup($id, $kind, $text, $user);
         $this->send($user, '✓ Запись сохранена' . ($posted ? ', видна в поиске сети и опубликована в группе.' : ' и видна в поиске сети.') .
-            ' Имя не показывается, пока вы сами не согласитесь на знакомство. Запись живёт 90 дней.',
+            ' Имя не показывается, пока вы сами не согласитесь на знакомство. ' . self::lifeText($kind),
             self::buttons([[self::b('Только при совпадении', 'trh:n:vis:' . $id), self::b('Указать город', 'trh:n:city:' . $id)]]));
+        $this->similar($user, ['id' => $id, 'kind' => $kind, 'body' => $text, 'city' => null]);
         return 'entry_saved';
+    }
+
+    /**
+     * Right after a record is saved: show the author similar open records, and tell owners of similar
+     * records (open or hidden) that a matching one appeared — at most MATCH_NOTIFY_MAX a day each,
+     * never at night, never to someone who switched it off. «Similar» = at least two shared word stems
+     * (or all of them, for a record of one word).
+     */
+    private function similar(string $user, array $entry): void
+    {
+        $q = self::stems($entry['body']);
+        if (!$q) return;
+        $need = min(2, count($q));
+        $score = fn(array $r): int => count(array_intersect($q, self::stems($r['body'] . ' ' . ($r['city'] ?? ''))));
+        $found = [];
+        foreach ($this->liveEntries('open', $user) as $r) if (($s = $score($r)) >= $need) { $r['_s'] = $s; $found[] = $r; }
+        usort($found, fn($a, $b) => [$b['_s'], $b['created_at']] <=> [$a['_s'], $a['created_at']]);
+        if ($found) $this->sendResults($user, 'Похожие записи уже есть (без имён):', array_slice($found, 0, 5));
+        else $this->send($user, 'Похожих записей пока нет. Когда появятся, я сообщу.');
+        if ($this->quiet()) return;
+        $notified = [];
+        foreach (array_merge($this->liveEntries('open', $user), $this->liveEntries('match', $user)) as $r) {
+            $owner = $r['telegram_user_id'];
+            if (isset($notified[$owner]) || $score($r) < $need) continue;
+            if ((int)($this->net($owner)['notify'] ?? 1) === 0 || $this->used($owner, 'match') >= self::MATCH_NOTIFY_MAX) continue;
+            $notified[$owner] = true;
+            $this->bump($owner, 'match');
+            $this->send($owner, 'Появилась запись, похожая на вашу («' . mb_substr($r['body'], 0, 80) . "»):\n" . self::line($entry) .
+                "\n\nПознакомиться? Имена откроются, только если согласитесь оба.",
+                self::buttons([[self::b('Познакомиться', 'trh:n:req:' . $entry['id'])], [self::b('Не присылать совпадения', 'trh:n:notify')]]));
+        }
     }
 
     private function postToGroup(string $id, string $kind, string $body, string $user): bool
@@ -369,7 +453,7 @@ final class Network
     /** Open, live records of people who may be found (not questioned or cut off). */
     private function liveEntries(string $visibility, ?string $exceptUser = null): array
     {
-        $rows = $this->query("SELECT * FROM trh_signals WHERE hub_id=? AND status='active' AND visibility=? AND (expires_at IS NULL OR expires_at>?) ORDER BY created_at DESC",
+        $rows = $this->query("SELECT * FROM trh_signals WHERE hub_id=? AND status='active' AND visibility=? AND (kind='interest' OR expires_at IS NULL OR expires_at>?) ORDER BY created_at DESC",
             [$this->hub(), $visibility, $this->now()])->fetchAll();
         $ok = [];
         foreach ($rows as $r) {
@@ -389,7 +473,7 @@ final class Network
     private function sendList(string $user): void
     {
         $rows = array_slice($this->liveEntries('open', $user), 0, self::LIST_MAX);
-        if (!$rows) { $this->send($user, 'Открытых записей пока нет. Будьте первым: /start → «Мне нужно», «У меня есть», «Хочу сделать» или «Интерес».'); return; }
+        if (!$rows) { $this->send($user, 'Открытых записей пока нет. Будьте первым — кнопки «Мне нужно», «У меня есть», «Хочу сделать» или «Интерес» внизу.'); return; }
         $this->sendResults($user, 'Обмен — свежие записи без имён (' . count($rows) . '):', $rows);
     }
 
@@ -406,16 +490,17 @@ final class Network
     private function sendMine(string $user): void
     {
         $rows = $this->query("SELECT * FROM trh_signals WHERE hub_id=? AND telegram_user_id=? AND status='active' ORDER BY created_at", [$this->hub(), $user])->fetchAll();
-        if (!$rows) { $this->send($user, 'У вас нет активных записей. Добавить: /start.'); return; }
+        if (!$rows) { $this->send($user, 'У вас нет активных записей. Добавить — кнопками внизу.'); return; }
         $lines = []; $buttons = [];
         foreach ($rows as $i => $r) {
-            $expired = $r['expires_at'] !== null && (int)$r['expires_at'] <= $this->now();
+            $endless = $r['kind'] === 'interest' || $r['expires_at'] === null;
+            $expired = !$endless && (int)$r['expires_at'] <= $this->now();
             $lines[] = ($i + 1) . '. ' . self::line($r) . "\n   " . ($r['visibility'] === 'match' ? 'только при совпадении' : 'видна в поиске') .
-                ($r['expires_at'] !== null ? ($expired ? '; срок истёк — продлите' : '; до ' . Community::date((int)$r['expires_at'])) : '');
+                ($endless ? '; без срока' : ($expired ? '; срок истёк — продлите' : '; до ' . Community::date((int)$r['expires_at'])));
             $buttons[] = self::b('Снять ' . ($i + 1), 'trh:n:del:' . $r['id']);
         }
         $rowsKb = array_chunk($buttons, 5);
-        $rowsKb[] = [self::b('Продлить все на 90 дней', 'trh:n:renew')];
+        $rowsKb[] = [self::b('Продлить все', 'trh:n:renew')];
         $this->community->sendChunks($user, 'Ваши записи:', $lines, self::buttons($rowsKb));
     }
 
@@ -577,7 +662,15 @@ final class Network
     /** Worker: a week after a connection, ask each side once. */
     public function tick(bool $quiet): void
     {
-        if ($quiet) return;
+        if ($quiet || $this->quiet()) return;
+        // A week before a record goes out, its author is asked once whether to keep it.
+        $ending = $this->query("SELECT * FROM trh_signals WHERE hub_id=? AND status='active' AND kind<>'interest' AND warned_at IS NULL AND expires_at IS NOT NULL AND expires_at>? AND expires_at<=? ORDER BY expires_at LIMIT 20",
+            [$this->hub(), $this->now(), $this->now() + self::WARN_BEFORE])->fetchAll();
+        foreach ($ending as $s) {
+            $this->query('UPDATE trh_signals SET warned_at=? WHERE id=?', [$this->now(), $s['id']]);
+            $this->send($s['telegram_user_id'], 'Ваша запись погаснет ' . Community::date((int)$s['expires_at']) . ":\n" . self::line($s) . "\n\nПродлить?",
+                self::buttons([[self::b('Продлить', 'trh:n:ren:' . $s['id']), self::b('Снять', 'trh:n:del:' . $s['id'])]]));
+        }
         $rows = $this->query("SELECT * FROM trh_links WHERE hub_id=? AND status='connected' AND connected_at<=? AND (asked_from=0 OR asked_to=0) ORDER BY connected_at LIMIT 20",
             [$this->hub(), $this->now() - self::REVIEW_AFTER])->fetchAll();
         foreach ($rows as $l) {
@@ -616,7 +709,7 @@ final class Network
         $this->setDialog($user, 'note:' . $id);
         $this->send($user, 'Опишите в паре слов, что случилось. Это увидит сам человек — без вашего имени. Или напишите /skip.');
         if ($before !== 'questioned' && $this->level($target) === 'questioned') {
-            $this->send($target, 'Несколько участников сообщили о нарушении Кодекса в общении с вами. Пока вы скрыты из поиска; решение примут организаторы. Отзывы — в /start → «О себе». Ответить можно, написав сюда.');
+            $this->send($target, 'Несколько участников сообщили о нарушении Кодекса в общении с вами. Пока вы скрыты из поиска; решение примут организаторы. Отзывы — кнопка «О себе». Ответить можно, написав сюда.');
             $points = $this->query("SELECT code_point FROM trh_reviews WHERE hub_id=? AND to_id=? AND verdict='violation' AND created_at>=?",
                 [$this->hub(), $target, $this->now() - self::REVIEW_WINDOW])->fetchAll(PDO::FETCH_COLUMN);
             $this->community->notifyOperator(Community::displayName($this->community->person($target)) .
@@ -664,7 +757,10 @@ final class Network
         $text = "О себе\n\nУровень доверия: " . $levelText . "\nЗнакомств: " . $links .
             "\nОтзывы: «Полезно» — " . $count['useful'] . ', «Нейтрально» — ' . $count['neutral'] . ', «Нарушил Кодекс» — ' . $count['violation'] .
             ($notes ? "\n\nЖалобы (без имён авторов):\n" . implode("\n", $notes) : '') .
-            "\n\nСтрока о себе: " . $this->about($user) . "\nЕё видит тот, кого вы просите о знакомстве или кто просит вас.";
-        $this->send($user, $text, self::buttons([[self::b('Изменить строку о себе', 'trh:n:about')]]));
+            "\n\nСтрока о себе: " . $this->about($user) . "\nЕё видит тот, кого вы просите о знакомстве или кто просит вас." .
+            "\n\nПохожие записи: " . ((int)($this->net($user)['notify'] ?? 1) === 1 ? 'присылаю, не больше ' . self::MATCH_NOTIFY_MAX . ' в день' : 'не присылаю') . '.';
+        $notify = (int)($this->net($user)['notify'] ?? 1) === 1;
+        $this->send($user, $text, self::buttons([[self::b('Изменить строку о себе', 'trh:n:about')],
+            [self::b($notify ? 'Не присылать совпадения' : 'Присылать совпадения', 'trh:n:notify')]]));
     }
 }

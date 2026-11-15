@@ -90,6 +90,7 @@ CREATE TABLE trh_signals (
     city VARCHAR(100) NULL,
     visibility ENUM('open','match') NOT NULL DEFAULT 'open',
     expires_at BIGINT UNSIGNED NULL,
+    warned_at BIGINT UNSIGNED NULL,
     status ENUM('active','archived') NOT NULL DEFAULT 'active',
     group_message_id BIGINT NULL,
     created_at BIGINT UNSIGNED NOT NULL,
@@ -113,6 +114,7 @@ CREATE TABLE trh_net (
     about VARCHAR(200) NULL,
     status ENUM('active','disconnected') NOT NULL DEFAULT 'active',
     cleared_at BIGINT UNSIGNED NULL,
+    notify TINYINT NOT NULL DEFAULT 1,
     PRIMARY KEY (hub_id, telegram_user_id)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 CREATE TABLE trh_links (
