@@ -312,7 +312,8 @@ final class Hub
         if (!$r) return;
         $result = $this->bot->call('sendMessage', $this->offerMessage($r, "Напоминание: ваша заявка в хаб ждёт ответа. Если хотите подумать — не спешите.\n\n"));
         if (empty($result['ok']) && (int)($result['error_code'] ?? 0) === 403) {
-            // The applicant blocked the bot or deleted the chat: stop reminding. /start resends the rules.
+            // Telegram refuses: the applicant never started the bot (after the 5-minute join-request
+            // window the bot may not write first) or blocked it. Stop reminding; /start resends the rules.
             $this->locked($r['telegram_user_id'], function (array $slot) use ($id) {
                 $current = $this->row($id);
                 if ($slot['current_request_id'] !== $id || !$current || $current['status'] !== 'pending' || $current['offer_state'] !== 'sent') return;
