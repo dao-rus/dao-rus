@@ -261,11 +261,11 @@ final class Hub
 
     /**
      * Reminders repeat until the applicant answers, blocks the bot or the request expires:
-     * every REMIND_EVERY seconds during the first day after the request, then daily.
+     * every REMIND_EVERY seconds during the first day after the request, then twice a day.
      */
     public const REMIND_EVERY = 14400;
     public const REMIND_DAILY_AFTER = 86400;
-    public const REMIND_EVERY_LATER = 86400;
+    public const REMIND_EVERY_LATER = 43200;
 
     public static function remindInterval(int $eventDate, int $now): int
     {
