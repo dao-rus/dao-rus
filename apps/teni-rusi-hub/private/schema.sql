@@ -55,3 +55,11 @@ CREATE TABLE trh_memberships (
     PRIMARY KEY (hub_id, telegram_user_id),
     FOREIGN KEY (latest_consent_id) REFERENCES trh_consents(request_id) ON DELETE RESTRICT
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+-- Added 2026-11-15 (migrations/2026-11-15-relays.sql): operator message -> sender, for replies.
+CREATE TABLE trh_relays (
+    hub_id VARCHAR(64) CHARACTER SET ascii COLLATE ascii_bin NOT NULL,
+    operator_message_id BIGINT UNSIGNED NOT NULL,
+    sender_chat_id VARCHAR(20) CHARACTER SET ascii COLLATE ascii_bin NOT NULL,
+    created_at BIGINT UNSIGNED NOT NULL,
+    PRIMARY KEY (hub_id, operator_message_id)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;

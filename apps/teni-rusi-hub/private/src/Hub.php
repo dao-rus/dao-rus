@@ -81,26 +81,82 @@ final class Hub
         return 'ignored';
     }
 
+    /** Media that carry a caption, so they can reach the operator as one message with the sender line. */
+    private const CAPTIONED = ['photo', 'video', 'document', 'audio', 'animation', 'voice'];
+
     /**
      * Any other private message to the bot goes to the operator, so nothing written to
-     * the bot is silently lost. The sender is told it was passed on.
-     * A failed forward throws: the update is retried (webhook 500 or the next poll run).
+     * the bot is silently lost. Text arrives as one message with a sender line on top,
+     * captioned media as one copy with that line in the caption, anything else (stickers,
+     * video notes...) as the line plus a forward. The operator-side message IDs are kept
+     * so a Telegram "Reply" from the operator can be delivered back (operatorReply).
+     * A failed send to the operator throws: the update is retried (webhook 500 / next poll).
+     * If the sender has an open request, the bot may now write to them, so the rules
+     * with fresh buttons are sent again.
      */
     private function relay(array $m): string
     {
         $operator = $this->config['operator_chat_id'] ?? null;
-        if (!self::userId($operator) || $m['from']['id'] === $operator) return 'ignored';
+        if (!self::userId($operator)) return 'ignored';
+        if ($m['from']['id'] === $operator) return $this->operatorReply($m, $operator);
         $name = trim(($m['from']['first_name'] ?? '') . ' ' . ($m['from']['last_name'] ?? ''));
-        $who = ($name !== '' ? $name : 'без имени') .
+        $who = 'Сообщение боту от: ' . ($name !== '' ? $name : 'без имени') .
             (isset($m['from']['username']) && is_string($m['from']['username']) ? ' (@' . $m['from']['username'] . ')' : '');
-        $this->bot->call('sendMessage', ['chat_id' => $operator, 'text' => 'Сообщение боту от: ' . $who]);
-        $forward = $this->bot->call('forwardMessage', [
-            'chat_id' => $operator, 'from_chat_id' => $m['chat']['id'], 'message_id' => $m['message_id'],
-        ]);
-        if (empty($forward['ok'])) throw new \RuntimeException('Relay to operator failed');
-        $this->bot->call('sendMessage', ['chat_id' => $m['chat']['id'],
-            'text' => 'Ваше сообщение передано организаторам хаба.']);
+        $sender = $m['chat']['id'];
+        $ids = [];
+        $media = null;
+        foreach (self::CAPTIONED as $type) if (isset($m[$type])) { $media = $type; break; }
+        $caption = is_string($m['caption'] ?? null) ? $m['caption'] : '';
+        if (is_string($m['text'] ?? null) && mb_strlen($who . "\n\n" . $m['text']) <= 4096) {
+            $sent = $this->bot->call('sendMessage', ['chat_id' => $operator, 'text' => $who . "\n\n" . $m['text']]);
+        } elseif ($media !== null && mb_strlen($who . "\n\n" . $caption) <= 1024) {
+            $sent = $this->bot->call('copyMessage', ['chat_id' => $operator, 'from_chat_id' => $sender,
+                'message_id' => $m['message_id'], 'caption' => $who . ($caption !== '' ? "\n\n" . $caption : '')]);
+        } else {
+            $line = $this->bot->call('sendMessage', ['chat_id' => $operator, 'text' => $who]);
+            if (is_int($line['result']['message_id'] ?? null)) $ids[] = $line['result']['message_id'];
+            $sent = $this->bot->call('forwardMessage', ['chat_id' => $operator, 'from_chat_id' => $sender, 'message_id' => $m['message_id']]);
+        }
+        if (empty($sent['ok'])) throw new \RuntimeException('Relay to operator failed');
+        if (is_int($sent['result']['message_id'] ?? null)) $ids[] = $sent['result']['message_id'];
+        foreach ($ids as $operatorMessageId) {
+            $this->query('INSERT INTO trh_relays(hub_id,operator_message_id,sender_chat_id,created_at) VALUES (?,?,?,?)',
+                [$this->config['hub_id'], $operatorMessageId, (string)$sender, $this->now()]);
+        }
+        $this->bot->call('sendMessage', ['chat_id' => $sender, 'text' => 'Ваше сообщение передано организаторам хаба.']);
+        $slot = $this->query('SELECT current_request_id FROM trh_slots WHERE hub_id=? AND telegram_user_id=?',
+            [$this->config['hub_id'], (string)$m['from']['id']])->fetch();
+        if ($slot && $slot['current_request_id']) {
+            $r = $this->row($slot['current_request_id']);
+            if ($r && $r['status'] === 'pending') $this->offer($r['id'], true);
+        }
         return 'relayed';
+    }
+
+    /**
+     * The operator answers by replying (Telegram "Reply") to a message the bot passed on;
+     * the reply is copied to that sender, and the operator is told whether it arrived.
+     * Anything else from the operator gets a short hint instead of silence.
+     */
+    private function operatorReply(array $m, int $operator): string
+    {
+        $replyTo = $m['reply_to_message']['message_id'] ?? null;
+        $row = is_int($replyTo) ? $this->query('SELECT sender_chat_id FROM trh_relays WHERE hub_id=? AND operator_message_id=?',
+            [$this->config['hub_id'], $replyTo])->fetch() : false;
+        if (!$row) {
+            $this->bot->call('sendMessage', ['chat_id' => $operator,
+                'text' => 'Чтобы ответить человеку, нажмите «Ответить» на его сообщении, которое переслал бот, и напишите ответ.']);
+            return 'operator_hint';
+        }
+        $copy = $this->bot->call('copyMessage', ['chat_id' => $row['sender_chat_id'], 'from_chat_id' => $operator,
+            'message_id' => $m['message_id']]);
+        $error = (int)($copy['error_code'] ?? 0);
+        $text = !empty($copy['ok']) ? 'Доставлено.' : ($error === 403
+            ? 'Не доставлено: человек заблокировал бота или удалил чат с ним.'
+            : 'Не доставлено: Telegram не принял сообщение' . ($error ? " (код $error)" : '') . '. Попробуйте ещё раз.');
+        $this->bot->call('sendMessage', ['chat_id' => $operator, 'text' => $text,
+            'reply_parameters' => ['message_id' => $m['message_id'], 'allow_sending_without_reply' => true]]);
+        return !empty($copy['ok']) ? 'reply_delivered' : 'reply_failed';
     }
 
     /**

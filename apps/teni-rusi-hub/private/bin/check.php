@@ -8,9 +8,9 @@ try {
     }
     $c = \TeniRusi\configuration();
     $db = \TeniRusi\database($c);
-    foreach (['trh_slots','trh_requests','trh_consents','trh_memberships'] as $t) $db->query('SELECT 1 FROM ' . $t . ' LIMIT 1');
-    $engines = $db->query("SELECT ENGINE FROM information_schema.tables WHERE TABLE_SCHEMA=DATABASE() AND TABLE_NAME IN ('trh_slots','trh_requests','trh_consents','trh_memberships')")->fetchAll(\PDO::FETCH_COLUMN);
-    if (count($engines) !== 4 || count(array_filter($engines, static fn($e) => $e === 'InnoDB')) !== 4) throw new \RuntimeException('InnoDB required');
+    foreach (['trh_slots','trh_requests','trh_consents','trh_memberships','trh_relays'] as $t) $db->query('SELECT 1 FROM ' . $t . ' LIMIT 1');
+    $engines = $db->query("SELECT ENGINE FROM information_schema.tables WHERE TABLE_SCHEMA=DATABASE() AND TABLE_NAME IN ('trh_slots','trh_requests','trh_consents','trh_memberships','trh_relays')")->fetchAll(\PDO::FETCH_COLUMN);
+    if (count($engines) !== 5 || count(array_filter($engines, static fn($e) => $e === 'InnoDB')) !== 5) throw new \RuntimeException('InnoDB required');
     echo "PHP/database/tables: OK\n";
     if (!in_array('--telegram', $argv, true)) exit(0);
     if (!$c['bot_token'] || !$c['expected_bot_id']) throw new \RuntimeException('Bot is not configured');
