@@ -197,6 +197,24 @@ final class Network
             self::keyboard());
     }
 
+    /**
+     * Sent once to someone who has just accepted the Code for the hub group: tells plainly that the
+     * hub is also a network, what is stored and shown, and invites a first record. Nothing is created
+     * for the person here; they are already counted through their group membership (canUse).
+     */
+    public function greeting(string $chat): void
+    {
+        $this->send($chat, "Добро пожаловать. Это не только чат: хаб «Тени Руси» строит сеть, где люди находят друг друга по делам и интересам.\n\n" .
+            "Скажу прямо: сейчас нас мало, и совпадение с вашей записью маловероятно. Сеть начинает работать, когда в ней достаточно людей, " .
+            "и каждая запись приближает этот момент. Оставьте её сейчас: когда появится кто-то подходящий, бот сообщит вам. " .
+            "Соединит он вас только с согласия обоих.\n\n" .
+            "Записи «Мне нужно» и «У меня есть» публикуются в группе с вашим именем и @username (скрыть можно кнопкой «Только при совпадении»). " .
+            "«Хочу сделать» и «Интерес» видны в сети без имени.\n\n" .
+            "Что мы храним: ваш Telegram ID, имя и @username, ваши записи и дату согласия с правилами. " .
+            "Разговоры людей друг с другом хаб не видит и не хранит. Любую запись можно снять в «Мои записи».\n\n" .
+            'Первая запись одной фразой: нажмите «Мне нужно» или «У меня есть» внизу.', self::keyboard());
+    }
+
     /** A press on the persistent keyboard (or /find, /who, /me, /menu). Null when the text is not a menu item. */
     public function menuAction(string $user, string $text): ?string
     {

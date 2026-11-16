@@ -319,7 +319,8 @@ final class Hub
         if (!is_string($cb['id'] ?? null) || !self::userId($cb['from']['id'] ?? null) ||
             !is_string($cb['data'] ?? null) || !preg_match('/^trh:(a|r):([a-f0-9]{32})$/D', $cb['data'], $match)) return 'ignored';
         $reviewed = false;
-        $message = $this->locked((string)$cb['from']['id'], function (array $slot) use ($match, &$reviewed) {
+        $accepted = false;
+        $message = $this->locked((string)$cb['from']['id'], function (array $slot) use ($match, &$reviewed, &$accepted) {
             $r = $this->query('SELECT * FROM trh_requests WHERE id=? AND hub_id=?',
                 [$match[2], $this->config['hub_id']])->fetch();
             if (!$r || $slot['current_request_id'] !== $r['id'] || $slot['telegram_user_id'] !== $r['telegram_user_id'] ||
@@ -344,6 +345,7 @@ final class Hub
                 return 'Согласие сохранено. Ранее вы были исключены из хаба, поэтому заявку рассмотрят организаторы.';
             }
             $this->query("UPDATE trh_requests SET status='approval_pending',decision_reason='accepted',accepted_at=?,offer_state='none' WHERE id=?", [$this->now(), $r['id']]);
+            $accepted = true;
             return 'Согласие сохранено. Допуск ожидает подтверждения Telegram.';
         });
         // Best-effort UI acknowledgement has no bearing on the durable decision.
@@ -360,6 +362,8 @@ final class Hub
             return 'handled';
         }
         if ($request && $request['telegram_user_id'] === (string)$cb['from']['id']) $this->decision($match[2]);
+        // Once, right after the consent was recorded: what the hub is, what is kept and shown.
+        if ($accepted) $this->network->greeting((string)$cb['from']['id']);
         return 'handled';
     }
 
