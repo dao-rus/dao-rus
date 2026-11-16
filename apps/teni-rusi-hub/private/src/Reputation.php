@@ -87,13 +87,18 @@ final class Reputation
     public function reaction(array $r): string
     {
         if (!$this->inHubGroup($r) || !is_int($r['message_id'] ?? null)) return 'ignored';
+        // Every way a reaction can fail to count has its own label, so the poll report says why.
         $user = $r['user'] ?? null;
         if (is_array($user)) {
-            $reactor = Hub::userId($user['id'] ?? null) && ($user['is_bot'] ?? false) !== true ? (string)$user['id'] : null;
+            if (!Hub::userId($user['id'] ?? null)) return 'reaction_bad_user';
+            if (($user['is_bot'] ?? false) === true) return 'reaction_bot';
+            $reactor = (string)$user['id'];
+        } elseif (is_array($r['actor_chat'] ?? null)) {
+            $reactor = $this->operator();
+            if ($reactor === null) return 'reaction_operator_unknown';
         } else {
-            $reactor = is_array($r['actor_chat'] ?? null) ? $this->operator() : null;
+            return 'reaction_no_actor';
         }
-        if ($reactor === null) return 'ignored';
         $row = $this->query('SELECT author_id FROM trh_group_messages WHERE hub_id=? AND message_id=?', [$this->hub(), $r['message_id']])->fetch();
         if (!$row) return 'reaction_unknown_message';
         $key = [$this->hub(), $r['message_id'], $reactor];
