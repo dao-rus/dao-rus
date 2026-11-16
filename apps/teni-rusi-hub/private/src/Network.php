@@ -505,7 +505,7 @@ final class Network
         $this->clearDialog($user);
         $posted = in_array($kind, self::GROUP_KINDS, true) && $this->community->isMember($user) && $this->postToGroup($id, $kind, $text, $user);
         $this->send($user, '✓ Запись сохранена' . ($posted ? ', видна в поиске сети и опубликована в группе.' : ' и видна в поиске сети.') .
-            ' Имя не показывается, пока вы сами не согласитесь на знакомство. ' . self::lifeText($kind),
+            ' Запись будет показана другому участнику при совпадении с его запросом. ' . self::lifeText($kind),
             self::buttons([[self::b('Только при совпадении', 'trh:n:vis:' . $id), self::b('Указать город', 'trh:n:city:' . $id)]]));
         $this->similar($user, ['id' => $id, 'kind' => $kind, 'body' => $text, 'city' => null]);
         return 'entry_saved';
