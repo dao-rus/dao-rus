@@ -54,6 +54,9 @@ final class Community
             $update['callback_query']['from'] ?? null,
             ($update['message']['chat']['type'] ?? null) === 'private' ? ($update['message']['from'] ?? null) : null,
             $update['chat_member']['new_chat_member']['user'] ?? null,
+            // Names of people seen in the hub group (authors and reactors), so a vote can name them.
+            (string)($update['message']['chat']['id'] ?? '') === $this->config['chat_id'] ? ($update['message']['from'] ?? null) : null,
+            (string)($update['message_reaction']['chat']['id'] ?? '') === $this->config['chat_id'] ? ($update['message_reaction']['user'] ?? null) : null,
         ];
         foreach ($users as $u) if (is_array($u)) $this->rememberUser($u);
     }

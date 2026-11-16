@@ -13,12 +13,14 @@ final class Hub
     private Community $community;
     private Network $network;
     private Reputation $reputation;
+    private Vote $vote;
 
     public function __construct(private PDO $db, private Bot $bot, private array $config, ?callable $clock = null)
     {
         $this->clock = $clock ?? static fn(): int => time();
         $this->reputation = new Reputation($db, $config, $this->clock);
         $this->community = new Community($db, $bot, $config, $this->clock);
+        $this->vote = new Vote($db, $bot, $config, $this->clock, $this->community);
         $this->network = new Network($db, $bot, $config, $this->clock, $this->community);
     }
 
@@ -69,6 +71,7 @@ final class Hub
             $data = is_string($cb['data'] ?? null) ? $cb['data'] : '';
             if (str_starts_with($data, 'trh:x:') || str_starts_with($data, 'trh:n:')) return $this->network->callback($cb);
             if (str_starts_with($data, 'trh:o:')) return $this->operatorDecision($cb);
+            if (str_starts_with($data, 'trh:v:')) return $this->counted(fn() => $this->vote->callback($cb));
             return $this->callback($cb);
         }
         $m = $update['message'] ?? null;
@@ -98,6 +101,10 @@ final class Hub
             $operator = $this->config['operator_chat_id'] ?? null;
             if (self::userId($operator) && $m['from']['id'] === $operator && ($m['text'] ?? null) === '/members') {
                 return $this->community->members($operator);
+            }
+            if (self::userId($operator) && $m['from']['id'] === $operator && is_string($m['text'] ?? null) && str_starts_with($m['text'], '/vote')) {
+                $voted = $this->counted(fn() => $this->vote->operatorCommand($m['text'], $operator) ?? '');
+                if ($voted !== '') return $voted;
             }
             // A Telegram "Reply" is an answer to a relayed message, never an Exchange record.
             if (!isset($m['reply_to_message'])) {
@@ -571,6 +578,7 @@ final class Hub
         foreach ($due as $r) $this->remind($r['id']);
         $this->network->tick(false);
         $this->counted(fn() => $this->reputationSignals());
+        $this->counted(fn() => $this->vote->tick());
     }
 
     /**
