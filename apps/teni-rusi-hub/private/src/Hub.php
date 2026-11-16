@@ -570,5 +570,38 @@ final class Hub
                 $now - self::REMIND_EVERY_WEEKLY])->fetchAll();
         foreach ($due as $r) $this->remind($r['id']);
         $this->network->tick(false);
+        $this->counted(fn() => $this->reputationSignals());
+    }
+
+    /**
+     * Dislikes from at least a third of the group's people over 30 days are a reason to look into a case,
+     * never a decision: the operator is told once per person per 30 days, and so is the person. Exclusion
+     * is decided by a vote of the people, not by the counter. Quiet hours are respected: tick() returns before this.
+     */
+    private function reputationSignals(): string
+    {
+        $candidates = $this->reputation->dislikeCandidates();
+        if (!$candidates) return 'no_candidates';
+        $count = $this->bot->call('getChatMemberCount', ['chat_id' => $this->config['chat_id']]);
+        $members = is_int($count['result'] ?? null) ? $count['result'] : 0;
+        if ($members <= 0) return 'members_unknown';
+        $need = Reputation::threshold($members);
+        $operator = $this->config['operator_chat_id'] ?? null;
+        if (!self::userId($operator)) return 'no_operator';
+        $signalled = 0;
+        foreach ($candidates as $c) {
+            $user = (string)$c['author_id'];
+            if ((int)$c['people'] < $need || $user === (string)$operator || $this->reputation->alertedRecently($user)) continue;
+            $told = $this->bot->call('sendMessage', ['chat_id' => (string)$user, 'text' =>
+                "За последние 30 дней под вашими сообщениями в группе набралось много дизлайков от разных людей. Это не решение и не наказание: организаторы посмотрят, в чём дело. " .
+                'Если хотите что-то пояснить, напишите сюда, сообщение дойдёт до них.']);
+            $sent = $this->bot->call('sendMessage', ['chat_id' => $operator, 'text' =>
+                'Сигнал по репутации: ' . Community::displayName($this->community->person($user)) . ' получил дизлайки от ' . (int)$c['people'] .
+                " разных людей за 30 дней (порог $need при $members участниках группы). Это повод разобраться, а не решение: исключение решается голосованием. " .
+                (!empty($told['ok']) ? 'Человеку об этом написано.' : 'Написать человеку бот не смог (он не запускал бота).')]);
+            // Only a delivered signal is remembered: otherwise the next tick tries again.
+            if (!empty($sent['ok'])) { $this->reputation->markAlerted($user, (int)$c['people']); $signalled++; }
+        }
+        return 'signals_' . $signalled;
     }
 }

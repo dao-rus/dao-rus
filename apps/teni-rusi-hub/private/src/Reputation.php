@@ -124,6 +124,44 @@ final class Reputation
         return ['likes' => $likes, 'likers' => $likers, 'dislikes' => $dislikes, 'dislikers' => $dislikers];
     }
 
+    // ---- Signal about dislikes (step 2) -------------------------------------------------------
+    /** Dislikes count over this window; the same window keeps the operator from being signalled twice about one person. */
+    public const WINDOW = 2592000;
+    /** Never fewer than this many different people, however small the group. */
+    public const FLOOR = 3;
+
+    /** One third of the people in the group (rounded up) is the bar for a signal. */
+    public static function threshold(int $members): int
+    {
+        return max(self::FLOOR, intdiv($members + 2, 3));
+    }
+
+    /** Authors with dislikes from at least FLOOR different people over the window (a cheap prefilter: no Telegram call needed). */
+    public function dislikeCandidates(): array
+    {
+        // The numbers are our own integers (not user input), written into the SQL so the comparison is numeric everywhere.
+        return $this->query('SELECT author_id, COUNT(DISTINCT reactor_id) AS people FROM trh_reactions WHERE hub_id=? AND sign=-1 AND updated_at>=' . ($this->now() - self::WINDOW) .
+            ' GROUP BY author_id HAVING COUNT(DISTINCT reactor_id) >= ' . self::FLOOR . ' ORDER BY people DESC', [$this->hub()])->fetchAll();
+    }
+
+    public function alertedRecently(string $user): bool
+    {
+        $t = $this->query('SELECT alerted_at FROM trh_rep_alerts WHERE hub_id=? AND user_id=?', [$this->hub(), $user])->fetchColumn();
+        return $t !== false && (int)$t > $this->now() - self::WINDOW;
+    }
+
+    public function markAlerted(string $user, int $people): void
+    {
+        $this->query('REPLACE INTO trh_rep_alerts(hub_id,user_id,alerted_at,dislikers) VALUES (?,?,?,?)', [$this->hub(), $user, $this->now(), $people]);
+    }
+
+    /** Authors with the most likes, most first. The caller filters out people who may not be shown. */
+    public function top(int $limit): array
+    {
+        return $this->query('SELECT author_id, COUNT(*) AS likes FROM trh_reactions WHERE hub_id=? AND sign=1 GROUP BY author_id ORDER BY likes DESC, COUNT(DISTINCT reactor_id) DESC, author_id LIMIT ' . max(1, min(100, $limit)),
+            [$this->hub()])->fetchAll();
+    }
+
     public static function text(array $s): string
     {
         return "Ваша репутация в группе:\n👍 лайков: {$s['likes']} (от разных людей: {$s['likers']})\n👎 дизлайков: {$s['dislikes']} (от разных людей: {$s['dislikers']})\n\n" .
