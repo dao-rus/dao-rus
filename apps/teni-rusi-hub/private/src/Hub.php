@@ -60,6 +60,8 @@ final class Hub
         if (is_array($r)) return $this->join($update, $r);
         $cm = $update['chat_member'] ?? null;
         if (is_array($cm)) return $this->community->chatMember($cm);
+        $reaction = $update['message_reaction'] ?? $update['message_reaction_count'] ?? null;
+        if (is_array($reaction)) return $this->reaction($reaction, isset($update['message_reaction']));
         $cb = $update['callback_query'] ?? null;
         if (is_array($cb)) {
             $data = is_string($cb['data'] ?? null) ? $cb['data'] : '';
@@ -108,6 +110,18 @@ final class Hub
             return $this->relay($m);
         }
         return 'ignored';
+    }
+
+    /**
+     * Probe, nothing is stored: does Telegram say WHO reacted in the hub group? The answer
+     * is only the result label counted in the polling report ("message_reaction:reaction_with_author"):
+     * no IDs, names, message IDs or emoji reach the log. Reactions of other chats are ignored.
+     */
+    private function reaction(array $r, bool $individual): string
+    {
+        if ((string)($r['chat']['id'] ?? '') !== $this->config['chat_id']) return 'ignored';
+        if (!$individual) return 'reaction_count_only';
+        return is_array($r['user'] ?? null) ? 'reaction_with_author' : 'reaction_anonymous';
     }
 
     /**

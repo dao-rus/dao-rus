@@ -13,7 +13,10 @@ namespace TeniRusi;
 final class Drain
 {
     // chat_member must be requested explicitly; it carries bans in the hub group (exclusion marks).
-    public const ALLOWED_UPDATES = ['chat_join_request', 'callback_query', 'message', 'chat_member'];
+    // message_reaction / message_reaction_count too: they are a probe whether Telegram names who
+    // reacted in the hub group (see Hub::reaction); nothing is stored from them.
+    public const ALLOWED_UPDATES = ['chat_join_request', 'callback_query', 'message', 'chat_member',
+        'message_reaction', 'message_reaction_count'];
 
     /** @var callable(string, array, int): ?array  Bot API call; null when no usable response. */
     private $api;
