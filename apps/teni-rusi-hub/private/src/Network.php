@@ -376,7 +376,7 @@ final class Network
             }
             $this->send($user, $lines
                 ? "Рейтинг: больше всего лайков под сообщениями в группе.\n\n" . implode("\n", $lines)
-                : 'Пока лайков нет: рейтинг появится, когда участники начнут ставить реакции под сообщениями в группе.');
+                : 'Пока лайков нет.');
             return 'top';
         }
         if ($data === 'trh:n:key') { $answer('Ключи'); $this->sendKeys($user); return 'keys'; }
