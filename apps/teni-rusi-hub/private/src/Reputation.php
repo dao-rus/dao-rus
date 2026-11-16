@@ -130,10 +130,10 @@ final class Reputation
     /** Never fewer than this many different people, however small the group. */
     public const FLOOR = 3;
 
-    /** One third of the people in the group (rounded up) is the bar for a signal. */
-    public static function threshold(int $members): int
+    /** One third of the active people (rounded up) is the bar for a signal. */
+    public static function threshold(int $active): int
     {
-        return max(self::FLOOR, intdiv($members + 2, 3));
+        return max(self::FLOOR, intdiv($active + 2, 3));
     }
 
     /** Authors with dislikes from at least FLOOR different people over the window (a cheap prefilter: no Telegram call needed). */
@@ -142,6 +142,18 @@ final class Reputation
         // The numbers are our own integers (not user input), written into the SQL so the comparison is numeric everywhere.
         return $this->query('SELECT author_id, COUNT(DISTINCT reactor_id) AS people FROM trh_reactions WHERE hub_id=? AND sign=-1 AND updated_at>=' . ($this->now() - self::WINDOW) .
             ' GROUP BY author_id HAVING COUNT(DISTINCT reactor_id) >= ' . self::FLOOR . ' ORDER BY people DESC', [$this->hub()])->fetchAll();
+    }
+
+    /**
+     * Active people: those who wrote in the group or reacted to a message over the window. The bar for a
+     * signal is a third of them, so a large silent group does not make it unreachable. Counted only from
+     * what the counter has seen (it starts empty); until then the FLOOR decides.
+     */
+    public function activePeople(): int
+    {
+        $since = $this->now() - self::WINDOW;
+        return (int)$this->query('SELECT COUNT(*) FROM (SELECT author_id AS u FROM trh_group_messages WHERE hub_id=? AND created_at>=' . $since .
+            ' UNION SELECT reactor_id FROM trh_reactions WHERE hub_id=? AND updated_at>=' . $since . ') AS active', [$this->hub(), $this->hub()])->fetchColumn();
     }
 
     public function alertedRecently(string $user): bool
