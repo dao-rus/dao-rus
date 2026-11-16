@@ -4,6 +4,7 @@ namespace TeniRusi;
 
 require_once __DIR__ . '/Telegram.php';
 require_once __DIR__ . '/Community.php';
+require_once __DIR__ . '/Reputation.php';
 require_once __DIR__ . '/Network.php';
 require_once __DIR__ . '/Hub.php';
 require_once __DIR__ . '/Api.php';

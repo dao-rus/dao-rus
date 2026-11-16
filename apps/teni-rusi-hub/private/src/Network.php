@@ -30,8 +30,8 @@ final class Network
     public const MATCH_NOTIFY_MAX = 2;    // «похожая запись появилась» per person per day
     /** The persistent keyboard (always under the input field) and commands map to the same actions. */
     public const MENU = ['Мне нужно' => 'new:need', 'У меня есть' => 'new:have', 'Хочу сделать' => 'new:do', 'Интерес' => 'new:interest',
-        'Найти людей' => 'find', 'Кто здесь' => 'who', 'Обмен' => 'list', 'Мои записи' => 'mine', 'О себе' => 'me',
-        '/find' => 'find', '/who' => 'who', '/me' => 'me', '/menu' => 'menu', '/key' => 'key'];
+        'Найти людей' => 'find', 'Кто здесь' => 'who', 'Обмен' => 'list', 'Мои записи' => 'mine', 'О себе' => 'me', 'Репутация' => 'rep',
+        '/find' => 'find', '/who' => 'who', '/me' => 'me', '/menu' => 'menu', '/key' => 'key', '/rep' => 'rep'];
     /** Keys for programs and AI assistants (step 2 of the protocol): at most KEYS_MAX live, a key unused for KEY_IDLE goes out. */
     public const KEYS_MAX = 5;
     public const KEY_IDLE = 7776000;
@@ -74,7 +74,7 @@ final class Network
     {
         $k = fn(string ...$labels) => array_map(fn($l) => ['text' => $l], $labels);
         return ['reply_markup' => ['keyboard' => [$k('Мне нужно', 'У меня есть'), $k('Хочу сделать', 'Интерес'), $k('Найти людей', 'Кто здесь'),
-            $k('Обмен', 'Мои записи', 'О себе')], 'resize_keyboard' => true, 'is_persistent' => true, 'input_field_placeholder' => 'Выберите кнопку меню']];
+            $k('Обмен', 'Мои записи', 'О себе'), $k('Репутация')], 'resize_keyboard' => true, 'is_persistent' => true, 'input_field_placeholder' => 'Выберите кнопку меню']];
     }
     private static function expiresAt(string $kind, int $now): ?int { $t = self::TTL[$kind] ?? null; return $t === null ? null : $now + $t; }
     private static function lifeText(string $kind): string
@@ -359,6 +359,11 @@ final class Network
             return 'search_prompt';
         }
         if ($data === 'trh:n:who') { $answer('Кто здесь'); $this->who($user); return 'who'; }
+        if ($data === 'trh:n:rep') {
+            $answer('Репутация');
+            $this->send($user, Reputation::text((new Reputation($this->db, $this->config, $this->clock))->score($user)));
+            return 'reputation';
+        }
         if ($data === 'trh:n:key') { $answer('Ключи'); $this->sendKeys($user); return 'keys'; }
         if ($data === 'trh:n:keynew') return $this->newKey($user, $answer);
         if ($data === 'trh:n:keyoff') {

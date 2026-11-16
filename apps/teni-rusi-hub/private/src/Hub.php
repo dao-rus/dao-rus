@@ -12,10 +12,12 @@ final class Hub
     private $clock;
     private Community $community;
     private Network $network;
+    private Reputation $reputation;
 
     public function __construct(private PDO $db, private Bot $bot, private array $config, ?callable $clock = null)
     {
         $this->clock = $clock ?? static fn(): int => time();
+        $this->reputation = new Reputation($db, $config, $this->clock);
         $this->community = new Community($db, $bot, $config, $this->clock);
         $this->network = new Network($db, $bot, $config, $this->clock, $this->community);
     }
@@ -109,19 +111,34 @@ final class Hub
             }
             return $this->relay($m);
         }
+        // A message in the hub group: only its number and author are kept, for the reputation counter.
+        if (is_array($m)) return $this->counted(fn() => $this->reputation->message($m));
         return 'ignored';
     }
 
     /**
-     * Probe, nothing is stored: does Telegram say WHO reacted in the hub group? The answer
-     * is only the result label counted in the polling report ("message_reaction:reaction_with_author"):
-     * no IDs, names, message IDs or emoji reach the log. Reactions of other chats are ignored.
+     * The reputation counter must never hold up the update queue (applications, the reception desk):
+     * a storage failure is counted in the poll report and noted in the error log (code only, no data).
+     */
+    private function counted(callable $work): string
+    {
+        try {
+            return $work();
+        } catch (\PDOException $e) {
+            error_log('reputation storage error ' . (string)$e->getCode());
+            return 'reputation_error';
+        }
+    }
+
+    /**
+     * A reaction in the hub group goes to the reputation counter; the result label is only counted in
+     * the polling report (no IDs, names, message IDs or emoji reach the log). Anonymous totals
+     * (message_reaction_count) name nobody, so nothing can be counted from them.
      */
     private function reaction(array $r, bool $individual): string
     {
         if ((string)($r['chat']['id'] ?? '') !== $this->config['chat_id']) return 'ignored';
-        if (!$individual) return 'reaction_count_only';
-        return is_array($r['user'] ?? null) ? 'reaction_with_author' : 'reaction_anonymous';
+        return $individual ? $this->counted(fn() => $this->reputation->reaction($r)) : 'reaction_count_only';
     }
 
     /**

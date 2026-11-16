@@ -166,3 +166,24 @@ CREATE TABLE trh_keys (
     revoked_at BIGINT UNSIGNED NULL,
     KEY trh_keys_user (hub_id, telegram_user_id)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- Reputation counter: group message authors (number and author only, no text) and reactions.
+CREATE TABLE trh_group_messages (
+    hub_id VARCHAR(64) CHARACTER SET ascii COLLATE ascii_bin NOT NULL,
+    message_id BIGINT NOT NULL,
+    author_id VARCHAR(20) CHARACTER SET ascii COLLATE ascii_bin NOT NULL,
+    created_at BIGINT UNSIGNED NOT NULL,
+    PRIMARY KEY (hub_id, message_id),
+    INDEX trh_group_messages_author (hub_id, author_id)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+CREATE TABLE trh_reactions (
+    hub_id VARCHAR(64) CHARACTER SET ascii COLLATE ascii_bin NOT NULL,
+    message_id BIGINT NOT NULL,
+    reactor_id VARCHAR(20) CHARACTER SET ascii COLLATE ascii_bin NOT NULL,
+    author_id VARCHAR(20) CHARACTER SET ascii COLLATE ascii_bin NOT NULL,
+    sign TINYINT NOT NULL,
+    updated_at BIGINT UNSIGNED NOT NULL,
+    PRIMARY KEY (hub_id, message_id, reactor_id),
+    INDEX trh_reactions_author (hub_id, author_id, sign)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
