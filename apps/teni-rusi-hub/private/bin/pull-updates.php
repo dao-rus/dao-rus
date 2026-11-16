@@ -85,6 +85,10 @@ try {
         $report = $drain->poll(50, $failureFile);
         if ($report['reached']) touch($heartbeat);
         line(['poll' => $report]);
+        // Reaction probe: cron drops stdout, so the counters of reaction updates (types and counts only:
+        // no IDs, names, message IDs or emoji) are appended to a file in the private directory.
+        $probe = array_filter($report['results'], static fn(string $k): bool => str_starts_with($k, 'message_reaction'), ARRAY_FILTER_USE_KEY);
+        if ($probe !== []) file_put_contents($private . '/reaction-probe.log', gmdate('Y-m-d H:i:s') . ' UTC ' . json_encode($probe) . "\n", FILE_APPEND | LOCK_EX);
         // stderr goes to the cron error log: only events that need a human.
         if ($report['skipped'] > 0) fwrite(STDERR, gmdate('Y-m-d H:i:s') . " UTC: skipped {$report['skipped']} update(s) after repeated processing failures\n");
         if ($report['stopped'] === 'processing_failed') fwrite(STDERR, gmdate('Y-m-d H:i:s') . " UTC: processing failed; will retry next run\n");
