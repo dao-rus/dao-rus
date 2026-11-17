@@ -14,6 +14,8 @@ final class Hub
     private Network $network;
     private Reputation $reputation;
     private Vote $vote;
+    /** Other groups with their own counters (config «extra_groups»): reputation and departures only. */
+    private array $groups = [];
 
     public function __construct(private PDO $db, private Bot $bot, private array $config, ?callable $clock = null)
     {
@@ -22,6 +24,46 @@ final class Hub
         $this->community = new Community($db, $bot, $config, $this->clock);
         $this->vote = new Vote($db, $bot, $config, $this->clock, $this->community);
         $this->network = new Network($db, $bot, $config, $this->clock, $this->community);
+        foreach (($config['extra_groups'] ?? []) as $e) {
+            if (!is_array($e) || !is_string($e['hub_id'] ?? null) || !preg_match('/^[a-z0-9-]{2,32}$/D', $e['hub_id']) || $e['hub_id'] === $config['hub_id'] ||
+                !is_string($e['chat_id'] ?? null) || !preg_match('/^-100[0-9]{6,13}$/D', $e['chat_id']) || $e['chat_id'] === $config['chat_id'] ||
+                !is_string($e['key'] ?? null) || !preg_match('/^[a-z]{2,16}$/D', $e['key'])) continue;
+            $gc = array_merge($config, ['hub_id' => $e['hub_id'], 'chat_id' => $e['chat_id'], 'group_only' => true,
+                'left_label' => is_string($e['left_label'] ?? null) ? $e['left_label'] : 'Покинул чат']);
+            $this->groups[] = ['key' => $e['key'], 'title' => is_string($e['title'] ?? null) ? $e['title'] : $e['key'], 'chat_id' => $e['chat_id'],
+                'reputation' => new Reputation($db, $gc, $this->clock), 'community' => new Community($db, $bot, $gc, $this->clock)];
+        }
+        $this->network->setGroups(array_map(fn($g) => ['title' => $g['title'], 'reputation' => $g['reputation']], $this->groups));
+    }
+
+    /** Chat an update belongs to, when it concerns a group (not a private chat). */
+    private static function updateChat(array $u)
+    {
+        foreach (['message', 'edited_message', 'chat_member', 'my_chat_member', 'message_reaction', 'message_reaction_count', 'chat_join_request'] as $k) {
+            if (is_array($u[$k] ?? null) && isset($u[$k]['chat']['id'])) return (string)$u[$k]['chat']['id'];
+        }
+        return null;
+    }
+
+    /** An update from one of the extra groups: only its reputation counter and departure list are kept. */
+    private function extraGroup(array $u): ?string
+    {
+        $chat = self::updateChat($u);
+        if ($chat === null) return null;
+        foreach ($this->groups as $g) {
+            if ($g['chat_id'] !== $chat) continue;
+            return $this->counted(function () use ($g, $u) {
+                $g['community']->remember($u, true);
+                // Names are shown by the hub's rating and menu too, so the hub keeps them as well.
+                $this->community->remember($u, true);
+                if (is_array($u['chat_member'] ?? null)) return $g['community']->chatMember($u['chat_member']);
+                if (is_array($u['message_reaction'] ?? null)) return $g['reputation']->reaction($u['message_reaction']);
+                if (is_array($u['message_reaction_count'] ?? null)) return 'reaction_count_only';
+                if (is_array($u['message'] ?? null)) return $g['reputation']->message($u['message']);
+                return 'ignored';
+            });
+        }
+        return null;
     }
 
     private function now(): int { return ($this->clock)(); }
@@ -60,6 +102,8 @@ final class Hub
     public function receive(array $update): string
     {
         $this->community->remember($update);
+        $extra = $this->extraGroup($update);
+        if ($extra !== null) return $extra;
         $r = $update['chat_join_request'] ?? null;
         if (is_array($r)) return $this->join($update, $r);
         $cm = $update['chat_member'] ?? null;
@@ -103,8 +147,17 @@ final class Hub
                 return $this->community->members($operator);
             }
             if (self::userId($operator) && $m['from']['id'] === $operator && is_string($m['text'] ?? null) &&
-                preg_match('/^\/left(?:@\w+)?(?:\s+([0-9]{1,4}|all))?\s*$/D', $m['text'], $ml)) {
-                return $this->community->departures($operator, $ml[1] ?? null);
+                preg_match('/^\/left(?:@\w+)?(?:\s+([0-9]{1,4}|all))?(?:\s+([a-z]{2,16}))?\s*$/D', $m['text'], $ml)) {
+                $community = $this->community;
+                if (isset($ml[2]) && $ml[2] !== '') {
+                    $found = array_values(array_filter($this->groups, fn($g) => $g['key'] === $ml[2]));
+                    if (!$found) {
+                        $this->bot->call('sendMessage', ['chat_id' => $operator, 'text' => 'Такого чата нет. Доступны: ' . implode(', ', array_map(fn($g) => $g['key'], $this->groups)) . '.']);
+                        return 'departures_unknown_group';
+                    }
+                    $community = $found[0]['community'];
+                }
+                return $community->departures($operator, ($ml[1] ?? '') !== '' ? $ml[1] : null);
             }
             if (self::userId($operator) && $m['from']['id'] === $operator && is_string($m['text'] ?? null) && str_starts_with($m['text'], '/vote')) {
                 $voted = $this->counted(fn() => $this->vote->operatorCommand($m['text'], $operator) ?? '');
@@ -581,7 +634,9 @@ final class Hub
                 $now - self::REMIND_EVERY_WEEKLY])->fetchAll();
         foreach ($due as $r) $this->remind($r['id']);
         $this->network->tick(false);
-        $this->counted(fn() => $this->reputationSignals());
+        $multi = count($this->groups) > 0;
+        $this->counted(fn() => $this->reputationSignals($this->reputation, $this->community, $multi ? $this->network->mainTitle() : null));
+        foreach ($this->groups as $g) $this->counted(fn() => $this->reputationSignals($g['reputation'], $g['community'], $g['title']));
         $this->counted(fn() => $this->vote->tick());
     }
 
@@ -590,27 +645,27 @@ final class Hub
      * never a decision: the operator is told once per person per 30 days, and so is the person. Exclusion
      * is decided by a vote of the people, not by the counter. Quiet hours are respected: tick() returns before this.
      */
-    private function reputationSignals(): string
+    private function reputationSignals(Reputation $reputation, Community $community, ?string $title = null): string
     {
-        $candidates = $this->reputation->dislikeCandidates();
+        $candidates = $reputation->dislikeCandidates();
         if (!$candidates) return 'no_candidates';
-        $active = $this->reputation->activePeople();
+        $active = $reputation->activePeople();
         $need = Reputation::threshold($active);
         $operator = $this->config['operator_chat_id'] ?? null;
         if (!self::userId($operator)) return 'no_operator';
         $signalled = 0;
         foreach ($candidates as $c) {
             $user = (string)$c['author_id'];
-            if ((int)$c['people'] < $need || $user === (string)$operator || $this->reputation->alertedRecently($user)) continue;
+            if ((int)$c['people'] < $need || $user === (string)$operator || $reputation->alertedRecently($user)) continue;
             $told = $this->bot->call('sendMessage', ['chat_id' => (string)$user, 'text' =>
-                "За последние 30 дней под вашими сообщениями в группе набралось много дизлайков от разных людей. Это не решение и не наказание: организаторы посмотрят, в чём дело. " .
+                "За последние 30 дней под вашими сообщениями ' . ($title === null ? 'в группе' : 'в чате «' . $title . '»') . ' набралось много дизлайков от разных людей. Это не решение и не наказание: организаторы посмотрят, в чём дело. " .
                 'Если хотите что-то пояснить, напишите сюда, сообщение дойдёт до них.']);
             $sent = $this->bot->call('sendMessage', ['chat_id' => $operator, 'text' =>
-                'Сигнал по репутации: ' . Community::displayName($this->community->person($user)) . ' получил дизлайки от ' . (int)$c['people'] .
+                'Сигнал по репутации' . ($title === null ? '' : ' (' . $title . ')') . ': ' . Community::displayName($community->person($user)) . ' получил дизлайки от ' . (int)$c['people'] .
                 " разных людей за 30 дней (порог $need: треть от $active активных за этот срок). Это повод разобраться, а не решение: исключение решается голосованием. " .
                 (!empty($told['ok']) ? 'Человеку об этом написано.' : 'Написать человеку бот не смог (он не запускал бота).')]);
             // Only a delivered signal is remembered: otherwise the next tick tries again.
-            if (!empty($sent['ok'])) { $this->reputation->markAlerted($user, (int)$c['people']); $signalled++; }
+            if (!empty($sent['ok'])) { $reputation->markAlerted($user, (int)$c['people']); $signalled++; }
         }
         return 'signals_' . $signalled;
     }

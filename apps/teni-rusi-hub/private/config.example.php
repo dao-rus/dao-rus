@@ -26,4 +26,8 @@ return [
     // Closed channel (the departure list of the DAO) where the bot adds one line for everyone who leaves the group.
     // The number (-100...), not the @name. The bot must be its administrator with the right to post. Set with bin/set-departure-channel.php.
     'departure_channel_id' => null,
+    // Other chats with their own reputation counter and departure list (no join flow, no votes).
+    // Add with bin/set-extra-group.php <key> <chat_id> <title>. Example entry:
+    // ['key' => 'dao', 'hub_id' => 'teni-rusi-dao', 'chat_id' => '-1001234567890', 'title' => 'Чат ДАО', 'left_label' => 'Покинул чат'],
+    'extra_groups' => [],
 ];

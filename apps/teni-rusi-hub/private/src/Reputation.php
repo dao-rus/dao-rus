@@ -179,6 +179,12 @@ final class Reputation
             [$this->hub()])->fetchAll();
     }
 
+    /** One group's totals under a heading (when the person has counters in several groups). */
+    public static function section(array $s, string $title): string
+    {
+        return "$title:\n👍 лайков: {$s['likes']} (от разных людей: {$s['likers']})\n👎 дизлайков: {$s['dislikes']} (от разных людей: {$s['dislikers']})";
+    }
+
     public static function text(array $s): string
     {
         return "Ваша репутация в группе:\n👍 лайков: {$s['likes']} (от разных людей: {$s['likers']})\n👎 дизлайков: {$s['dislikes']} (от разных людей: {$s['dislikers']})\n\n" .

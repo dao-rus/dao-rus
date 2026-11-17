@@ -47,7 +47,7 @@ final class Community
     // ---- People -----------------------------------------------------------------------
 
     /** Keeps the latest name and @username of every person seen in an update. */
-    public function remember(array $update): void
+    public function remember(array $update, bool $anyGroup = false): void
     {
         $users = [
             $update['chat_join_request']['from'] ?? null,
@@ -55,8 +55,8 @@ final class Community
             ($update['message']['chat']['type'] ?? null) === 'private' ? ($update['message']['from'] ?? null) : null,
             $update['chat_member']['new_chat_member']['user'] ?? null,
             // Names of people seen in the hub group (authors and reactors), so a vote can name them.
-            (string)($update['message']['chat']['id'] ?? '') === $this->config['chat_id'] ? ($update['message']['from'] ?? null) : null,
-            (string)($update['message_reaction']['chat']['id'] ?? '') === $this->config['chat_id'] ? ($update['message_reaction']['user'] ?? null) : null,
+            $anyGroup || (string)($update['message']['chat']['id'] ?? '') === $this->config['chat_id'] ? ($update['message']['from'] ?? null) : null,
+            $anyGroup || (string)($update['message_reaction']['chat']['id'] ?? '') === $this->config['chat_id'] ? ($update['message_reaction']['user'] ?? null) : null,
         ];
         foreach ($users as $u) if (is_array($u)) $this->rememberUser($u);
     }
@@ -120,6 +120,8 @@ final class Community
                 $departure = 'departure_error';
             }
         }
+        // A group without the join flow keeps only the departure list: exclusion marks and their messages belong to the hub group.
+        if (!empty($this->config['group_only'])) return $departure ?? 'ignored';
         if ($new !== 'kicked' || ($cm['old_chat_member']['status'] ?? null) === 'kicked') return $departure ?? 'ignored';
         $by = Hub::userId($cm['from']['id'] ?? null) ? (string)$cm['from']['id'] : null;
         $date = is_int($cm['date'] ?? null) ? $cm['date'] : $this->now();
@@ -143,7 +145,7 @@ final class Community
         $since = $this->query('SELECT c.accepted_at FROM trh_memberships m JOIN trh_consents c ON c.request_id=m.latest_consent_id WHERE m.hub_id=? AND m.telegram_user_id=?',
             [$this->hub(), $userId])->fetchColumn();
         $line = self::date($at) . ' · ' . self::displayName($this->person($userId) ?? $user) .
-            ($since ? ' · В ДАО с ' . self::date((int)$since) : '') . ' · Покинул форум';
+            ($since ? ' · В ДАО с ' . self::date((int)$since) : '') . ' · ' . ($this->config['left_label'] ?? 'Покинул форум');
         $this->bot->call('sendMessage', ['chat_id' => $channel, 'text' => $line]);
     }
 

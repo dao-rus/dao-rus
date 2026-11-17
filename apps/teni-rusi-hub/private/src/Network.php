@@ -326,6 +326,46 @@ final class Network
         return $this->handle($user, $data, $answer, $cb);
     }
 
+    /** Counters of the other groups: [['title' => ..., 'reputation' => Reputation]]. The hub group is always first. */
+    private array $groups = [];
+    public function setGroups(array $groups): void { $this->groups = $groups; }
+    public function mainTitle(): string { return is_string($this->config['group_title'] ?? null) ? $this->config['group_title'] : 'Тени Руси'; }
+
+    /** @return array<int, array{title: string, reputation: Reputation}> */
+    private function allGroups(): array
+    {
+        return array_merge([['title' => $this->mainTitle(), 'reputation' => new Reputation($this->db, $this->config, $this->clock)]], $this->groups);
+    }
+
+    private function reputationText(string $user): string
+    {
+        $all = $this->allGroups();
+        if (count($all) === 1) return Reputation::text($all[0]['reputation']->score($user));
+        return "Ваша репутация:\n\n" . implode("\n\n", array_map(fn($g) => Reputation::section($g['reputation']->score($user), $g['title']), $all)) .
+            "\n\nКто отреагировал, не показывается.";
+    }
+
+    private function topText(): string
+    {
+        $all = $this->allGroups();
+        $blocks = [];
+        foreach ($all as $g) {
+            $lines = [];
+            foreach ($g['reputation']->top(self::TOP * 3) as $row) {
+                // Only people who are in the network now: excluded or cut-off members are not shown.
+                if (!$this->canUse((string)$row['author_id'])) continue;
+                $lines[] = (count($lines) + 1) . '. ' . Community::displayName($this->community->person((string)$row['author_id'])) . ' — 👍 ' . (int)$row['likes'];
+                if (count($lines) >= self::TOP) break;
+            }
+            $blocks[] = [$g['title'], $lines];
+        }
+        if (count($all) === 1) {
+            return $blocks[0][1] ? "Рейтинг: больше всего лайков под сообщениями в группе.\n\n" . implode("\n", $blocks[0][1]) : 'Пока лайков нет.';
+        }
+        if (!array_filter($blocks, fn($b) => $b[1])) return 'Пока лайков нет.';
+        return "Рейтинг: больше всего лайков под сообщениями.\n\n" . implode("\n\n", array_map(fn($b) => $b[0] . ":\n" . ($b[1] ? implode("\n", $b[1]) : 'пока нет лайков'), $blocks));
+    }
+
     private function handle(string $user, string $data, callable $answer, ?array $cb): string
     {
         $id = '([a-f0-9]{32})';
@@ -362,21 +402,12 @@ final class Network
         if ($data === 'trh:n:who') { $answer('Кто здесь'); $this->who($user); return 'who'; }
         if ($data === 'trh:n:rep') {
             $answer('Репутация');
-            $this->send($user, Reputation::text((new Reputation($this->db, $this->config, $this->clock))->score($user)));
+            $this->send($user, $this->reputationText($user));
             return 'reputation';
         }
         if ($data === 'trh:n:top') {
             $answer('Рейтинг');
-            $lines = [];
-            foreach ((new Reputation($this->db, $this->config, $this->clock))->top(self::TOP * 3) as $row) {
-                // Only people who are in the network now: excluded or cut-off members are not shown.
-                if (!$this->canUse((string)$row['author_id'])) continue;
-                $lines[] = (count($lines) + 1) . '. ' . Community::displayName($this->community->person((string)$row['author_id'])) . ' — 👍 ' . (int)$row['likes'];
-                if (count($lines) >= self::TOP) break;
-            }
-            $this->send($user, $lines
-                ? "Рейтинг: больше всего лайков под сообщениями в группе.\n\n" . implode("\n", $lines)
-                : 'Пока лайков нет.');
+            $this->send($user, $this->topText());
             return 'top';
         }
         if ($data === 'trh:n:key') { $answer('Ключи'); $this->sendKeys($user); return 'keys'; }
