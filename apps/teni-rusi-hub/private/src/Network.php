@@ -356,19 +356,16 @@ final class Network
         $p = $this->community->person($user);
         $name = trim(($p['first_name'] ?? '') . ' ' . ($p['last_name'] ?? ''));
         if ($name === '') $name = 'участник';
-        $row = $this->query("SELECT body,city FROM trh_signals WHERE hub_id=? AND telegram_user_id=? AND kind='interest' AND status='active' ORDER BY created_at DESC LIMIT 1", [$this->hub(), $user])->fetch();
         $head = 'Новый человек в Приёмной: ';
         $entity = ['type' => 'text_mention', 'offset' => Community::u16($head), 'length' => Community::u16($name), 'user' => ['id' => (int)$user]];
         $text = $head . $name . (!empty($p['username']) ? ' (@' . $p['username'] . ')' : '');
-        if ($row && ($row['city'] ?? '') !== '' && $row['city'] !== null) $text .= "\nГород: " . $row['city'];
-        if ($row) $text .= "\nЗанимает: " . $row['body'];
         $text .= "\n\n" . $story;
         $sent = $this->bot->call('sendMessage', ['chat_id' => $e[0], 'message_thread_id' => $e[1], 'text' => $text, 'entities' => [$entity]]);
         if (empty($sent['ok'])) {
             $this->send($user, 'Не получилось передать рассказ участникам. Он не потерян: напишите его ещё раз позже или просто пришлите сюда — сообщение придёт организаторам.');
             return 'intro_post_failed';
         }
-        $this->send($user, '✓ Рассказ передан участникам ДАО в ветку «Приёмная». Ответят вам здесь, в личке, или там. Пока можно оставить записи «Мне нужно» и «У меня есть» внизу.');
+        $this->send($user, '✓ Рассказ передан участникам ДАО в ветку «Приёмная». Когда они решат, вам пришлют ссылку на вступление в чат. Вы пока не в ДАО: вступление — через чат.');
         return 'intro_posted';
     }
 
@@ -441,17 +438,18 @@ final class Network
         $id = '([a-f0-9]{32})';
         if ($data === 'trh:n:join') {
             if ($this->community->excludedAt($user) !== null && !$this->community->isMember($user)) { $answer('Недоступно'); return 'net_denied'; }
-            $first = $this->net($user) === null;
             $this->ensureNet($user);
-            $answer('Добро пожаловать');
-            $this->menu($user);
-            if (!$first) return 'net_joined';
-            // First value within seconds: one question, saved as an interest, answered with similar people.
-            if ($this->entrance() !== null) {
-                $this->setDialog($user, 'intro:interest');
-                $this->send($user, "Три коротких вопроса, чтобы участники ДАО могли вас узнать. Пропустить можно в любой момент: /skip.\n\n1. Что вас сейчас занимает? Одной фразой — сохраню как ваш интерес и покажу, кто думает о похожем.");
+            // The DAO is its chat, and the bot cannot let anyone into it. A newcomer introduces himself to the
+            // people there (topic «Приёмная»); they decide and send him the invitation. No «welcome», no menu yet.
+            if ($this->entrance() !== null && $this->daoStatus($user) !== 'in') {
+                $answer('Расскажите о себе');
+                $this->setDialog($user, 'intro:story');
+                $this->send($user, "Вы приняли правила. Чтобы вступить в ДАО, представьтесь участникам.\n\nРасскажите кратко о себе: как вас зовут, сколько вам лет, где живёте и чем занимаетесь.\n\nЭтот рассказ бот перешлёт в ветку «Приёмная» чата ДАО: его прочтут участники ДАО и решат о вступлении. Бот сам рассказ не хранит. Не хотите публиковать — /skip.");
                 return 'net_joined';
             }
+            $answer('Добро пожаловать');
+            $this->menu($user);
+            // First value within seconds: one question, saved as an interest, answered with similar people.
             $this->setDialog($user, 'entry:interest');
             $this->send($user, 'Что вас сейчас занимает? Напишите одной фразой — сохраню как ваш интерес и сразу покажу, кто думает о похожем. Не хотите — нажмите любую кнопку внизу.');
             return 'net_joined';
@@ -560,22 +558,6 @@ final class Network
         if ($text !== null && str_starts_with($text, '/')) { $this->clearDialog($user); return null; }
         $state = (string)$d['state'];
         if ($text === null || $text === '') { $this->send($user, 'Пожалуйста, напишите текстом.'); return 'text_required'; }
-        if ($state === 'intro:interest') {
-            $r = $this->saveEntry($user, 'interest', $text);
-            if ($r === 'entry_saved') {
-                $this->setDialog($user, 'intro:city');
-                $this->send($user, '2. Из какого вы города? Одно слово. Не хотите называть — пришлите «-».');
-            }
-            return $r;
-        }
-        if ($state === 'intro:city') {
-            if (mb_strlen($text) > self::CITY_MAX) { $this->send($user, 'Слишком длинно для города — пришлите короче.'); return 'too_long'; }
-            if ($text !== '-') $this->query("UPDATE trh_signals SET city=? WHERE hub_id=? AND telegram_user_id=? AND kind='interest' AND status='active' AND created_at=(SELECT m FROM (SELECT MAX(created_at) AS m FROM trh_signals WHERE hub_id=? AND telegram_user_id=? AND kind='interest' AND status='active') x)",
-                [$text, $this->hub(), $user, $this->hub(), $user]);
-            $this->setDialog($user, 'intro:story');
-            $this->send($user, "3. Расскажите о себе в нескольких фразах: чем занимаетесь, что вас привело, чем можете быть полезны. Возраст можно назвать, если хотите.\n\nЭтот рассказ бот перешлёт в ветку «Приёмная» чата ДАО: его прочтут участники ДАО, и они же ответят вам. Бот сам рассказ не хранит. Не хотите публиковать — /skip.");
-            return 'intro_city';
-        }
         if ($state === 'intro:story') {
             if (mb_strlen($text) > self::STORY_MAX) { $this->send($user, 'Длиннее ' . self::STORY_MAX . ' символов — сократите и пришлите ещё раз.'); return 'too_long'; }
             $this->clearDialog($user);
