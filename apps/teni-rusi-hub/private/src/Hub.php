@@ -33,7 +33,7 @@ final class Hub
             $this->groups[] = ['key' => $e['key'], 'title' => is_string($e['title'] ?? null) ? $e['title'] : $e['key'], 'chat_id' => $e['chat_id'],
                 'reputation' => new Reputation($db, $gc, $this->clock), 'community' => new Community($db, $bot, $gc, $this->clock)];
         }
-        $this->network->setGroups(array_map(fn($g) => ['title' => $g['title'], 'reputation' => $g['reputation']], $this->groups));
+        $this->network->setGroups(array_map(fn($g) => ['key' => $g['key'], 'chat_id' => $g['chat_id'], 'title' => $g['title'], 'reputation' => $g['reputation']], $this->groups));
     }
 
     /** Chat an update belongs to, when it concerns a group (not a private chat). */

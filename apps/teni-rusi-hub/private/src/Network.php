@@ -186,6 +186,7 @@ final class Network
             $this->send($chat, 'Сеть ДАО для вас сейчас недоступна. Если считаете это ошибкой, напишите сюда — сообщение придёт организаторам.');
             return;
         }
+        if ($this->syncDao($chat)) { $this->menu($chat); return; }
         $this->send($chat, "Вы в Приёмной ДАО Русь. ДАО — сообщество людей, которые находят друг друга по делам и интересам.\n\nВступая, вы принимаете правила — Кодекс:\n" . Hub::CODE . "\n\nИмя и контакты не раскрываются, пока оба не согласятся на знакомство.",
             self::buttons([[self::b('Вступить в ДАО', 'trh:n:join'), self::b('Не сейчас', 'trh:n:later')]]));
     }
@@ -329,6 +330,29 @@ final class Network
     /** Counters of the other groups: [['title' => ..., 'reputation' => Reputation]]. The hub group is always first. */
     private array $groups = [];
     public function setGroups(array $groups): void { $this->groups = $groups; }
+
+    /**
+     * The DAO is its main chat (group «dao»). A person who is in that chat now is a DAO participant even if
+     * he never accepted the Code in this bot: ask Telegram, then record him in the network. Called only when
+     * someone arrives (not on every button), because it is a request to Telegram. True when he can use the
+     * network afterwards. Never overrides an exclusion or a cut-off.
+     */
+    private function syncDao(string $user): bool
+    {
+        foreach ($this->groups as $g) {
+            if (($g['key'] ?? null) !== 'dao' || !is_string($g['chat_id'] ?? null)) continue;
+            try {
+                $r = $this->bot->call('getChatMember', ['chat_id' => $g['chat_id'], 'user_id' => (int)$user]);
+            } catch (\Throwable $e) { return false; }
+            $m = $r['result'] ?? null;
+            $in = !empty($r['ok']) && is_array($m) && (in_array($m['status'] ?? '', ['member', 'administrator', 'creator'], true) ||
+                (($m['status'] ?? '') === 'restricted' && ($m['is_member'] ?? false) === true));
+            if (!$in) return false;
+            $this->ensureNet($user);
+            return $this->canUse($user);
+        }
+        return false;
+    }
     public function mainTitle(): string { return is_string($this->config['group_title'] ?? null) ? $this->config['group_title'] : 'Тени Руси'; }
 
     /** @return array<int, array{title: string, reputation: Reputation}> */
