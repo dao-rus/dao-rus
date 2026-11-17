@@ -339,6 +339,39 @@ final class Network
      * someone arrives (not on every button), because it is a request to Telegram. True when he can use the
      * network afterwards. Never overrides an exclusion or a cut-off.
      */
+    /**
+     * A reply in the DAO chat to the bot's «Новый человек в Приёмной» post goes to that person in private
+     * (a link to join, a question). The person is read from the mention in the post itself, so nothing is stored.
+     * Returns null when the message is not such a reply.
+     */
+    public function entranceReply(array $m, string $key): ?string
+    {
+        if ($key !== 'dao') return null;
+        $to = $m['reply_to_message'] ?? null;
+        $text = is_string($m['text'] ?? null) ? $m['text'] : null;
+        if (!is_array($to) || $text === null || trim($text) === '' || !is_array($to['from'] ?? null) || ($to['from']['is_bot'] ?? false) !== true ||
+            !is_string($to['text'] ?? null) || !str_starts_with($to['text'], 'Новый человек в Приёмной:')) return null;
+        $from = $m['from'] ?? [];
+        if (($from['is_bot'] ?? false) === true && ($from['id'] ?? null) !== Reputation::ANONYMOUS_ADMIN_BOT) return null;
+        $applicant = null;
+        foreach ($to['entities'] ?? [] as $en) {
+            if (is_array($en) && ($en['type'] ?? null) === 'text_mention' && Hub::userId($en['user']['id'] ?? null)) { $applicant = (string)$en['user']['id']; break; }
+        }
+        if ($applicant === null || ($from['id'] ?? null) === (int)$applicant) return null;
+        $head = "Ответ участников ДАО на ваш рассказ:\n\n";
+        $entities = [];
+        foreach ($m['entities'] ?? [] as $en) {
+            if (is_array($en) && is_int($en['offset'] ?? null) && is_int($en['length'] ?? null)) $entities[] = ['offset' => $en['offset'] + Community::u16($head)] + $en;
+        }
+        $sent = $this->send($applicant, $head . $text, $entities ? ['entities' => $entities] : []);
+        if (empty($sent['ok'])) {
+            $this->bot->call('sendMessage', ['chat_id' => (string)$m['chat']['id'], 'text' => 'Не удалось передать ответ: человек не запускал бота или заблокировал его.',
+                'reply_parameters' => ['message_id' => $m['message_id'], 'allow_sending_without_reply' => true]]);
+            return 'entrance_reply_failed';
+        }
+        return 'entrance_reply_delivered';
+    }
+
     /** [chat_id, thread_id] of the «Приёмная» topic in the DAO chat, or null when it is not set up. */
     private function entrance(): ?array
     {

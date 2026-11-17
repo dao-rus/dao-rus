@@ -60,7 +60,11 @@ final class Hub
                 if (is_array($u['chat_member'] ?? null)) return $g['community']->chatMember($u['chat_member']);
                 if (is_array($u['message_reaction'] ?? null)) return $g['reputation']->reaction($u['message_reaction']);
                 if (is_array($u['message_reaction_count'] ?? null)) return 'reaction_count_only';
-                if (is_array($u['message'] ?? null)) return $g['reputation']->message($u['message']);
+                if (is_array($u['message'] ?? null)) {
+                    $reply = $this->network->entranceReply($u['message'], $g['key']);
+                    $kept = $g['reputation']->message($u['message']);
+                    return $reply ?? $kept;
+                }
                 return 'ignored';
             });
         }
