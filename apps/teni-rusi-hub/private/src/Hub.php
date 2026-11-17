@@ -661,7 +661,7 @@ final class Hub
                 "За последние 30 дней под вашими сообщениями ' . ($title === null ? 'в группе' : 'в чате «' . $title . '»') . ' набралось много дизлайков от разных людей. Это не решение и не наказание: организаторы посмотрят, в чём дело. " .
                 'Если хотите что-то пояснить, напишите сюда, сообщение дойдёт до них.']);
             $sent = $this->bot->call('sendMessage', ['chat_id' => $operator, 'text' =>
-                'Сигнал по репутации' . ($title === null ? '' : ' (' . $title . ')') . ': ' . Community::displayName($community->person($user)) . ' получил дизлайки от ' . (int)$c['people'] .
+                'Сигнал по дизлайкам' . ($title === null ? '' : ' (' . $title . ')') . ': ' . Community::displayName($community->person($user)) . ' получил дизлайки от ' . (int)$c['people'] .
                 " разных людей за 30 дней (порог $need: треть от $active активных за этот срок). Это повод разобраться, а не решение: исключение решается голосованием. " .
                 (!empty($told['ok']) ? 'Человеку об этом написано.' : 'Написать человеку бот не смог (он не запускал бота).')]);
             // Only a delivered signal is remembered: otherwise the next tick tries again.

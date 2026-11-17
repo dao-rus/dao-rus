@@ -187,7 +187,7 @@ final class Reputation
 
     public static function text(array $s): string
     {
-        return "Ваша репутация в группе:\n👍 лайков: {$s['likes']} (от разных людей: {$s['likers']})\n👎 дизлайков: {$s['dislikes']} (от разных людей: {$s['dislikers']})\n\n" .
+        return "Ваша популярность в группе:\n👍 лайков: {$s['likes']} (от разных людей: {$s['likers']})\n👎 дизлайков: {$s['dislikes']} (от разных людей: {$s['dislikers']})\n\n" .
             'Кто отреагировал, не показывается.';
     }
 }
