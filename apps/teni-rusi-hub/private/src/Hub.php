@@ -31,9 +31,10 @@ final class Hub
             $gc = array_merge($config, ['hub_id' => $e['hub_id'], 'chat_id' => $e['chat_id'], 'group_only' => true,
                 'left_label' => is_string($e['left_label'] ?? null) ? $e['left_label'] : 'Покинул чат']);
             $this->groups[] = ['key' => $e['key'], 'title' => is_string($e['title'] ?? null) ? $e['title'] : $e['key'], 'chat_id' => $e['chat_id'],
+                'entrance_thread_id' => is_int($e['entrance_thread_id'] ?? null) && $e['entrance_thread_id'] > 0 ? $e['entrance_thread_id'] : null,
                 'reputation' => new Reputation($db, $gc, $this->clock), 'community' => new Community($db, $bot, $gc, $this->clock)];
         }
-        $this->network->setGroups(array_map(fn($g) => ['key' => $g['key'], 'chat_id' => $g['chat_id'], 'title' => $g['title'], 'reputation' => $g['reputation']], $this->groups));
+        $this->network->setGroups(array_map(fn($g) => ['key' => $g['key'], 'chat_id' => $g['chat_id'], 'entrance_thread_id' => $g['entrance_thread_id'], 'title' => $g['title'], 'reputation' => $g['reputation']], $this->groups));
     }
 
     /** Chat an update belongs to, when it concerns a group (not a private chat). */

@@ -28,6 +28,9 @@ return [
     'departure_channel_id' => null,
     // Other chats with their own reputation counter and departure list (no join flow, no votes).
     // Add with bin/set-extra-group.php <key> <chat_id> <title>. Example entry:
-    // ['key' => 'dao', 'hub_id' => 'teni-rusi-dao', 'chat_id' => '-1001234567890', 'title' => 'Чат ДАО', 'left_label' => 'Покинул чат'],
+    // ['key' => 'dao', 'hub_id' => 'teni-rusi-dao', 'chat_id' => '-1001234567890', 'title' => 'Чат ДАО', 'left_label' => 'Покинул чат', 'entrance_thread_id' => 123],
+    // The group with key «dao» is the DAO itself: its members are recognised as participants on arrival, and
+    // «Вступить в ДАО» runs a 3-question survey whose story is posted into the topic «Приёмная»
+    // (entrance_thread_id; set with bin/set-entrance-thread.php <thread_id>).
     'extra_groups' => [],
 ];
