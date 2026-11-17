@@ -102,6 +102,10 @@ final class Hub
             if (self::userId($operator) && $m['from']['id'] === $operator && ($m['text'] ?? null) === '/members') {
                 return $this->community->members($operator);
             }
+            if (self::userId($operator) && $m['from']['id'] === $operator && is_string($m['text'] ?? null) &&
+                preg_match('/^\/left(?:@\w+)?(?:\s+([0-9]{1,4}|all))?\s*$/D', $m['text'], $ml)) {
+                return $this->community->departures($operator, $ml[1] ?? null);
+            }
             if (self::userId($operator) && $m['from']['id'] === $operator && is_string($m['text'] ?? null) && str_starts_with($m['text'], '/vote')) {
                 $voted = $this->counted(fn() => $this->vote->operatorCommand($m['text'], $operator) ?? '');
                 if ($voted !== '') return $voted;

@@ -85,13 +85,39 @@ final class Community
 
     // ---- Exclusions -------------------------------------------------------------------
 
-    /** A ban in the hub group (status "kicked") is remembered; unbanning keeps the mark. */
+    /** In the group as Telegram reports it: a member, or restricted but still inside. */
+    private static function inGroup(array $m): bool
+    {
+        $s = $m['status'] ?? null;
+        return in_array($s, ['member', 'administrator', 'creator'], true) || ($s === 'restricted' && !empty($m['is_member']));
+    }
+
+    /**
+     * Every departure from the hub group goes to the departure list: left by themselves, or removed
+     * (banned, or removed by an administrator and unbanned at once). A ban is also remembered as an
+     * exclusion mark; unbanning keeps the mark.
+     */
     public function chatMember(array $cm): string
     {
         if ((string)($cm['chat']['id'] ?? '') !== $this->config['chat_id']) return 'ignored';
         $user = $cm['new_chat_member']['user'] ?? null;
         if (!is_array($user) || !Hub::userId($user['id'] ?? null)) return 'ignored';
-        if (($cm['new_chat_member']['status'] ?? null) !== 'kicked' || ($cm['old_chat_member']['status'] ?? null) === 'kicked') return 'ignored';
+        $new = $cm['new_chat_member']['status'] ?? null;
+        $departure = null;
+        if (is_array($cm['old_chat_member'] ?? null) && self::inGroup($cm['old_chat_member']) && in_array($new, ['left', 'kicked'], true) && ($user['is_bot'] ?? false) !== true) {
+            $by = Hub::userId($cm['from']['id'] ?? null) ? (string)$cm['from']['id'] : null;
+            $kind = $new === 'left' && $by === (string)$user['id'] ? 'left' : 'removed';
+            try {
+                $this->query('REPLACE INTO trh_departures(hub_id,user_id,left_at,kind,by_id) VALUES (?,?,?,?,?)',
+                    [$this->hub(), (string)$user['id'], is_int($cm['date'] ?? null) ? $cm['date'] : $this->now(), $kind, $kind === 'removed' ? $by : null]);
+                $departure = 'departure_recorded';
+            } catch (\PDOException $e) {
+                // The list must never stop the update queue (a missing table, say): the exclusion mark below still works.
+                error_log('departure storage error ' . $e->getCode());
+                $departure = 'departure_error';
+            }
+        }
+        if ($new !== 'kicked' || ($cm['old_chat_member']['status'] ?? null) === 'kicked') return $departure ?? 'ignored';
         $by = Hub::userId($cm['from']['id'] ?? null) ? (string)$cm['from']['id'] : null;
         $date = is_int($cm['date'] ?? null) ? $cm['date'] : $this->now();
         $this->query('INSERT INTO trh_exclusions(hub_id,telegram_user_id,excluded_at,excluded_by,times) VALUES (?,?,?,?,1) ON DUPLICATE KEY UPDATE excluded_at=VALUES(excluded_at),excluded_by=VALUES(excluded_by),times=times+1',
@@ -139,6 +165,52 @@ final class Community
     }
 
     // ---- Operator list ----------------------------------------------------------------
+
+    private const MONTHS = ['', 'Январь', 'Февраль', 'Март', 'Апрель', 'Май', 'Июнь', 'Июль', 'Август', 'Сентябрь', 'Октябрь', 'Ноябрь', 'Декабрь'];
+
+    /**
+     * /left [days|all] for the operator: who left the group and when, newest first, grouped by month.
+     * Counts people (a person who left twice is one person). The list starts from the day the
+     * departure record was switched on; earlier history is in the archive of departures, not here.
+     */
+    public function departures(int $operator, ?string $arg): string
+    {
+        $all = $arg === 'all';
+        $days = $all ? 0 : ($arg !== null && $arg !== '' ? max(1, min(3650, (int)$arg)) : 30);
+        $since = $all ? 0 : $this->now() - $days * 86400;
+        $rows = $this->query('SELECT d.user_id,d.left_at,d.kind,p.first_name,p.last_name,p.username,c.accepted_at FROM trh_departures d' .
+            ' LEFT JOIN trh_people p ON p.hub_id=d.hub_id AND p.telegram_user_id=d.user_id' .
+            ' LEFT JOIN trh_memberships m ON m.hub_id=d.hub_id AND m.telegram_user_id=d.user_id' .
+            ' LEFT JOIN trh_consents c ON c.request_id=m.latest_consent_id' .
+            ' WHERE d.hub_id=? AND d.left_at>=' . (int)$since . ' ORDER BY d.left_at DESC', [$this->hub()])->fetchAll();
+        $people = [];
+        foreach ($rows as $r) $people[$r['user_id']] = true;
+        $period = $all ? 'за всё время записи' : 'за ' . $days . ' ' . self::plural($days, 'день', 'дня', 'дней');
+        $head = 'Ушли из группы ' . $period . ': ' . count($people) . ' ' . self::plural(count($people), 'человек', 'человека', 'человек') .
+            (count($rows) !== count($people) ? ' (выходов: ' . count($rows) . ')' : '') . '.';
+        $lines = [];
+        $month = null;
+        foreach ($rows as $r) {
+            $ts = (int)$r['left_at'] + 10800;
+            $key = gmdate('Y-m', $ts);
+            if ($key !== $month) {
+                $month = $key;
+                $lines[] = ($lines ? "\n" : '') . self::MONTHS[(int)gmdate('n', $ts)] . ' ' . gmdate('Y', $ts);
+            }
+            $lines[] = gmdate('d.m', $ts) . ' — ' . self::displayName($r) . ' — ' . ($r['kind'] === 'left' ? 'вышел' : 'удалён') .
+                ($r['accepted_at'] ? '; принял правила ' . self::date((int)$r['accepted_at']) : '');
+        }
+        if (!$lines) $head .= "\n\nПока никого. Запись ведётся с момента её включения.";
+        $this->sendChunks((string)$operator, $head, $lines, [], "\n");
+        return 'departures_listed';
+    }
+
+    private static function plural(int $n, string $one, string $few, string $many): string
+    {
+        $m = $n % 100;
+        if ($m >= 11 && $m <= 14) return $many;
+        return match ($n % 10) { 1 => $one, 2, 3, 4 => $few, default => $many };
+    }
 
     /** /members for the operator: everyone who accepted the rules, plus exclusion marks. */
     public function members(int $operator): string
