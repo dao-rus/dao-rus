@@ -363,8 +363,12 @@ final class Network
         // Topic 1 is the General topic of a forum: Telegram wants no thread id for it (it can answer «thread not found» to 1).
         $sent = $this->bot->call('sendMessage', ['chat_id' => $e[0], 'text' => $text, 'entities' => [$entity]] + ($e[1] > 1 ? ['message_thread_id' => $e[1]] : []));
         if (empty($sent['ok'])) {
-            error_log('entrance post failed: ' . (is_string($sent['description'] ?? null) ? mb_substr($sent['description'], 0, 120) : 'no description'));
-            $this->send($user, 'Не получилось передать рассказ участникам. Он не потерян: напишите его ещё раз позже или просто пришлите сюда — сообщение придёт организаторам.');
+            $why = is_string($sent['description'] ?? null) ? mb_substr($sent['description'], 0, 200) : 'нет описания от Telegram';
+            error_log('entrance post failed: ' . $why);
+            // The story is not lost: the operator gets it with the reason, so he can post it or fix the setup.
+            $operator = $this->config['operator_chat_id'] ?? null;
+            if (Hub::userId($operator)) $this->send((string)$operator, "Рассказ не опубликован в ветке «Приёмная»: $why\n\n" . mb_substr($text, 0, 3500));
+            $this->send($user, 'Не получилось передать рассказ участникам. Он не потерян: его получили организаторы и передадут.');
             return 'intro_post_failed';
         }
         $this->send($user, '✓ Рассказ передан участникам ДАО в ветку «Приёмная». Когда они решат, вам пришлют ссылку на вступление в чат. Вы пока не в ДАО: вступление — через чат.');
