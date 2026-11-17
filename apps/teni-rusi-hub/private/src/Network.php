@@ -196,7 +196,8 @@ final class Network
     {
         if (!$this->canUse($chat)) { $this->welcome($chat); return; }
         $this->ensureNet($chat);
-        $this->send($chat, "Вы в ДАО Русь. Здесь можно оставить запись о том, что вам нужно или что вы можете: вас найдут те, кому это близко. Или найти людей самому.\n\nИмя и контакты открываются только по согласию обоих. Меню внизу экрана, команды набирать не нужно.",
+        $head = $this->daoStatus($chat) === 'in' ? 'Вы в ДАО Русь.' : 'Сеть ДАО Русь.';
+        $this->send($chat, "$head Здесь можно оставить запись о том, что вам нужно или что вы можете: вас найдут те, кому это близко. Или найти людей самому.\n\nИмя и контакты открываются только по согласию обоих. Меню внизу экрана, команды набирать не нужно.",
             self::keyboard());
     }
 
@@ -371,21 +372,32 @@ final class Network
         return 'intro_posted';
     }
 
-    private function syncDao(string $user): bool
+    /**
+     * Is this person in the DAO chat right now? 'in' / 'out' from Telegram, 'unknown' when Telegram did not
+     * answer, 'none' when no DAO chat is configured. «В ДАО» means exactly this: nothing the hub holds
+     * (accepted rules, a network record) makes a person a DAO participant.
+     */
+    public function daoStatus(string $user): string
     {
         foreach ($this->groups as $g) {
             if (($g['key'] ?? null) !== 'dao' || !is_string($g['chat_id'] ?? null)) continue;
             try {
                 $r = $this->bot->call('getChatMember', ['chat_id' => $g['chat_id'], 'user_id' => (int)$user]);
-            } catch (\Throwable $e) { return false; }
+            } catch (\Throwable $e) { return 'unknown'; }
             $m = $r['result'] ?? null;
-            $in = !empty($r['ok']) && is_array($m) && (in_array($m['status'] ?? '', ['member', 'administrator', 'creator'], true) ||
-                (($m['status'] ?? '') === 'restricted' && ($m['is_member'] ?? false) === true));
-            if (!$in) return false;
-            $this->ensureNet($user);
-            return $this->canUse($user);
+            if (empty($r['ok']) || !is_array($m) || !is_string($m['status'] ?? null)) return 'unknown';
+            return in_array($m['status'], ['member', 'administrator', 'creator'], true) ||
+                ($m['status'] === 'restricted' && ($m['is_member'] ?? false) === true) ? 'in' : 'out';
         }
-        return false;
+        return 'none';
+    }
+
+    /** A person in the DAO chat is recorded in the network on arrival. True when he can use the network afterwards. */
+    private function syncDao(string $user): bool
+    {
+        if ($this->daoStatus($user) !== 'in') return false;
+        $this->ensureNet($user);
+        return $this->canUse($user);
     }
     public function mainTitle(): string { return is_string($this->config['group_title'] ?? null) ? $this->config['group_title'] : 'Тени Руси'; }
 
@@ -429,9 +441,11 @@ final class Network
         $id = '([a-f0-9]{32})';
         if ($data === 'trh:n:join') {
             if ($this->community->excludedAt($user) !== null && !$this->community->isMember($user)) { $answer('Недоступно'); return 'net_denied'; }
+            $first = $this->net($user) === null;
             $this->ensureNet($user);
             $answer('Добро пожаловать');
             $this->menu($user);
+            if (!$first) return 'net_joined';
             // First value within seconds: one question, saved as an interest, answered with similar people.
             if ($this->entrance() !== null) {
                 $this->setDialog($user, 'intro:interest');

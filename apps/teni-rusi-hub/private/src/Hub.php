@@ -322,7 +322,7 @@ final class Hub
         $r = $id ? $this->row($id) : null;
         $settled = !$r || in_array($r['status'], ['approved', 'superseded', 'declined'], true);
         // People in the network (hub members or those who accepted the Code in the bot) get its menu.
-        if ($settled && $this->network->canUse($chatId)) {
+        if ($settled && $this->network->canUse($chatId) && $this->network->daoStatus($chatId) !== 'out') {
             $this->network->menu($chatId);
             return;
         }
