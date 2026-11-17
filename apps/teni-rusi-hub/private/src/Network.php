@@ -360,8 +360,10 @@ final class Network
         $entity = ['type' => 'text_mention', 'offset' => Community::u16($head), 'length' => Community::u16($name), 'user' => ['id' => (int)$user]];
         $text = $head . $name . (!empty($p['username']) ? ' (@' . $p['username'] . ')' : '');
         $text .= "\n\n" . $story;
-        $sent = $this->bot->call('sendMessage', ['chat_id' => $e[0], 'message_thread_id' => $e[1], 'text' => $text, 'entities' => [$entity]]);
+        // Topic 1 is the General topic of a forum: Telegram wants no thread id for it (it can answer «thread not found» to 1).
+        $sent = $this->bot->call('sendMessage', ['chat_id' => $e[0], 'text' => $text, 'entities' => [$entity]] + ($e[1] > 1 ? ['message_thread_id' => $e[1]] : []));
         if (empty($sent['ok'])) {
+            error_log('entrance post failed: ' . (is_string($sent['description'] ?? null) ? mb_substr($sent['description'], 0, 120) : 'no description'));
             $this->send($user, 'Не получилось передать рассказ участникам. Он не потерян: напишите его ещё раз позже или просто пришлите сюда — сообщение придёт организаторам.');
             return 'intro_post_failed';
         }
