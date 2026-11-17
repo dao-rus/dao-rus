@@ -108,9 +108,12 @@ final class Community
             $by = Hub::userId($cm['from']['id'] ?? null) ? (string)$cm['from']['id'] : null;
             $kind = $new === 'left' && $by === (string)$user['id'] ? 'left' : 'removed';
             try {
+                $at = is_int($cm['date'] ?? null) ? $cm['date'] : $this->now();
+                $known = $this->query('SELECT 1 FROM trh_departures WHERE hub_id=? AND user_id=? AND left_at=?', [$this->hub(), (string)$user['id'], $at])->fetch();
                 $this->query('REPLACE INTO trh_departures(hub_id,user_id,left_at,kind,by_id) VALUES (?,?,?,?,?)',
-                    [$this->hub(), (string)$user['id'], is_int($cm['date'] ?? null) ? $cm['date'] : $this->now(), $kind, $kind === 'removed' ? $by : null]);
+                    [$this->hub(), (string)$user['id'], $at, $kind, $kind === 'removed' ? $by : null]);
                 $departure = 'departure_recorded';
+                if (!$known && $kind === 'left') $this->postDeparture((string)$user['id'], $user, $at);
             } catch (\PDOException $e) {
                 // The list must never stop the update queue (a missing table, say): the exclusion mark below still works.
                 error_log('departure storage error ' . $e->getCode());
@@ -125,6 +128,23 @@ final class Community
         $this->notifyOperator('Отмечено исключение из группы: ' . self::displayName($this->person((string)$user['id']) ?? $user) .
             '. Если этот человек снова подаст заявку, решение будет за вами.');
         return 'exclusion_recorded';
+    }
+
+    /**
+     * One line in the closed departure channel of the DAO for a person who left by themselves:
+     * date, name, @username, since when in the DAO (when known), «Покинул форум». People removed by an
+     * administrator are not posted there (as before, in the Core). A failure of Telegram loses nothing:
+     * the departure stays in the operator's /left list.
+     */
+    private function postDeparture(string $userId, array $user, int $at): void
+    {
+        $channel = $this->config['departure_channel_id'] ?? null;
+        if (!is_string($channel) || !preg_match('/^-100[0-9]{6,13}$/D', $channel)) return;
+        $since = $this->query('SELECT c.accepted_at FROM trh_memberships m JOIN trh_consents c ON c.request_id=m.latest_consent_id WHERE m.hub_id=? AND m.telegram_user_id=?',
+            [$this->hub(), $userId])->fetchColumn();
+        $line = self::date($at) . ' · ' . self::displayName($this->person($userId) ?? $user) .
+            ($since ? ' · В ДАО с ' . self::date((int)$since) : '') . ' · Покинул форум';
+        $this->bot->call('sendMessage', ['chat_id' => $channel, 'text' => $line]);
     }
 
     public function excludedAt(string $userId): ?int

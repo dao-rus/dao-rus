@@ -23,4 +23,7 @@ return [
     // Telegram user ID (integer) who receives every other private message sent to the bot.
     // That person must have pressed Start in the bot. Set with bin/set-operator.php.
     'operator_chat_id' => null,
+    // Closed channel (the departure list of the DAO) where the bot adds one line for everyone who leaves the group.
+    // The number (-100...), not the @name. The bot must be its administrator with the right to post. Set with bin/set-departure-channel.php.
+    'departure_channel_id' => null,
 ];
