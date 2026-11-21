@@ -493,7 +493,9 @@ final class Hub
             $target = $r['offer_target'];
             $error = (int)($result['error_code'] ?? 0);
             if (empty($result['ok']) && (int)$current['offer_attempts'] < 5) {
-                if ($error === 429) { $state = 'queued'; $due += $this->delay($current['offer_attempts'], $result); }
+                // 429 = flood limit; 0 = no usable answer (timeout, connection error); 5xx = Telegram side. Nothing
+                // is known to be delivered, so try again with a growing delay (at most 5 attempts in total).
+                if ($error === 429 || $error === 0 || $error >= 500) { $state = 'queued'; $due += $this->delay($current['offer_attempts'], $result); }
                 elseif (in_array($error, [400, 403], true) && $target !== $r['telegram_user_id']) {
                     $state = 'queued'; $target = $r['telegram_user_id'];
                 }
@@ -571,13 +573,24 @@ final class Hub
         });
         if (!$r) return;
         $result = $this->bot->call('sendMessage', $this->offerMessage($r, "Напоминание: ваша заявка в хаб ждёт ответа. Если хотите подумать — не спешите.\n\n"));
-        if (empty($result['ok']) && (int)($result['error_code'] ?? 0) === 403) {
+        $code = (int)($result['error_code'] ?? 0);
+        if (empty($result['ok']) && $code === 403) {
             // Telegram refuses: the applicant never started the bot (after the 5-minute join-request
             // window the bot may not write first) or blocked it. Stop reminding; /start resends the rules.
             $this->locked($r['telegram_user_id'], function (array $slot) use ($id) {
                 $current = $this->row($id);
                 if ($slot['current_request_id'] !== $id || !$current || $current['status'] !== 'pending' || $current['offer_state'] !== 'sent') return;
                 $this->query("UPDATE trh_requests SET offer_state='awaiting_start',error_code='remind_403' WHERE id=?", [$id]);
+            });
+        } elseif (empty($result['ok']) && ($code === 0 || $code === 429 || $code >= 500)) {
+            // Timeout, flood limit or Telegram-side error: the time was claimed before sending, so without this the
+            // reminder would be skipped for a whole interval. Move it back so the next try is in a few minutes.
+            $retry = max(300, (int)($result['parameters']['retry_after'] ?? 0));
+            $this->locked($r['telegram_user_id'], function (array $slot) use ($id, $retry) {
+                $current = $this->row($id);
+                if ($slot['current_request_id'] !== $id || !$current || $current['status'] !== 'pending' || $current['offer_state'] !== 'sent') return;
+                $this->query('UPDATE trh_requests SET offer_due_at=? WHERE id=?',
+                    [$this->now() - self::remindInterval((int)$current['event_date'], $this->now()) + $retry, $id]);
             });
         }
     }
