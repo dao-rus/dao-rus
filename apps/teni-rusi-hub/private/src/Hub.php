@@ -29,7 +29,9 @@ final class Hub
                 !is_string($e['chat_id'] ?? null) || !preg_match('/^-100[0-9]{6,13}$/D', $e['chat_id']) || $e['chat_id'] === $config['chat_id'] ||
                 !is_string($e['key'] ?? null) || !preg_match('/^[a-z]{2,16}$/D', $e['key'])) continue;
             $gc = array_merge($config, ['hub_id' => $e['hub_id'], 'chat_id' => $e['chat_id'], 'group_only' => true,
-                'left_label' => is_string($e['left_label'] ?? null) ? $e['left_label'] : 'Покинул чат']);
+                // The chat with key «dao» is the DAO itself; «Покинул чат» (the old default) is read as that.
+                'left_label' => is_string($e['left_label'] ?? null) && !($e['key'] === 'dao' && $e['left_label'] === 'Покинул чат') ? $e['left_label']
+                    : ($e['key'] === 'dao' ? 'Покинул ДАО Русь' : 'Покинул чат')]);
             $this->groups[] = ['key' => $e['key'], 'title' => is_string($e['title'] ?? null) ? $e['title'] : $e['key'], 'chat_id' => $e['chat_id'],
                 'entrance_thread_id' => is_int($e['entrance_thread_id'] ?? null) && $e['entrance_thread_id'] > 0 ? $e['entrance_thread_id'] : null,
                 'reputation' => new Reputation($db, $gc, $this->clock), 'community' => new Community($db, $bot, $gc, $this->clock)];

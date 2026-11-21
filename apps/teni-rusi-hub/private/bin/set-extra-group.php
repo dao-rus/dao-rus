@@ -23,7 +23,7 @@ try {
     $c = \TeniRusi\configuration();
     $groups = array_values(array_filter($c['extra_groups'] ?? [], fn($g) => is_array($g) && ($g['key'] ?? null) !== $key));
     $old = array_values(array_filter($c['extra_groups'] ?? [], fn($g) => is_array($g) && ($g['key'] ?? null) === $key))[0] ?? [];
-    $entry = ['key' => $key, 'hub_id' => $c['hub_id'] . '-' . $key, 'chat_id' => $chat, 'title' => $title, 'left_label' => 'Покинул чат'];
+    $entry = ['key' => $key, 'hub_id' => $c['hub_id'] . '-' . $key, 'chat_id' => $chat, 'title' => $title, 'left_label' => $key === 'dao' ? 'Покинул ДАО Русь' : 'Покинул чат'];
     if (is_int($old['entrance_thread_id'] ?? null)) $entry['entrance_thread_id'] = $old['entrance_thread_id']; // a re-run keeps the entrance topic
     $groups[] = $entry;
     $c['extra_groups'] = $groups;

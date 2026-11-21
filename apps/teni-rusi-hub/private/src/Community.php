@@ -134,10 +134,18 @@ final class Community
 
     /**
      * One line in the closed departure channel of the DAO for a person who left by themselves:
-     * date, name, @username, since when in the DAO (when known), «Покинул форум». People removed by an
+     * date, name, @username, since when in the hub (when known), and which one he left: the hub or the DAO. People removed by an
      * administrator are not posted there (as before, in the Core). A failure of Telegram loses nothing:
      * the departure stays in the operator's /left list.
      */
+    /** The hub and the DAO are different things: the line says which one the person left. */
+    private function leftLabel(): string
+    {
+        if (is_string($this->config['left_label'] ?? null)) return $this->config['left_label'];
+        $title = is_string($this->config['group_title'] ?? null) ? $this->config['group_title'] : 'Тени Руси';
+        return 'Покинул хаб «' . $title . '»';
+    }
+
     private function postDeparture(string $userId, array $user, int $at): void
     {
         $channel = $this->config['departure_channel_id'] ?? null;
@@ -145,7 +153,7 @@ final class Community
         $since = $this->query('SELECT c.accepted_at FROM trh_memberships m JOIN trh_consents c ON c.request_id=m.latest_consent_id WHERE m.hub_id=? AND m.telegram_user_id=?',
             [$this->hub(), $userId])->fetchColumn();
         $line = self::date($at) . ' · ' . self::displayName($this->person($userId) ?? $user) .
-            ($since ? ' · В ДАО с ' . self::date((int)$since) : '') . ' · ' . ($this->config['left_label'] ?? 'Покинул форум');
+            ($since ? ' · В хабе с ' . self::date((int)$since) : '') . ' · ' . $this->leftLabel();
         $this->bot->call('sendMessage', ['chat_id' => $channel, 'text' => $line]);
     }
 
