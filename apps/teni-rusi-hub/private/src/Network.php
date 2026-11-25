@@ -30,7 +30,7 @@ final class Network
     public const MATCH_NOTIFY_MAX = 2;    // «похожая запись появилась» per person per day
     /** The persistent keyboard (always under the input field) and commands map to the same actions. */
     public const MENU = ['Мне нужно' => 'new:need', 'У меня есть' => 'new:have', 'Хочу сделать' => 'new:do', 'Интерес' => 'new:interest',
-        'Найти людей' => 'find', 'Кто здесь' => 'who', 'Обмен' => 'list', 'Мои записи' => 'mine', 'О себе' => 'me', 'Популярность' => 'rep', 'Репутация' => 'rep', 'Рейтинг' => 'top',
+        'Найти людей' => 'find', 'Кто здесь' => 'who', 'Обмен' => 'list', 'Мои записи' => 'mine', 'О себе' => 'me', 'Популярность' => 'rep', 'Репутация' => 'rep', 'Рейтинг' => 'top', 'Рейтинг хаба' => 'tophub',
         '/find' => 'find', '/who' => 'who', '/me' => 'me', '/menu' => 'menu', '/key' => 'key', '/rep' => 'rep', '/top' => 'top'];
     public const TOP = 10;
     /** Keys for programs and AI assistants (step 2 of the protocol): at most KEYS_MAX live, a key unused for KEY_IDLE goes out. */
@@ -76,7 +76,7 @@ final class Network
     {
         $k = fn(string ...$labels) => array_map(fn($l) => ['text' => $l], $labels);
         return ['reply_markup' => ['keyboard' => [$k('Мне нужно', 'У меня есть'), $k('Хочу сделать', 'Интерес'), $k('Найти людей', 'Кто здесь'),
-            $k('Обмен', 'Мои записи', 'О себе'), $k('Популярность', 'Рейтинг')], 'resize_keyboard' => true, 'is_persistent' => true, 'input_field_placeholder' => 'Выберите кнопку меню']];
+            $k('Обмен', 'Мои записи', 'О себе'), $k('Репутация', 'Рейтинг хаба')], 'resize_keyboard' => true, 'is_persistent' => true, 'input_field_placeholder' => 'Выберите кнопку меню']];
     }
     private static function expiresAt(string $kind, int $now): ?int { $t = self::TTL[$kind] ?? null; return $t === null ? null : $now + $t; }
     private static function lifeText(string $kind): string
@@ -440,36 +440,49 @@ final class Network
     /** @return array<int, array{title: string, reputation: Reputation}> */
     private function allGroups(): array
     {
-        return array_merge([['title' => $this->mainTitle(), 'reputation' => new Reputation($this->db, $this->config, $this->clock)]], $this->groups);
+        return array_merge([['key' => null, 'title' => $this->mainTitle(), 'reputation' => new Reputation($this->db, $this->config, $this->clock)]], $this->groups);
+    }
+
+    /** «в хабе» for the hub group, «в ДАО» for the DAO chat, «в чате «…»» for any other (decision of 25 Nov 2026). */
+    private static function where(array $g): string
+    {
+        if (($g['key'] ?? null) === null) return 'в хабе';
+        return $g['key'] === 'dao' ? 'в ДАО' : 'в чате «' . $g['title'] . '»';
     }
 
     private function reputationText(string $user): string
     {
         $all = $this->allGroups();
         if (count($all) === 1) return Reputation::text($all[0]['reputation']->score($user));
-        return "Ваша популярность:\n\n" . implode("\n\n", array_map(fn($g) => Reputation::section($g['reputation']->score($user), $g['title']), $all)) .
-            "\n\nКто отреагировал, не показывается.";
+        return implode("\n\n", array_map(fn($g) => Reputation::section($g['reputation']->score($user), 'Репутация ' . self::where($g)), $all)) .
+            "\n\nРепутация — лайки минус дизлайки под вашими сообщениями. Кто отреагировал, не показывается.";
     }
 
-    private function topText(): string
+    /** Rating by reputation (likes minus dislikes). $hubOnly: the hub group alone («Рейтинг хаба»). */
+    private function topText(bool $hubOnly = false): string
     {
-        $all = $this->allGroups();
+        $all = $hubOnly ? [$this->allGroups()[0]] : $this->allGroups();
         $blocks = [];
         foreach ($all as $g) {
             $lines = [];
             foreach ($g['reputation']->top(self::TOP * 3) as $row) {
                 // Only people who are in the network now: excluded or cut-off members are not shown.
                 if (!$this->canUse((string)$row['author_id'])) continue;
-                $lines[] = (count($lines) + 1) . '. ' . Community::displayName($this->community->person((string)$row['author_id'])) . ' — 👍 ' . (int)$row['likes'];
+                $lines[] = (count($lines) + 1) . '. ' . Community::displayName($this->community->person((string)$row['author_id'])) . ' — ' . (int)$row['score'];
                 if (count($lines) >= self::TOP) break;
             }
-            $blocks[] = [$g['title'], $lines];
+            $blocks[] = ['Рейтинг ' . (($g['key'] ?? null) === null ? 'хаба' : ($g['key'] === 'dao' ? 'ДАО' : 'чата «' . $g['title'] . '»')), $lines];
         }
-        if (count($all) === 1) {
-            return $blocks[0][1] ? "Рейтинг: больше всего лайков под сообщениями в группе.\n\n" . implode("\n", $blocks[0][1]) : 'Пока лайков нет.';
-        }
-        if (!array_filter($blocks, fn($b) => $b[1])) return 'Пока лайков нет.';
-        return "Рейтинг: больше всего лайков под сообщениями.\n\n" . implode("\n\n", array_map(fn($b) => $b[0] . ":\n" . ($b[1] ? implode("\n", $b[1]) : 'пока нет лайков'), $blocks));
+        $note = "\n\nРепутация — лайки минус дизлайки под сообщениями.";
+        if (count($all) === 1) return $blocks[0][1] ? $blocks[0][0] . ":\n\n" . implode("\n", $blocks[0][1]) . $note : 'Рейтинг пока пуст.';
+        if (!array_filter($blocks, fn($b) => $b[1])) return 'Рейтинг пока пуст.';
+        return implode("\n\n", array_map(fn($b) => $b[0] . ":\n" . ($b[1] ? implode("\n", $b[1]) : 'пока пуст'), $blocks)) . $note;
+    }
+
+    /** Rating of the hub, opened by «Рейтинг хаба» under a summary in the group (/start top). Members also get the menu keyboard. */
+    public function showTop(string $chat): void
+    {
+        $this->send($chat, $this->topText(true), $this->canUse($chat) ? self::keyboard() : []);
     }
 
     private function handle(string $user, string $data, callable $answer, ?array $cb): string
@@ -515,13 +528,18 @@ final class Network
         }
         if ($data === 'trh:n:who') { $answer('Кто здесь'); $this->who($user); return 'who'; }
         if ($data === 'trh:n:rep') {
-            $answer('Популярность');
+            $answer('Репутация');
             $this->send($user, $this->reputationText($user));
             return 'reputation';
         }
         if ($data === 'trh:n:top') {
             $answer('Рейтинг');
             $this->send($user, $this->topText());
+            return 'top';
+        }
+        if ($data === 'trh:n:tophub') {
+            $answer('Рейтинг хаба');
+            $this->send($user, $this->topText(true));
             return 'top';
         }
         if ($data === 'trh:n:key') { $answer('Ключи'); $this->sendKeys($user); return 'keys'; }

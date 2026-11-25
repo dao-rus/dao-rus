@@ -20,7 +20,8 @@ final class Hub
     public function __construct(private PDO $db, private Bot $bot, private array $config, ?callable $clock = null)
     {
         $this->clock = $clock ?? static fn(): int => time();
-        $this->reputation = new Reputation($db, $config, $this->clock);
+        // Only the hub group gets summaries of reputation changes (decision of 25 Nov 2026); other chats stay silent.
+        $this->reputation = new Reputation($db, $config, $this->clock, true);
         $this->community = new Community($db, $bot, $config, $this->clock);
         $this->vote = new Vote($db, $bot, $config, $this->clock, $this->community);
         $this->network = new Network($db, $bot, $config, $this->clock, $this->community);
@@ -141,8 +142,14 @@ final class Hub
                 return ['id' => $slot['current_request_id']];
             });
             if ($start !== null) {
+                $chat = (string)$m['chat']['id'];
                 $this->network->clearDialog((string)$m['from']['id']);
-                $this->startReply((string)$m['chat']['id'], $start['id']);
+                // «Рейтинг хаба» under a summary in the group opens the bot with /start top.
+                if ($m['text'] === '/start top') {
+                    $this->network->showTop($chat);
+                    if ($this->network->canUse($chat)) return 'start_top';
+                }
+                $this->startReply($chat, $start['id']);
             }
             return 'start';
         }
@@ -641,6 +648,8 @@ final class Hub
     /** One bounded cron batch. No always-running worker or public cron endpoint. */
     public function tick(int $limit = 20): void
     {
+        // Deleting old summaries is silent, so it is done at night too.
+        $this->counted(fn() => $this->sweepReputationPosts());
         $rows = $this->query("SELECT id FROM trh_requests WHERE hub_id=? AND ((status='pending' AND (expires_at<=? OR (offer_state='queued' AND offer_due_at<=?))) OR (status IN ('approval_pending','decline_pending') AND retry_at<=?)) ORDER BY created_at LIMIT " . max(1, min(50, $limit)),
             [$this->config['hub_id'], $this->now(), $this->now(), $this->now()])->fetchAll();
         foreach ($rows as $r) { $this->decision($r['id']); $this->offer($r['id']); }
@@ -657,7 +666,64 @@ final class Hub
         $multi = count($this->groups) > 0;
         $this->counted(fn() => $this->reputationSignals($this->reputation, $this->community, $multi ? $this->network->mainTitle() : null));
         foreach ($this->groups as $g) $this->counted(fn() => $this->reputationSignals($g['reputation'], $g['community'], $g['title']));
+        $this->counted(fn() => $this->reputationNews());
         $this->counted(fn() => $this->vote->tick());
+    }
+
+    /**
+     * Summaries in the hub group (decision of 25 Nov 2026): an hour after the first change of a person's reputation,
+     * one message in reply to the last message of his that got a reaction: «Имя (@username), ваша репутация в хабе
+     * выросла на 5 и теперь составляет 17. Слава Руси!» with the button «Рейтинг хаба». Likes and dislikes within
+     * the hour cancel out; a net change of zero is not announced. The hour also blurs who reacted. Not sent at night
+     * (tick() returns before this), so the night's changes go out after 9:00. The operator is never announced:
+     * anonymous admin messages are counted as his, and a reply would name him.
+     */
+    private function reputationNews(): string
+    {
+        $operator = (string)($this->config['operator_chat_id'] ?? '');
+        $bot = is_string($this->config['bot_username'] ?? null) && preg_match('/^[A-Za-z0-9_]{5,32}$/D', $this->config['bot_username']) ? $this->config['bot_username'] : 'Daorus_bot';
+        $sent = 0;
+        foreach ($this->reputation->dueNews() as $n) {
+            if (!$this->reputation->claimNews($n)) continue;
+            $user = (string)$n['user_id'];
+            $delta = (int)$n['delta'];
+            if ($delta === 0 || $user === $operator || !$this->network->canUse($user)) continue;
+            $name = self::ownName($this->community->person($user));
+            if ($name === null) continue;
+            $params = ['chat_id' => $this->config['chat_id'], 'text' => Reputation::newsText($name, $delta, $this->reputation->net($user)),
+                'reply_parameters' => ['message_id' => (int)$n['message_id'], 'allow_sending_without_reply' => true],
+                'reply_markup' => ['inline_keyboard' => [[['text' => 'Рейтинг хаба', 'url' => "https://t.me/$bot?start=top"]]]]];
+            if ($n['thread_id'] !== null) $params['message_thread_id'] = (int)$n['thread_id'];
+            $r = $this->bot->call('sendMessage', $params);
+            if (!empty($r['ok']) && is_int($r['result']['message_id'] ?? null)) {
+                $this->reputation->rememberPost($r['result']['message_id']);
+                $sent++;
+            }
+        }
+        return 'news_' . $sent;
+    }
+
+    /** Deletes summaries older than 5 minutes. A summary Telegram no longer has (deleted by hand, too old) is forgotten. */
+    private function sweepReputationPosts(): string
+    {
+        $deleted = 0;
+        foreach ($this->reputation->duePosts() as $id) {
+            $r = $this->bot->call('deleteMessage', ['chat_id' => $this->config['chat_id'], 'message_id' => $id]);
+            // No answer from Telegram (code 0 from the adapter): try again on the next pass. Any real answer settles it.
+            if (empty($r['ok']) && (int)($r['error_code'] ?? 0) === 0) continue;
+            $this->reputation->forgetPost($id);
+            if (!empty($r['ok'])) $deleted++;
+        }
+        return 'deleted_' . $deleted;
+    }
+
+    /** The person's own Telegram name with @username; only @username when there is no name; null when neither is known. */
+    private static function ownName(?array $p): ?string
+    {
+        $name = trim(($p['first_name'] ?? '') . ' ' . ($p['last_name'] ?? ''));
+        $user = !empty($p['username']) ? '@' . $p['username'] : '';
+        if ($name === '') return $user !== '' ? $user : null;
+        return $user !== '' ? "$name ($user)" : $name;
     }
 
     /**
@@ -678,7 +744,7 @@ final class Hub
             $user = (string)$c['author_id'];
             if ((int)$c['people'] < $need || $user === (string)$operator || $reputation->alertedRecently($user)) continue;
             $told = $this->bot->call('sendMessage', ['chat_id' => (string)$user, 'text' =>
-                "За последние 30 дней под вашими сообщениями ' . ($title === null ? 'в группе' : 'в чате «' . $title . '»') . ' набралось много дизлайков от разных людей. Это не решение и не наказание: организаторы посмотрят, в чём дело. " .
+                'За последние 30 дней под вашими сообщениями ' . ($title === null ? 'в группе' : 'в чате «' . $title . '»') . ' набралось много дизлайков от разных людей. Это не решение и не наказание: организаторы посмотрят, в чём дело. ' .
                 'Если хотите что-то пояснить, напишите сюда, сообщение дойдёт до них.']);
             $sent = $this->bot->call('sendMessage', ['chat_id' => $operator, 'text' =>
                 'Сигнал по дизлайкам' . ($title === null ? '' : ' (' . $title . ')') . ': ' . Community::displayName($community->person($user)) . ' получил дизлайки от ' . (int)$c['people'] .

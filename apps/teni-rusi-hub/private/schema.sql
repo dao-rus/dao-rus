@@ -173,6 +173,7 @@ CREATE TABLE trh_group_messages (
     message_id BIGINT NOT NULL,
     author_id VARCHAR(20) CHARACTER SET ascii COLLATE ascii_bin NOT NULL,
     created_at BIGINT UNSIGNED NOT NULL,
+    thread_id BIGINT NULL,
     PRIMARY KEY (hub_id, message_id),
     INDEX trh_group_messages_author (hub_id, author_id)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
@@ -195,6 +196,24 @@ CREATE TABLE trh_rep_alerts (
     alerted_at BIGINT UNSIGNED NOT NULL,
     dislikers INT UNSIGNED NOT NULL,
     PRIMARY KEY (hub_id, user_id)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- Reputation summaries in the hub group (migrations/2026-11-25-reputation-news.sql).
+CREATE TABLE trh_rep_news (
+    hub_id VARCHAR(64) CHARACTER SET ascii COLLATE ascii_bin NOT NULL,
+    user_id VARCHAR(20) CHARACTER SET ascii COLLATE ascii_bin NOT NULL,
+    delta INT NOT NULL,
+    message_id BIGINT NOT NULL,
+    thread_id BIGINT NULL,
+    started_at BIGINT UNSIGNED NOT NULL,
+    PRIMARY KEY (hub_id, user_id)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+CREATE TABLE trh_rep_posts (
+    hub_id VARCHAR(64) CHARACTER SET ascii COLLATE ascii_bin NOT NULL,
+    message_id BIGINT NOT NULL,
+    delete_at BIGINT UNSIGNED NOT NULL,
+    PRIMARY KEY (hub_id, message_id)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 -- Vote on excluding a person (migrations/2026-11-16-vote.sql).

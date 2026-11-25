@@ -19,7 +19,7 @@ final class Telegram implements Bot
     {
         // This adapter exposes no setWebhook, token URLs, raw errors or message logs.
         if (!in_array($method, ['sendMessage', 'forwardMessage', 'copyMessage', 'editMessageText', 'answerCallbackQuery', 'approveChatJoinRequest',
-            'declineChatJoinRequest', 'getChatMember', 'getChat', 'getMe', 'getWebhookInfo',
+            'declineChatJoinRequest', 'deleteMessage', 'getChatMember', 'getChat', 'getMe', 'getWebhookInfo',
             'setMyShortDescription', 'setMyDescription', 'setMyCommands'], true)) {
             throw new \InvalidArgumentException('Unsupported Telegram method');
         }
