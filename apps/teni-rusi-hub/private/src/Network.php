@@ -468,6 +468,8 @@ final class Network
             foreach ($g['reputation']->top(self::TOP * 3) as $row) {
                 // Only people who are in the network now: excluded or cut-off members are not shown.
                 if (!$this->canUse((string)$row['author_id'])) continue;
+                // The operator is not rated (decision of 25 Nov 2026): anonymous admin messages count as his.
+                if ((string)$row['author_id'] === (string)($this->config['operator_chat_id'] ?? '')) continue;
                 $lines[] = (count($lines) + 1) . '. ' . Community::displayName($this->community->person((string)$row['author_id'])) . ' — ' . (int)$row['score'];
                 if (count($lines) >= self::TOP) break;
             }
